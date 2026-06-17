@@ -41,19 +41,191 @@ const QUICK_ACTIONS = [
 
 interface Message { from: "user" | "sophia"; text: string; }
 
+// ─── SOPHIA AI COMPANION INFO PANEL ──────────────────────────────────────────
+function SophiaCompanionTab() {
+  const tiers = [
+    {
+      name: "Starter",
+      price: "$29",
+      period: "/mo",
+      color: "#C0A060",
+      features: [
+        "Unlimited emotional conversations",
+        "Memory journaling (up to 50 entries)",
+        "Daily check-ins & mood tracking",
+        "Basic grief & healing support",
+        "Email follow-ups",
+      ],
+    },
+    {
+      name: "Premium",
+      price: "$49",
+      period: "/mo",
+      color: GOLD,
+      highlight: true,
+      features: [
+        "Everything in Starter",
+        "Deep emotional story sessions",
+        "Unlimited memory entries",
+        "Relationship & healing guidance",
+        "Voice conversation mode",
+        "Weekly personalized insights",
+      ],
+    },
+    {
+      name: "Elite",
+      price: "$79",
+      period: "/mo",
+      color: "#F4D06F",
+      features: [
+        "Everything in Premium",
+        "Priority 24/7 Sophia access",
+        "Emotional legacy document",
+        "Advanced grief counseling mode",
+        "Dedicated memory vault",
+        "Monthly 1-on-1 AI session report",
+      ],
+    },
+  ];
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px" }}>
+      {/* Distinction callout */}
+      <div style={{
+        background: "rgba(212,175,55,0.07)",
+        border: "1px solid rgba(212,175,55,0.22)",
+        borderRadius: 12, padding: "12px 14px", marginBottom: 16,
+      }}>
+        <div style={{
+          fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: 700,
+          color: GOLD, letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 8,
+        }}>
+          ⚠ Two Different Services
+        </div>
+        <div style={{ display: "flex", gap: 10, flexDirection: "column" }}>
+          <div style={{
+            background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)",
+            borderRadius: 8, padding: "9px 11px",
+          }}>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 700, color: "#22C55E", marginBottom: 3 }}>
+              ✦ Sophia AI Concierge (this widget)
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+              Free customer support assistant. Answers product questions, guides onboarding, recommends services. <strong style={{ color: "rgba(255,255,255,0.85)" }}>3 messages/day free</strong>, unlimited on any paid plan.
+            </div>
+          </div>
+          <div style={{
+            background: "rgba(212,175,55,0.07)", border: "1px solid rgba(212,175,55,0.2)",
+            borderRadius: 8, padding: "9px 11px",
+          }}>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 3 }}>
+              💛 Sophia AI Emotional Companion
+            </div>
+            <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+              A <strong style={{ color: "rgba(255,255,255,0.85)" }}>separate premium platform</strong> — deep emotional conversations, grief support, memory journaling, healing guidance, and personal growth. Requires its own membership. <strong style={{ color: GOLD }}>Not included in Concierge.</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sophia Companion heading */}
+      <div style={{
+        fontFamily: "'Playfair Display', serif", fontSize: 15, fontWeight: 700,
+        color: "#fff", marginBottom: 4,
+      }}>
+        Sophia AI Emotional Companion
+      </div>
+      <div style={{
+        fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.5)",
+        marginBottom: 14, lineHeight: 1.5,
+      }}>
+        A private, deeply personal AI companion for emotional healing, grief processing, relationship recovery, and life storytelling. This is a full standalone experience — not a chatbot.
+      </div>
+
+      {/* Tier cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+        {tiers.map((tier) => (
+          <div key={tier.name} style={{
+            background: tier.highlight
+              ? `linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.06) 100%)`
+              : "rgba(255,255,255,0.03)",
+            border: tier.highlight
+              ? `1.5px solid rgba(212,175,55,0.35)`
+              : "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 12, padding: "12px 13px",
+            position: "relative", overflow: "hidden",
+          }}>
+            {tier.highlight && (
+              <div style={{
+                position: "absolute", top: 8, right: 10,
+                fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 700,
+                color: "#01040B", background: GOLD, borderRadius: 999,
+                padding: "2px 8px", letterSpacing: "0.08em",
+              }}>
+                MOST POPULAR
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
+              <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 13, fontWeight: 700, color: tier.color }}>
+                {tier.name}
+              </span>
+              <span style={{ marginLeft: "auto", fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, color: "#fff" }}>
+                {tier.price}
+              </span>
+              <span style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: "rgba(255,255,255,0.45)" }}>
+                {tier.period}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {tier.features.map((f) => (
+                <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 7 }}>
+                  <span style={{ color: tier.color, fontSize: 11, marginTop: 2, flexShrink: 0 }}>✓</span>
+                  <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.45 }}>{f}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <a
+        href="/products/sophia-ai"
+        style={{
+          display: "block", textAlign: "center",
+          padding: "11px 16px",
+          background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
+          color: "#01040B", fontFamily: "Inter, sans-serif",
+          fontWeight: 700, fontSize: 13, borderRadius: 12,
+          textDecoration: "none", marginBottom: 8,
+        }}
+      >
+        Explore Sophia AI Emotional Companion →
+      </a>
+      <p style={{
+        fontFamily: "Inter, sans-serif", fontSize: 11,
+        color: "rgba(255,255,255,0.3)", textAlign: "center", lineHeight: 1.5,
+      }}>
+        Separate membership required · Not part of Concierge · Cancel anytime
+      </p>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export function SophiaConcierge() {
-  const [open, setOpen]         = useState(false);
-  const [input, setInput]       = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [open, setOpen]           = useState(false);
+  const [activeTab, setActiveTab] = useState<"chat" | "about">("chat");
+  const [input, setInput]         = useState("");
+  const [loading, setLoading]     = useState(false);
   const [remaining, setRemaining] = useState(FREE_LIMIT);
   const [limitReached, setLimitReached] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages]   = useState<Message[]>([
     { from: "sophia", text: "Hello, I'm Sophia — your Ghaafeedi Music AI Concierge. I'm here to help you turn your memories into something extraordinary. How can I help?" },
   ]);
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const { data: session } = useSession();
-  const isPaidMember = false; // Will be determined server-side; client just tracks display
 
   useEffect(() => {
     if (open) {
@@ -71,12 +243,10 @@ export function SophiaConcierge() {
     if (!text.trim() || loading) return;
     if (limitReached) return;
 
-    // Optimistic UI
     setMessages(m => [...m, { from: "user", text }]);
     setInput("");
     setLoading(true);
 
-    // Track client-side for instant feedback
     const newCount = incrementFreeTierLocal();
     const newRemaining = Math.max(0, FREE_LIMIT - newCount);
 
@@ -104,7 +274,7 @@ export function SophiaConcierge() {
         setRemaining(0);
         setMessages(m => [...m, {
           from: "sophia",
-          text: "You've used your 3 free daily messages with me. Upgrade to any Ghaafeedi plan for unlimited access — I'd love to keep helping you create something beautiful. 💛",
+          text: "You've used your 3 free daily messages. Upgrade to any Ghaafeedi plan for unlimited Concierge access. Or explore the Sophia AI Emotional Companion — a deeper, dedicated platform for emotional support. 💛",
         }]);
         return;
       }
@@ -140,7 +310,7 @@ export function SophiaConcierge() {
 
   return (
     <>
-      {/* ─── SECTION WRAPPER (homepage section) ─── */}
+      {/* ─── HOMEPAGE SECTION ──────────────────────────────────────────────── */}
       <section style={{
         padding: "80px 40px 96px",
         background: "#0A0B0F",
@@ -168,7 +338,7 @@ export function SophiaConcierge() {
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: GOLD, boxShadow: `0 0 8px ${GOLD}` }} />
                 <span style={{ fontSize: 11, fontFamily: "Inter, sans-serif", fontWeight: 600, color: GOLD, letterSpacing: "0.18em", textTransform: "uppercase" }}>
-                  AI Emotional Concierge
+                  AI Services
                 </span>
               </div>
 
@@ -176,42 +346,118 @@ export function SophiaConcierge() {
                 fontFamily: "'Playfair Display', serif", fontSize: "clamp(32px,3.5vw,52px)",
                 color: "#FFFFFF", fontWeight: 700, lineHeight: 1.18, marginBottom: 18,
               }}>
-                Meet Sophia,<br />
+                Two Sophia Experiences,<br />
                 <span style={{ background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                  Your Creative Partner
+                  Built for Different Needs
                 </span>
               </h2>
               <p style={{
-                fontFamily: "Inter, sans-serif", fontSize: 16, color: "rgba(255,255,255,0.6)",
-                lineHeight: 1.7, marginBottom: 28, maxWidth: 460,
+                fontFamily: "Inter, sans-serif", fontSize: 15, color: "rgba(255,255,255,0.6)",
+                lineHeight: 1.7, marginBottom: 24, maxWidth: 480,
               }}>
-                Sophia is available to everyone — no subscription required. Ask her anything about your story, our products, or the creative process. Free members get 3 questions per day.
+                We offer two distinct Sophia-powered experiences. Understanding which one serves you best helps you get the most out of Ghaafeedi Music.
               </p>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
-                {[
-                  { icon: "💬", text: "3 free daily messages for all visitors" },
-                  { icon: "🔓", text: "Unlimited access for paid members" },
-                  { icon: "🎯", text: "Onboarding guidance & product recommendations" },
-                  { icon: "24h", text: "Free tier resets every 24 hours" },
-                ].map((item) => (
-                  <div key={item.text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: item.icon === "24h" ? 11 : 16, fontWeight: item.icon === "24h" ? 700 : 400, color: GOLD, minWidth: 24, textAlign: "center" }}>{item.icon}</span>
-                    <span style={{ fontFamily: "Inter, sans-serif", fontSize: 14, color: "rgba(255,255,255,0.65)" }}>{item.text}</span>
+              {/* Comparison cards */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 28 }}>
+                {/* Concierge */}
+                <div style={{
+                  background: "rgba(34,197,94,0.06)",
+                  border: "1px solid rgba(34,197,94,0.18)",
+                  borderRadius: 14, padding: "16px 18px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: "50%",
+                      background: "rgba(34,197,94,0.15)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 16, flexShrink: 0,
+                    }}>✦</div>
+                    <div>
+                      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, fontWeight: 700, color: "#22C55E" }}>
+                        Sophia AI Concierge
+                      </div>
+                      <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                        Free support assistant · This widget
+                      </div>
+                    </div>
+                    <div style={{
+                      marginLeft: "auto", fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 700,
+                      color: "#22C55E", background: "rgba(34,197,94,0.12)",
+                      border: "1px solid rgba(34,197,94,0.25)", borderRadius: 999, padding: "3px 10px",
+                    }}>FREE</div>
                   </div>
-                ))}
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
+                    Answers your product questions, guides onboarding, and recommends the right Ghaafeedi service for your story. <strong style={{ color: "rgba(255,255,255,0.85)" }}>3 messages/day</strong> for visitors — unlimited on any paid plan.
+                  </div>
+                </div>
+
+                {/* Emotional Companion */}
+                <div style={{
+                  background: "rgba(212,175,55,0.07)",
+                  border: "1px solid rgba(212,175,55,0.22)",
+                  borderRadius: 14, padding: "16px 18px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: "50%",
+                      background: `linear-gradient(135deg, ${GOLD} 0%, #8B4513 100%)`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 16, flexShrink: 0,
+                    }}>💛</div>
+                    <div>
+                      <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, fontWeight: 700, color: GOLD }}>
+                        Sophia AI Emotional Companion
+                      </div>
+                      <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+                        Separate premium platform · Membership required
+                      </div>
+                    </div>
+                    <div style={{
+                      marginLeft: "auto", fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 700,
+                      color: GOLD, background: "rgba(212,175,55,0.1)",
+                      border: "1px solid rgba(212,175,55,0.25)", borderRadius: 999, padding: "3px 10px",
+                      whiteSpace: "nowrap",
+                    }}>From $29/mo</div>
+                  </div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
+                    A deeply personal AI companion for emotional healing, grief processing, relationship recovery, and life storytelling. Full memory journaling, voice sessions, and unlimited emotional conversations. <strong style={{ color: GOLD }}>Not the same as the Concierge widget.</strong>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    {["Starter $29/mo", "Premium $49/mo", "Elite $79/mo"].map((t) => (
+                      <span key={t} style={{
+                        fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: 600, color: GOLD2,
+                        background: "rgba(212,175,55,0.09)",
+                        border: "1px solid rgba(212,175,55,0.18)",
+                        borderRadius: 999, padding: "3px 10px",
+                      }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              <button onClick={() => setOpen(true)} style={{
-                display: "inline-flex", alignItems: "center", gap: 10,
-                background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
-                color: "#01040B", fontFamily: "Inter, sans-serif", fontWeight: 700,
-                fontSize: 15, borderRadius: 999, padding: "14px 30px",
-                border: "none", cursor: "pointer",
-                boxShadow: `0 6px 32px rgba(212,175,55,0.4)`,
-              }}>
-                <span>✦</span> Chat with Sophia
-              </button>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button onClick={() => setOpen(true)} style={{
+                  display: "inline-flex", alignItems: "center", gap: 10,
+                  background: "rgba(34,197,94,0.12)",
+                  border: "1px solid rgba(34,197,94,0.3)",
+                  color: "#22C55E", fontFamily: "Inter, sans-serif", fontWeight: 700,
+                  fontSize: 14, borderRadius: 999, padding: "13px 24px",
+                  cursor: "pointer",
+                }}>
+                  ✦ Open Concierge (Free)
+                </button>
+                <a href="/products/sophia-ai" style={{
+                  display: "inline-flex", alignItems: "center", gap: 10,
+                  background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
+                  color: "#01040B", fontFamily: "Inter, sans-serif", fontWeight: 700,
+                  fontSize: 14, borderRadius: 999, padding: "13px 24px",
+                  border: "none", cursor: "pointer", textDecoration: "none",
+                  boxShadow: `0 6px 32px rgba(212,175,55,0.35)`,
+                }}>
+                  💛 Explore Emotional Companion
+                </a>
+              </div>
             </motion.div>
 
             {/* Right — chat preview */}
@@ -241,10 +487,10 @@ export function SophiaConcierge() {
                     fontSize: 18,
                   }}>✦</div>
                   <div>
-                    <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#fff", fontWeight: 700 }}>Sophia</div>
+                    <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 15, color: "#fff", fontWeight: 700 }}>Sophia Concierge</div>
                     <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "#22C55E", display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22C55E", display: "inline-block" }} />
-                      Online · AI Concierge
+                      Online · Free Support Assistant
                     </div>
                   </div>
                   <div style={{ marginLeft: "auto", fontFamily: "Inter, sans-serif", fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
@@ -255,9 +501,9 @@ export function SophiaConcierge() {
                 {/* Sample messages */}
                 <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   {[
-                    { from: "sophia", text: "Hello! I'm Sophia. I can help you find the perfect way to preserve your memories. What brings you here today?" },
-                    { from: "user",   text: "I want to create something for my late grandmother." },
-                    { from: "sophia", text: "That's a beautiful intention. Our Memorial Legacy Film or a Personalized Cinematic Song would be perfect — both transform cherished memories into something eternal. Which feels right?" },
+                    { from: "sophia", text: "Hello! I'm the Sophia AI Concierge — a free support assistant for Ghaafeedi Music. What can I help you with today?" },
+                    { from: "user",   text: "What's the difference between the Concierge and the Emotional Companion?" },
+                    { from: "sophia", text: "Great question! I'm the Concierge — free for everyone, I answer product questions and guide you. The Sophia AI Emotional Companion is a separate premium platform for deep emotional healing, grief support, and memory journaling. It requires its own membership starting at $29/mo." },
                   ].map((m, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start" }}>
                       <div style={{
@@ -270,7 +516,7 @@ export function SophiaConcierge() {
                           : `1px solid rgba(212,175,55,0.22)`,
                         borderRadius: m.from === "sophia" ? "4px 16px 16px 16px" : "16px 4px 16px 16px",
                         padding: "10px 14px",
-                        fontFamily: "Inter, sans-serif", fontSize: 13.5, lineHeight: 1.55,
+                        fontFamily: "Inter, sans-serif", fontSize: 13, lineHeight: 1.55,
                         color: m.from === "sophia" ? "rgba(255,255,255,0.8)" : "#fff",
                       }}>
                         {m.text}
@@ -280,17 +526,28 @@ export function SophiaConcierge() {
                 </div>
 
                 {/* CTA */}
-                <div style={{ padding: "0 20px 20px" }}>
+                <div style={{ padding: "0 20px 20px", display: "flex", gap: 8 }}>
                   <button onClick={() => setOpen(true)} style={{
-                    width: "100%", padding: "12px",
+                    flex: 1, padding: "11px",
+                    background: "rgba(34,197,94,0.08)",
+                    border: "1px solid rgba(34,197,94,0.2)",
+                    borderRadius: 12, color: "#22C55E",
+                    fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 13,
+                    cursor: "pointer",
+                  }}>
+                    Open Concierge →
+                  </button>
+                  <a href="/products/sophia-ai" style={{
+                    flex: 1, padding: "11px",
                     background: "rgba(212,175,55,0.08)",
                     border: "1px solid rgba(212,175,55,0.2)",
                     borderRadius: 12, color: GOLD,
-                    fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 14,
-                    cursor: "pointer",
+                    fontFamily: "Inter, sans-serif", fontWeight: 600, fontSize: 13,
+                    cursor: "pointer", textDecoration: "none", textAlign: "center",
+                    display: "block",
                   }}>
-                    Continue this conversation →
-                  </button>
+                    Companion →
+                  </a>
                 </div>
               </div>
             </motion.div>
@@ -321,7 +578,7 @@ export function SophiaConcierge() {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 22, boxShadow: `0 8px 32px rgba(212,175,55,0.5)`,
             }}
-            aria-label="Chat with Sophia"
+            aria-label="Chat with Sophia Concierge"
           >
             ✦
           </motion.button>
@@ -338,192 +595,261 @@ export function SophiaConcierge() {
             transition={{ type: "spring", stiffness: 320, damping: 26 }}
             style={{
               position: "fixed", bottom: 24, right: 24, zIndex: 9990,
-              width: "min(380px, calc(100vw - 32px))",
+              width: "min(400px, calc(100vw - 32px))",
               background: "linear-gradient(145deg, #0D0F1E 0%, #080A14 100%)",
               border: "1px solid rgba(212,175,55,0.18)",
               borderRadius: 20, overflow: "hidden",
               boxShadow: "0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(212,175,55,0.06)",
               display: "flex", flexDirection: "column",
-              maxHeight: "min(560px, calc(100svh - 48px))",
+              maxHeight: "min(620px, calc(100svh - 48px))",
             }}
           >
             {/* Header */}
             <div style={{
-              padding: "14px 16px",
-              background: "rgba(212,175,55,0.05)",
+              padding: "13px 16px 0",
+              background: "rgba(212,175,55,0.04)",
               borderBottom: "1px solid rgba(212,175,55,0.1)",
-              display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+              flexShrink: 0,
             }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: "50%",
-                background: `linear-gradient(135deg, ${GOLD} 0%, #8B4513 100%)`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 16, flexShrink: 0,
-              }}>✦</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, color: "#fff", fontWeight: 700 }}>Sophia</div>
-                <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: "#22C55E", display: "flex", alignItems: "center", gap: 4 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22C55E", display: "inline-block" }} />
-                  AI Concierge · Online
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: `linear-gradient(135deg, ${GOLD} 0%, #8B4513 100%)`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 15, flexShrink: 0,
+                }}>✦</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 14, color: "#fff", fontWeight: 700 }}>Sophia</div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10, color: "#22C55E", display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22C55E", display: "inline-block" }} />
+                    AI Concierge · Online
+                  </div>
                 </div>
+                {!session && activeTab === "chat" && (
+                  <div style={{
+                    fontFamily: "Inter, sans-serif", fontSize: 11,
+                    color: remaining === 0 ? "#ef4444" : remaining === 1 ? "#f59e0b" : "rgba(255,255,255,0.45)",
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 999, padding: "3px 9px",
+                  }}>
+                    {remaining}/{FREE_LIMIT} free
+                  </div>
+                )}
+                <button onClick={() => setOpen(false)} style={{
+                  background: "none", border: "none", color: "rgba(255,255,255,0.4)",
+                  cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, flexShrink: 0,
+                }}>×</button>
               </div>
-              {/* Free tier counter */}
-              {!session && (
-                <div style={{
-                  fontFamily: "Inter, sans-serif", fontSize: 11,
-                  color: remaining === 0 ? "#ef4444" : remaining === 1 ? "#f59e0b" : "rgba(255,255,255,0.45)",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 999, padding: "3px 9px",
-                }}>
-                  {remaining}/{FREE_LIMIT} free
-                </div>
-              )}
-              <button onClick={() => setOpen(false)} style={{
-                background: "none", border: "none", color: "rgba(255,255,255,0.4)",
-                cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 4, flexShrink: 0,
-              }}>×</button>
-            </div>
 
-            {/* Messages */}
-            <div style={{
-              flex: 1, overflowY: "auto", padding: "16px",
-              display: "flex", flexDirection: "column", gap: 12,
-            }}>
-              {messages.map((m, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{
-                    maxWidth: "84%",
-                    background: m.from === "sophia"
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(212,175,55,0.12)",
-                    border: m.from === "sophia"
-                      ? "1px solid rgba(255,255,255,0.07)"
-                      : "1px solid rgba(212,175,55,0.2)",
-                    borderRadius: m.from === "sophia" ? "4px 14px 14px 14px" : "14px 4px 14px 14px",
-                    padding: "9px 13px",
-                    fontFamily: "Inter, sans-serif", fontSize: 13.5, lineHeight: 1.55,
-                    color: m.from === "sophia" ? "rgba(255,255,255,0.82)" : "#fff",
-                  }}>
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-
-              {loading && (
-                <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                  <div style={{
-                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)",
-                    borderRadius: "4px 14px 14px 14px", padding: "10px 16px",
-                    display: "flex", gap: 5, alignItems: "center",
-                  }}>
-                    {[0,1,2].map(i => (
-                      <div key={i} style={{
-                        width: 6, height: 6, borderRadius: "50%", background: GOLD,
-                        animation: "sophiaDot 1.2s ease-in-out infinite",
-                        animationDelay: `${i * 0.2}s`,
-                      }} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Limit reached banner */}
-              {limitReached && (
-                <div style={{
-                  background: "rgba(212,175,55,0.08)",
-                  border: "1px solid rgba(212,175,55,0.22)",
-                  borderRadius: 12, padding: "12px 14px", textAlign: "center",
-                }}>
-                  <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>
-                    Daily free messages used. Resets tomorrow.
-                  </p>
-                  <a href="/signup" style={{
-                    display: "inline-block", padding: "8px 18px",
-                    background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
-                    color: "#01040B", fontFamily: "Inter, sans-serif",
-                    fontWeight: 700, fontSize: 13, borderRadius: 999,
-                    textDecoration: "none",
-                  }}>
-                    Upgrade for Unlimited Access →
-                  </a>
-                </div>
-              )}
-
-              <div ref={bottomRef} />
-            </div>
-
-            {/* Quick actions (show only at start) */}
-            {messages.length <= 1 && (
-              <div style={{
-                padding: "0 14px 10px",
-                display: "flex", flexWrap: "wrap", gap: 7, flexShrink: 0,
-              }}>
-                {QUICK_ACTIONS.map(a => (
-                  <button key={a.label} onClick={() => handleQuick(a.label)} style={{
-                    background: "rgba(212,175,55,0.06)",
-                    border: "1px solid rgba(212,175,55,0.18)",
-                    borderRadius: 999, padding: "6px 12px",
-                    color: "rgba(255,255,255,0.7)", cursor: "pointer",
-                    fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 500,
-                    transition: "all 0.2s",
-                  }}>
-                    {a.icon} {a.label}
+              {/* Tabs */}
+              <div style={{ display: "flex", gap: 0 }}>
+                {([
+                  { key: "chat",  label: "Concierge Chat" },
+                  { key: "about", label: "Sophia AI Info" },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    style={{
+                      flex: 1, padding: "8px 0",
+                      background: "none", border: "none",
+                      borderBottom: activeTab === tab.key
+                        ? `2px solid ${GOLD}`
+                        : "2px solid transparent",
+                      color: activeTab === tab.key ? GOLD : "rgba(255,255,255,0.4)",
+                      fontFamily: "Inter, sans-serif",
+                      fontSize: 12, fontWeight: activeTab === tab.key ? 700 : 500,
+                      cursor: "pointer", transition: "all 0.2s",
+                    }}
+                  >
+                    {tab.key === "chat" ? "✦ " : "💛 "}{tab.label}
                   </button>
                 ))}
               </div>
-            )}
-
-            {/* Input */}
-            <div style={{
-              padding: "12px 14px 16px",
-              borderTop: "1px solid rgba(255,255,255,0.05)",
-              flexShrink: 0,
-            }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                <textarea
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={limitReached ? "Upgrade for unlimited access..." : "Ask Sophia anything..."}
-                  disabled={limitReached || loading}
-                  rows={1}
-                  style={{
-                    flex: 1, background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: 12, padding: "10px 13px",
-                    color: "#fff", fontFamily: "Inter, sans-serif", fontSize: 14,
-                    resize: "none", outline: "none",
-                    opacity: limitReached ? 0.5 : 1,
-                  }}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || loading || limitReached}
-                  style={{
-                    width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                    background: input.trim() && !limitReached
-                      ? `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`
-                      : "rgba(255,255,255,0.06)",
-                    border: "none", cursor: input.trim() && !limitReached ? "pointer" : "not-allowed",
-                    color: input.trim() && !limitReached ? "#01040B" : "rgba(255,255,255,0.3)",
-                    fontSize: 16, transition: "all 0.2s",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  ↑
-                </button>
-              </div>
-              {!session && !limitReached && (
-                <p style={{
-                  fontFamily: "Inter, sans-serif", fontSize: 11,
-                  color: "rgba(255,255,255,0.3)", marginTop: 7, textAlign: "center",
-                }}>
-                  {remaining} free message{remaining !== 1 ? "s" : ""} remaining today ·{" "}
-                  <a href="/signup" style={{ color: GOLD, textDecoration: "none" }}>Upgrade for unlimited</a>
-                </p>
-              )}
             </div>
+
+            {/* Tab content */}
+            {activeTab === "about" ? (
+              <SophiaCompanionTab />
+            ) : (
+              <>
+                {/* Messages */}
+                <div style={{
+                  flex: 1, overflowY: "auto", padding: "16px",
+                  display: "flex", flexDirection: "column", gap: 12,
+                }}>
+                  {messages.map((m, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: m.from === "user" ? "flex-end" : "flex-start" }}>
+                      <div style={{
+                        maxWidth: "84%",
+                        background: m.from === "sophia"
+                          ? "rgba(255,255,255,0.05)"
+                          : "rgba(212,175,55,0.12)",
+                        border: m.from === "sophia"
+                          ? "1px solid rgba(255,255,255,0.07)"
+                          : "1px solid rgba(212,175,55,0.2)",
+                        borderRadius: m.from === "sophia" ? "4px 14px 14px 14px" : "14px 4px 14px 14px",
+                        padding: "9px 13px",
+                        fontFamily: "Inter, sans-serif", fontSize: 13.5, lineHeight: 1.55,
+                        color: m.from === "sophia" ? "rgba(255,255,255,0.82)" : "#fff",
+                      }}>
+                        {m.text}
+                      </div>
+                    </div>
+                  ))}
+
+                  {loading && (
+                    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                      <div style={{
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)",
+                        borderRadius: "4px 14px 14px 14px", padding: "10px 16px",
+                        display: "flex", gap: 5, alignItems: "center",
+                      }}>
+                        {[0,1,2].map(i => (
+                          <div key={i} style={{
+                            width: 6, height: 6, borderRadius: "50%", background: GOLD,
+                            animation: "sophiaDot 1.2s ease-in-out infinite",
+                            animationDelay: `${i * 0.2}s`,
+                          }} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Limit reached banner */}
+                  {limitReached && (
+                    <div style={{
+                      background: "rgba(212,175,55,0.08)",
+                      border: "1px solid rgba(212,175,55,0.22)",
+                      borderRadius: 12, padding: "12px 14px",
+                    }}>
+                      <p style={{ fontFamily: "Inter, sans-serif", fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 10 }}>
+                        Daily free messages used. Resets tomorrow.
+                      </p>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <a href="/signup" style={{
+                          flex: 1, display: "block", textAlign: "center", padding: "8px 0",
+                          background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
+                          color: "#01040B", fontFamily: "Inter, sans-serif",
+                          fontWeight: 700, fontSize: 12, borderRadius: 999,
+                          textDecoration: "none",
+                        }}>
+                          Upgrade (Unlimited)
+                        </a>
+                        <button
+                          onClick={() => setActiveTab("about")}
+                          style={{
+                            flex: 1, padding: "8px 0",
+                            background: "rgba(212,175,55,0.09)",
+                            border: "1px solid rgba(212,175,55,0.22)",
+                            borderRadius: 999, color: GOLD,
+                            fontFamily: "Inter, sans-serif", fontWeight: 700, fontSize: 12,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Sophia Companion →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={bottomRef} />
+                </div>
+
+                {/* Quick actions (show only at start) */}
+                {messages.length <= 1 && (
+                  <div style={{
+                    padding: "0 14px 10px",
+                    display: "flex", flexWrap: "wrap", gap: 7, flexShrink: 0,
+                  }}>
+                    {QUICK_ACTIONS.map(a => (
+                      <button key={a.label} onClick={() => handleQuick(a.label)} style={{
+                        background: "rgba(212,175,55,0.06)",
+                        border: "1px solid rgba(212,175,55,0.18)",
+                        borderRadius: 999, padding: "6px 12px",
+                        color: "rgba(255,255,255,0.7)", cursor: "pointer",
+                        fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 500,
+                        transition: "all 0.2s",
+                      }}>
+                        {a.icon} {a.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setActiveTab("about")}
+                      style={{
+                        background: "rgba(212,175,55,0.1)",
+                        border: "1px solid rgba(212,175,55,0.28)",
+                        borderRadius: 999, padding: "6px 12px",
+                        color: GOLD, cursor: "pointer",
+                        fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      💛 Sophia Companion Plans
+                    </button>
+                  </div>
+                )}
+
+                {/* Input */}
+                <div style={{
+                  padding: "12px 14px 16px",
+                  borderTop: "1px solid rgba(255,255,255,0.05)",
+                  flexShrink: 0,
+                }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                    <textarea
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={limitReached ? "Upgrade for unlimited access..." : "Ask Sophia anything..."}
+                      disabled={limitReached || loading}
+                      rows={1}
+                      style={{
+                        flex: 1, background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 12, padding: "10px 13px",
+                        color: "#fff", fontFamily: "Inter, sans-serif", fontSize: 14,
+                        resize: "none", outline: "none",
+                        opacity: limitReached ? 0.5 : 1,
+                      }}
+                    />
+                    <button
+                      onClick={handleSend}
+                      disabled={!input.trim() || loading || limitReached}
+                      style={{
+                        width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                        background: input.trim() && !limitReached
+                          ? `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`
+                          : "rgba(255,255,255,0.06)",
+                        border: "none", cursor: input.trim() && !limitReached ? "pointer" : "not-allowed",
+                        color: input.trim() && !limitReached ? "#01040B" : "rgba(255,255,255,0.3)",
+                        fontSize: 16, transition: "all 0.2s",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      ↑
+                    </button>
+                  </div>
+                  {!session && !limitReached && (
+                    <p style={{
+                      fontFamily: "Inter, sans-serif", fontSize: 11,
+                      color: "rgba(255,255,255,0.3)", marginTop: 7, textAlign: "center",
+                    }}>
+                      {remaining} free message{remaining !== 1 ? "s" : ""} remaining ·{" "}
+                      <a href="/signup" style={{ color: GOLD, textDecoration: "none" }}>Upgrade for unlimited</a>
+                      {" "}·{" "}
+                      <button
+                        onClick={() => setActiveTab("about")}
+                        style={{ background: "none", border: "none", color: GOLD2, cursor: "pointer", fontSize: 11, padding: 0 }}
+                      >
+                        Sophia Companion Plans
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
