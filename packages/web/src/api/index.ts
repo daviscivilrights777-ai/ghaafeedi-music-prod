@@ -20,7 +20,8 @@ const app = new Hono()
   .get('/ping', (c) => c.json({ message: `Pong! ${Date.now()}` }, 200))
   .get('/health', (c) => c.json({ status: 'ok' }, 200))
   // Auth — Better Auth handles /api/auth/*
-  .on(["GET", "POST"], "/auth/**", (c) => auth.handler(c.req.raw))
+  // Note: basePath('api') is set, so use /auth/* (single glob, not /**)
+  .on(["GET", "POST"], "/auth/*", (c) => auth.handler(c.req.raw))
   // Feature routes
   .route("/profiles", profiles)
   .route("/orders", orders)
