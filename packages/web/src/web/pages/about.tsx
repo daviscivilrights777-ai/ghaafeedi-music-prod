@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Navbar } from "../components/Navbar";
 import { Footer } from "../components/Footer";
 import { Link } from "wouter";
+import { GhaafeediLogo } from "../components/GhaafeediLogo";
 
 const FADE_UP = {
   hidden: { opacity: 0, y: 32 },
@@ -174,13 +175,7 @@ export default function AboutPage() {
                   "We believe every life is a masterpiece waiting to be told. Technology should give it the stage it deserves."
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: "50%",
-                    background: "linear-gradient(135deg, #F8E08A, #D4A574)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 18, fontWeight: 900, color: "#0A0B0F",
-                    fontFamily: "'Playfair Display', serif",
-                  }}>G</div>
+                  <GhaafeediLogo variant="navbar" />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", fontFamily: "Inter, sans-serif" }}>Ghaafeedi Music</div>
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.38)", fontFamily: "Inter, sans-serif" }}>Founding Vision, 2023</div>
