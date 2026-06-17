@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: ghaafeedi-music
+    runtime: node
+    buildCommand: npm install -g bun && bun install && cd packages/web && bun run build
+    startCommand: cd packages/web && bun src/server.ts
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: FAL_API_KEY
+        sync: false
+      - key: SUNO_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_S3_ENDPOINT
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: VITE_API_URL
+        sync: false
+      - key: N8N_WEBHOOK_BASE
+        value: https://n8n-production-7cc4.up.railway.app
+      - key: N8N_WEBHOOK_SECRET
+        value: gm-n8n-secret-2026-prod
+      - key: ADMIN_EMAIL
+        value: lawrence@ghaafeedi.com
