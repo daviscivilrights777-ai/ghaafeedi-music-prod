@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+*.env
+!.env.example
+dist/
+.turbo/
+.next/
+build/
+*.log
+.DS_Store
+.github-deploy.env
+packages/web/.env

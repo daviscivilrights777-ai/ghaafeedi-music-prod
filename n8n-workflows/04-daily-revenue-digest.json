@@ -1,0 +1,89 @@
+{
+  "name": "04 - Daily Revenue Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron - 08:00 UTC Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GM_API_BASE }}/api/automations/digest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-GM-Secret", "value": "={{ $env.GM_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "fetch-digest",
+      "name": "GET /api/automations/digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GM_API_BASE }}/api/automations/inbound/digest-email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-GM-Secret", "value": "={{ $env.GM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ todayRevenue: $json.totalRevenueCents, mtdRevenue: $json.totalRevenueCents, ordersToday: $json.orderCount, activeMembers: 0, jobsQueued: 0, jobsProcessing: 0, jobsCompleted: 0, jobsFailed: 0 }) }}",
+        "options": {}
+      },
+      "id": "send-digest",
+      "name": "POST digest-email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GM_API_BASE }}/api/automations/inbound/digest-sent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-GM-Secret", "value": "={{ $env.GM_WEBHOOK_SECRET }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"date\": \"{{ $now.format('yyyy-MM-dd') }}\" }",
+        "options": {}
+      },
+      "id": "confirm-sent",
+      "name": "POST digest-sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Cron - 08:00 UTC Daily": {
+      "main": [[{ "node": "GET /api/automations/digest", "type": "main", "index": 0 }]]
+    },
+    "GET /api/automations/digest": {
+      "main": [[{ "node": "POST digest-email", "type": "main", "index": 0 }]]
+    },
+    "POST digest-email": {
+      "main": [[{ "node": "POST digest-sent", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["ghaafeedi", "revenue", "digest"]
+}
