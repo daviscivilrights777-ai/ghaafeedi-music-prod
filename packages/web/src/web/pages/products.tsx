@@ -1,6 +1,7 @@
 import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useSession, signOut, clearToken } from "../lib/authClient";
 
 // ─── CSS ───────────────────────────────────────────────────────────────────────
 const GLOBAL_CSS = `
@@ -1003,6 +1004,8 @@ export default function ProductsPage() {
   const [activeCat, setActiveCat] = useState("All");
   const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 1440);
   const [, nav] = useLocation();
+  const { data: session } = useSession();
+  const handleSignOut = async () => { await signOut(); clearToken(); nav("/"); };
 
   useEffect(() => {
     // Debounced resize
@@ -1044,12 +1047,34 @@ export default function ProductsPage() {
           <button onClick={()=>nav("/")} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center"}}>
             <GhaafeediLogo variant="page" />
           </button>
-          <button onClick={()=>nav("/")} style={{
-            background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.35)",
-            color:"#D4AF37",padding:"10px 22px",borderRadius:24,cursor:"pointer",
-            fontSize:13,fontWeight:500,fontFamily:"'Inter',sans-serif",
-            letterSpacing:"0.05em",textTransform:"uppercase",backdropFilter:"blur(8px)",
-          }}>← Back</button>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            {session?.user && (
+              <span style={{fontFamily:"'Inter',sans-serif",fontSize:12,color:"rgba(255,255,255,0.45)",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {session.user.name || session.user.email}
+              </span>
+            )}
+            <button onClick={()=>nav("/")} style={{
+              background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.35)",
+              color:"#D4AF37",padding:"10px 22px",borderRadius:24,cursor:"pointer",
+              fontSize:13,fontWeight:500,fontFamily:"'Inter',sans-serif",
+              letterSpacing:"0.05em",textTransform:"uppercase",backdropFilter:"blur(8px)",
+            }}>← Back</button>
+            {session?.user ? (
+              <button onClick={handleSignOut} style={{
+                background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.18)",
+                color:"rgba(255,255,255,0.65)",padding:"10px 20px",borderRadius:24,cursor:"pointer",
+                fontSize:13,fontWeight:500,fontFamily:"'Inter',sans-serif",
+                letterSpacing:"0.05em",textTransform:"uppercase",backdropFilter:"blur(8px)",
+              }}>Sign Out</button>
+            ) : (
+              <button onClick={()=>nav("/signin")} style={{
+                background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.35)",
+                color:"#D4AF37",padding:"10px 20px",borderRadius:24,cursor:"pointer",
+                fontSize:13,fontWeight:500,fontFamily:"'Inter',sans-serif",
+                letterSpacing:"0.05em",textTransform:"uppercase",backdropFilter:"blur(8px)",
+              }}>Sign In</button>
+            )}
+          </div>
         </nav>
 
         {/* HERO */}

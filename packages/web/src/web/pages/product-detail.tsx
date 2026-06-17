@@ -486,9 +486,15 @@ export default function ProductDetail() {
           <span style={{ fontSize: 18, lineHeight: 1 }}>←</span> All Products
         </button>
         <span style={{ fontFamily: "Playfair Display, serif", fontWeight: 700, fontSize: 15, background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Ghaafeedi Music</span>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {session ? (
-            <button onClick={() => setLocation("/dashboard")} style={{ padding: "8px 18px", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 8, color: GOLD, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Dashboard</button>
+            <>
+              <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.42)", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {session.user?.name || session.user?.email}
+              </span>
+              <button onClick={() => setLocation("/dashboard")} style={{ padding: "8px 18px", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 8, color: GOLD, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Dashboard</button>
+              <button onClick={async () => { await authClient.signOut(); if (typeof (authClient as any).clearToken === "function") (authClient as any).clearToken(); setLocation("/"); }} style={{ padding: "8px 18px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.62)", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Sign Out</button>
+            </>
           ) : (
             <>
               <button onClick={() => setLocation("/signin")} style={{ padding: "8px 18px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.7)", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Sign In</button>

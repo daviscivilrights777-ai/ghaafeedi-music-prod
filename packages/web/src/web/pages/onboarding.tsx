@@ -1,7 +1,9 @@
 import { GhaafeediLogo } from "../components/GhaafeediLogo";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
+import { useSession } from "../lib/authClient";
+import { AuthGateModal } from "../components/AuthGateModal";
 
 // ─── Brand tokens ────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -8600,9 +8602,27 @@ function S9OrderDetailsModal({ onClose }: { onClose: () => void }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const GM_OB_STEP_KEY = "gm_ob_step";
+
 export default function Onboarding() {
-  const _initStep = typeof window !== 'undefined' ? (parseInt(new URLSearchParams(window.location.search).get('step') || '1') || 1) : 1;
+  const { data: session, isPending: sessionLoading } = useSession();
+  const isAuthed = !!session?.user;
+
+  // Determine initial step: URL param > localStorage (if authed) > 1
+  const _initStep = (() => {
+    if (typeof window === 'undefined') return 1;
+    const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') || '0') || 0;
+    if (urlStep >= 1) return urlStep;
+    // Only resume saved step if authenticated
+    if (isAuthed) {
+      const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || '1') || 1;
+      return Math.min(saved, 9);
+    }
+    return 1;
+  })();
+
   const [step, setStep] = useState(_initStep);
+  const [authGateOpen, setAuthGateOpen] = useState(false);
   const [, setLocation] = useLocation();
   const [obData, setObData] = useState<OnboardingData>({
     whoFor: null,
@@ -8615,7 +8635,33 @@ export default function Onboarding() {
     uploadedDocuments: [],
   });
 
-  const next = () => setStep(s => Math.min(s + 1, 9));
+  // Persist step to localStorage whenever it changes (only for authed users)
+  useEffect(() => {
+    if (isAuthed && step > 1 && step < 9) {
+      localStorage.setItem(GM_OB_STEP_KEY, String(step));
+    }
+  }, [step, isAuthed]);
+
+  // Auth gate: if session resolves and user came in authenticated, resume from saved step
+  useEffect(() => {
+    if (!sessionLoading && isAuthed) {
+      const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || '1') || 1;
+      if (saved > 1 && step === 1) {
+        setStep(Math.min(saved, 9));
+      }
+      // Ensure member record exists (handles Google OAuth callback case)
+      fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
+    }
+  }, [sessionLoading, isAuthed]);
+
+  const next = () => {
+    // Gate: S2+ require auth
+    if (step === 1 && !isAuthed) {
+      setAuthGateOpen(true);
+      return;
+    }
+    setStep(s => Math.min(s + 1, 9));
+  };
   const back = () => setStep(s => Math.max(s - 1, 1));
   const [orderModalOpen, setOrderModalOpen] = React.useState(false);
   const setWhoFor         = (v: string) => setObData(d => ({ ...d, whoFor: v }));
@@ -8629,6 +8675,11 @@ export default function Onboarding() {
 
   return (
     <div style={{ background:"#06040f", minHeight:"100svh", height:"100svh", overflow:"hidden", position:"fixed", inset:0 }}>
+      <AuthGateModal
+        open={authGateOpen}
+        onClose={() => setAuthGateOpen(false)}
+        redirectTo="/onboarding"
+      />
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div key="s1"
@@ -8763,6 +8814,7 @@ export default function Onboarding() {
               }}
               onDashboard={() => {
                 s9Track("dashboard_nav");
+                localStorage.removeItem(GM_OB_STEP_KEY);
                 setLocation("/");
               }}
             />
