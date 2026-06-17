@@ -5,7 +5,7 @@ import { db } from "./database";
 
 export const auth = betterAuth({
   basePath: "/api/auth",
-  baseURL: process.env.WEBSITE_URL ?? "http://localhost:4200",
+  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:4200",
   database: drizzleAdapter(db, { provider: "sqlite" }),
   emailAndPassword: { enabled: true },
   secret: process.env.BETTER_AUTH_SECRET ?? "ghaafeedi-music-secret-key-change-in-prod",
@@ -19,7 +19,7 @@ export const auth = betterAuth({
           google: {
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            redirectURI: `${process.env.WEBSITE_URL ?? "http://localhost:4200"}/api/auth/callback/google`,
+            redirectURI: `${process.env.BETTER_AUTH_URL ?? "http://localhost:4200"}/api/auth/callback/google`,
           },
         }
       : {}),

@@ -1,3 +1,4 @@
+import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
@@ -105,9 +106,8 @@ export default function SignUp() {
 
       {/* Logo */}
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, padding: "20px 40px" }}>
-        <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${GOLD2}, ${GOLD})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 900, color: BG, fontFamily: "Playfair Display, serif" }}>G</div>
-          <span style={{ fontFamily: "Playfair Display, serif", fontWeight: 700, fontSize: 15, background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Ghaafeedi Music</span>
+        <Link href="/" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          <GhaafeediLogo variant="navbar" />
         </Link>
       </div>
 
