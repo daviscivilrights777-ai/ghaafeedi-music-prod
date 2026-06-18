@@ -14,7 +14,7 @@
  *  6  — CTA → Enter Homepage
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence, useInView } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -73,6 +73,10 @@ const PARTICLES = Array.from({ length: 28 }, (_, i) => ({
 }));
 
 // ─── Reusable scroll-reveal section wrapper ───────────────────────────────────
+// IMPORTANT: The outer container is position:fixed with overflow-y:auto.
+// Intersection Observer (used by useInView + whileInView) measures against
+// the viewport by default — it NEVER fires inside a fixed scroll container.
+// Solution: always render sections as visible. No scroll-triggered hiding.
 function Section({
   children, id, accent = false, style,
 }: {
@@ -81,15 +85,9 @@ function Section({
   accent?: boolean;
   style?: React.CSSProperties;
 }) {
-  const ref    = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-60px" });
   return (
-    <motion.section
+    <section
       id={id}
-      ref={ref}
-      initial="hidden"
-      animate={inView ? "visible" : "hidden"}
-      variants={stagger}
       style={{
         width: "100%",
         background: accent ? BG2 : "transparent",
@@ -98,14 +96,19 @@ function Section({
         ...style,
       }}
     >
-      <div style={{
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: "clamp(64px,9vw,100px) clamp(20px,5vw,52px)",
-      }}>
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={stagger}
+        style={{
+          maxWidth: 1100,
+          margin: "0 auto",
+          padding: "clamp(64px,9vw,100px) clamp(20px,5vw,52px)",
+        }}
+      >
         {children}
-      </div>
-    </motion.section>
+      </motion.div>
+    </section>
   );
 }
 
@@ -1314,6 +1317,28 @@ interface SplashLandingPageProps {
 
 export function SplashLandingPage({ onComplete }: SplashLandingPageProps) {
   const [exiting, setExiting] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Lock body scroll while splash is active; unlock on unmount
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // Forward wheel events from document to the splash scroll container
+  // (required because position:fixed divs don't receive wheel by default
+  // when the cursor is outside a scrollable child)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      el.scrollTop += e.deltaY;
+    };
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, []);
 
   const handleEnter = useCallback(() => {
     if (exiting) return;
@@ -1326,6 +1351,7 @@ export function SplashLandingPage({ onComplete }: SplashLandingPageProps) {
       {!exiting && (
         <motion.div
           key="splash-landing"
+          ref={scrollRef}
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5, ease: "easeInOut" }}
@@ -1333,11 +1359,12 @@ export function SplashLandingPage({ onComplete }: SplashLandingPageProps) {
             position: "fixed",
             inset: 0,
             zIndex: 99999,
-            overflowY: "auto",
+            overflowY: "scroll",
             overflowX: "hidden",
             background: BG,
             fontFamily: "Inter, sans-serif",
             color: TEXT,
+            WebkitOverflowScrolling: "touch" as const,
           }}
         >
           {/* S0 — Living Logo Hero */}
