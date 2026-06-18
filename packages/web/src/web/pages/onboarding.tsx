@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 import { useSession } from "../lib/authClient";
 import { AuthGateModal } from "../components/AuthGateModal";
+import { DodoPayments } from "dodopayments-checkout";
 
 // ─── Brand tokens ────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -7340,12 +7341,68 @@ function Step8Checkout({
 
   const pkg = S8_PACKAGES.find(p => p.id === selectedPkgId) ?? S8_PACKAGES[1];
 
-  // ── Submit handler ─────────────────────────────────────────────────────────
-  const handleSubmit = React.useCallback(() => {
-    // Double-submit guard
+  // ── Dodo inline checkout state ─────────────────────────────────────────────
+  const [dodoCheckoutUrl,  setDodoCheckoutUrl]  = React.useState<string | null>(null);
+  const [dodoSessionId,    setDodoSessionId]    = React.useState<string | null>(null);
+  const [dodoReady,        setDodoReady]        = React.useState(false);
+  const dodoInitialized = React.useRef(false);
+
+  // ── Initialize Dodo SDK once ───────────────────────────────────────────────
+  React.useEffect(() => {
+    if (dodoInitialized.current) return;
+    dodoInitialized.current = true;
+    DodoPayments.Initialize({
+      mode: "live",
+      displayType: "inline",
+      onEvent: (event) => {
+        if (event.event_type === "checkout.form_ready") {
+          setDodoReady(true);
+        }
+        if (event.event_type === "checkout.pay_button_clicked") {
+          setSubmitState("loading");
+          startPolling();
+        }
+        if (event.event_type === "checkout.error") {
+          setSubmitState("error");
+          submitLock.current = false;
+        }
+      },
+    });
+    return () => { DodoPayments.Checkout.close(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Poll for payment confirmation ──────────────────────────────────────────
+  const pollTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const startPolling = React.useCallback(() => {
+    if (pollTimer.current) return;
+    let attempts = 0;
+    pollTimer.current = setInterval(async () => {
+      attempts++;
+      try {
+        // Check localStorage flag set by webhook or manual trigger
+        const locked = localStorage.getItem(GM_CHECKOUT_LOCK_KEY);
+        if (locked === "1") {
+          clearInterval(pollTimer.current!);
+          pollTimer.current = null;
+          onNext();
+          return;
+        }
+        // After 90s give up
+        if (attempts > 45) {
+          clearInterval(pollTimer.current!);
+          pollTimer.current = null;
+          setSubmitState("idle");
+          submitLock.current = false;
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+  }, [onNext]);
+
+  // ── Fetch Dodo checkout session ────────────────────────────────────────────
+  const handleSubmit = React.useCallback(async () => {
     if (submitLock.current || submitState === "loading") return;
 
-    // Rate limit: max 3 attempts per minute
+    // Rate limit
     const now = Date.now();
     attemptTimestamps.current = attemptTimestamps.current.filter(t => now - t < 60_000);
     if (attemptTimestamps.current.length >= 3) {
@@ -7357,50 +7414,50 @@ function Step8Checkout({
     submitLock.current = true;
     setSubmitState("loading");
 
-    // Simulate async payment processing (2 s)
-    setTimeout(() => {
-      try {
-        const orderId        = genOrderId();
-        const subtotal       = pkg.price;
-        const addonsTotal    = addons.reduce((sum, a) => sum + a.price, 0);
-        const aiFee          = 9;
-        const rendering      = 12;
-        const tax            = +((subtotal + addonsTotal) * 0.085).toFixed(2);
-        const total          = subtotal + addonsTotal + aiFee + rendering + tax;
+    try {
+      const res = await fetch("/api/dodo/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packageId: pkg.id,
+          successUrl: `${window.location.origin}/onboarding?step=9&payment=success`,
+          cancelUrl:  `${window.location.origin}/onboarding?step=8`,
+        }),
+      });
 
-        const orderRecord = {
-          orderId,
-          packageId:     pkg.id,
-          packageName:   `${pkg.name} Membership`,
-          packagePrice:  pkg.price,
-          addons:        addons.map(a => ({ id: a.productId, name: a.name, price: a.price, priceStr: a.priceStr })),
-          addonsTotal,
-          total,
-          paymentMethod: bnplOption ? `BNPL – ${bnplOption}` : payNowMethod,
-          purchaseDate:  new Date().toISOString(),
-          status:        "confirmed",
-        };
+      const data = await res.json() as { checkoutUrl?: string; sessionId?: string; error?: string };
 
-        // Persist S9 order record
-        localStorage.setItem("gm_order_confirmation", JSON.stringify(orderRecord));
-        // Lock against repeat submissions
-        localStorage.setItem(GM_CHECKOUT_LOCK_KEY, "1");
-        // Clear checkout draft
-        localStorage.removeItem(GM_CHECKOUT_STATE_KEY);
-
-        setSubmitState("success");
-
-        // Advance after brief success flash
-        setTimeout(() => {
-          submitLock.current = false;
-          onNext();
-        }, 800);
-      } catch {
+      if (!res.ok || !data.checkoutUrl) {
+        console.error("[Dodo] session error:", data.error);
         setSubmitState("error");
         submitLock.current = false;
+        return;
       }
-    }, 2000);
-  }, [pkg, addons, bnplOption, payNowMethod, submitState, onNext]);
+
+      setDodoCheckoutUrl(data.checkoutUrl);
+      setDodoSessionId(data.sessionId ?? null);
+      setSubmitState("idle");
+      submitLock.current = false;
+
+      // Open inline checkout
+      setTimeout(() => {
+        DodoPayments.Checkout.open({
+          checkoutUrl: data.checkoutUrl!,
+          elementId: "dodo-inline-checkout",
+          options: {
+            showTimer: true,
+            showSecurityBadge: true,
+            payButtonText: "Complete Payment",
+          },
+        });
+      }, 100);
+
+    } catch (err) {
+      console.error("[Dodo] fetch error:", err);
+      setSubmitState("error");
+      submitLock.current = false;
+    }
+  }, [pkg, submitState]);
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
@@ -7463,6 +7520,41 @@ function Step8Checkout({
             onSubmit={handleSubmit}
             isMobile={isMobile}
           />
+
+          {/* ── Dodo Inline Checkout Frame ───────────────────────────────── */}
+          {dodoCheckoutUrl && (
+            <div style={{
+              marginTop: 24,
+              borderRadius: 16,
+              overflow: "hidden",
+              border: "1px solid rgba(212,175,55,0.25)",
+              background: "#0d0d0d",
+              minHeight: 500,
+              position: "relative",
+            }}>
+              {/* Loading skeleton */}
+              {!dodoReady && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexDirection: "column", gap: 12,
+                  background: "#0d0d0d",
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: "50%",
+                    border: "3px solid rgba(212,175,55,0.2)",
+                    borderTopColor: "#D4AF37",
+                    animation: "spin 0.8s linear infinite",
+                  }} />
+                  <span style={{ fontFamily:"Inter,sans-serif", fontSize:13, color:"rgba(255,255,255,0.4)" }}>
+                    Loading secure checkout…
+                  </span>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+              <div id="dodo-inline-checkout" style={{ width: "100%", minHeight: 500 }} />
+            </div>
+          )}
         </div>
 
         {/* Right — order review */}
