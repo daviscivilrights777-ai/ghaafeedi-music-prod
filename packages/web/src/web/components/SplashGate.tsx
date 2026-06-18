@@ -75,7 +75,9 @@ export function SplashGate({ onComplete }: SplashGateProps) {
                   background: GOLD,
                   opacity: p.opacity,
                   animation: `splashDrift ${p.dur}s ease-in-out ${p.delay}s infinite alternate`,
-                }}
+                  "--dx": `${p.driftX * 10}px`,
+                  "--dy": `${p.driftY * 10}px`,
+                } as React.CSSProperties}
               />
             ))}
           </div>
