@@ -12,7 +12,7 @@ const G_GLOW_LOW  = "rgba(243,211,122,0.13)";
 const BG          = "#01040B";
 const WHITE       = "#FFFFFF";
 
-const HERO_VIDEO = "/videos/GHAAFEEDI_MUSIC_DEMO_FULL.mp4";
+const HERO_VIDEO = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/GHAAFEEDI_MUSIC_DEMO_FULL.mp4";
 const GALAXY_BG  = "/assets/galaxy-bg.png";
 
 const CARDS = [
