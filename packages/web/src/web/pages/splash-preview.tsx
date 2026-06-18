@@ -1,16 +1,18 @@
 /**
- * /splash-preview — Always shows the SplashGate regardless of localStorage.
- * Use this to review/approve the splash intro at any time.
- * After clicking through, redirects to homepage.
+ * /splash-preview — Always shows the SplashGate for review/approval.
+ * Ignores localStorage. After clicking through, renders the homepage
+ * inline so you see the full transition: splash → homepage.
  */
-import { useLocation } from "wouter";
+import { useState } from "react";
 import { SplashGate } from "../components/SplashGate";
+import IndexPage from "./index";
 
 export default function SplashPreview() {
-  const [, setLocation] = useLocation();
-  return (
-    <SplashGate
-      onComplete={() => setLocation("/")}
-    />
-  );
+  const [done, setDone] = useState(false);
+
+  // When done: render homepage inline (no navigation, no localStorage write)
+  // so you can see the full splash → homepage transition in context.
+  if (done) return <IndexPage />;
+
+  return <SplashGate onComplete={() => setDone(true)} />;
 }
