@@ -196,8 +196,8 @@ export function StorytellingShowcase() {
         >
           <video
             ref={videoRef}
-            src="/assets/flagship-demo.mp4"
-            poster="/assets/sophia-poster.png"
+            src="https://pub-bc7b203485814e1186102277ad450211.r2.dev/flagship-demo.mp4"
+            poster="https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.png"
             muted={muted}
             playsInline
             preload="metadata"
