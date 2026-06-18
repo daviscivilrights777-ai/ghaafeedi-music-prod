@@ -128,8 +128,8 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
 
   return (
     <div className="ob-step1-root" style={{
-      position:"relative", width:"100%", height:"100svh",
-      minHeight:"100svh", overflow:"hidden",
+      position:"relative", width:"100%", height:"100%",
+      minHeight:"100%", overflow:"hidden",
       background:`linear-gradient(160deg, #06040f 0%, #0a0718 35%, #0d0a22 65%, #070510 100%)`,
       display:"flex", flexDirection:"column",
     }}>
@@ -530,9 +530,9 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
           }
           /* ── TABLET: column layout, content top ~48%, portal fills bottom ── */
           .ob-step1-root{
-            height:100svh!important;
-            min-height:100svh!important;
-            max-height:100svh!important;
+            height:100%!important;
+            min-height:100%!important;
+            max-height:100%!important;
             overflow:hidden!important;
             display:flex!important;
             flex-direction:column!important;
@@ -598,9 +598,9 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
         /* MOBILE ≤600px — full-screen locked, text top 46%, portal bottom 54% */
         @media(max-width:600px){
           .ob-step1-root{
-            height:100svh!important;
-            min-height:100svh!important;
-            max-height:100svh!important;
+            height:100%!important;
+            min-height:100%!important;
+            max-height:100%!important;
             overflow:hidden!important;
             display:flex!important;
             flex-direction:column!important;
@@ -744,7 +744,7 @@ function Step2WhoIsThisFor({ selected, onSelect, onNext, onBack }: Step2Props) {
 
   return (
     <div className="ob2-root" style={{
-      position:"relative", width:"100%", height:"100vh",
+      position:"relative", width:"100%", height:"100%",
       background:"linear-gradient(160deg,#06040f 0%,#0a0618 40%,#0c0820 70%,#06040f 100%)",
       overflow:"hidden", display:"flex", flexDirection:"column",
       fontFamily:"Inter, sans-serif",
@@ -1180,7 +1180,7 @@ function Step3ChooseExperience({ selected, onSelect, onNext, onBack }: Step3Prop
 
   return (
     <div className="ob3-root" style={{
-      position:"relative", width:"100%", height:"100svh",
+      position:"relative", width:"100%", height:"100%",
       background:"linear-gradient(160deg,#06040f 0%,#090518 40%,#0d0920 70%,#06040f 100%)",
       overflow:"hidden", display:"flex", flexDirection:"column",
       fontFamily:"Inter, sans-serif",
@@ -1521,7 +1521,7 @@ function Step3ChooseExperience({ selected, onSelect, onNext, onBack }: Step3Prop
 
         @media(min-width:601px) and (max-width:1100px){
           .ob3-root{
-            height:100svh!important;
+            height:100%!important;
             min-height:unset!important;
             overflow-y:hidden!important;
             display:flex!important;
@@ -1562,13 +1562,13 @@ function Step3ChooseExperience({ selected, onSelect, onNext, onBack }: Step3Prop
         }
 
         @media(max-width:600px){
-          .ob3-root{ height:auto!important; min-height:100svh!important; overflow-y:auto!important; }
+          .ob3-root{ height:100%!important; min-height:unset!important; overflow-y:auto!important; }
           .ob3-content{ justify-content:flex-start!important; padding-top:20px!important; padding-bottom:8px!important; }
           .ob3-title{ font-size:clamp(26px,7.5vw,34px)!important; }
           .ob3-grid{ max-width:100%!important; gap:10px!important; }
           .ob3-card{ min-height:100px!important; padding:12px 8px!important; }
           .ob3-icon-wrap{ width:40px!important; height:40px!important; }
-          .ob3-nav{ padding:12px 20px 100px 20px!important; }
+          .ob3-nav{ padding:12px 20px 32px 20px!important; }
           .ob3-header{ padding-top:16px!important; overflow-x:auto!important; }
         }
       `}</style>
@@ -1977,7 +1977,7 @@ function Step4TellYourStory({
 
   return (
     <div className="ob4-root" style={{
-      position: "relative", width: "100%", height: "100svh",
+      position: "relative", width: "100%", height: "100%",
       background: "linear-gradient(160deg,#06040f 0%,#090518 40%,#0d0920 70%,#06040f 100%)",
       overflow: "hidden", display: "flex", flexDirection: "column",
       fontFamily: "Inter, sans-serif",
@@ -2656,7 +2656,7 @@ function Step4TellYourStory({
 
         /* MOBILE */
         @media(max-width:600px){
-          .ob4-root { height:auto!important; min-height:100svh!important; }
+          .ob4-root { height:100%!important; min-height:unset!important; }
           .ob4-scroll { overflow-y:auto!important; }
           .ob4-inner { padding-top:20px!important; padding-bottom:12px!important; }
           .ob4-title { font-size:clamp(22px,7vw,30px)!important; }
@@ -3152,7 +3152,7 @@ function Step5AIAnalysis({
 
   return (
     <div ref={coreWrapRef} className="ob5-root" style={{
-      position: "relative", width: "100%", height: "100svh",
+      position: "relative", width: "100%", height: "100%",
       background: "linear-gradient(160deg,#020B2B 0%,#04133D 45%,#060820 80%,#020B2B 100%)",
       overflow: "hidden", display: "flex", flexDirection: "column",
       fontFamily: "Inter,sans-serif",
@@ -3934,7 +3934,7 @@ function Step5AIAnalysis({
         }
 
         @media(max-width:600px){
-          .ob5-root   { height:auto !important;min-height:100svh !important; }
+          .ob5-root   { height:100% !important;min-height:unset !important; }
           .ob5-scroll { overflow-y:auto !important; }
           .ob5-layout {
             flex-direction:column !important;
@@ -4179,7 +4179,7 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
 
   return (
     <div className="ob6-page-wrap" style={{
-      position:"relative", width:"100%", minHeight:"100vh",
+      position:"relative", width:"100%", minHeight:"100%",
       background:"linear-gradient(160deg,#060410 0%,#090818 30%,#0d0b22 60%,#060410 100%)",
       display:"flex", flexDirection:"column", alignItems:"center",
       overflowX:"hidden", overflowY:"auto",
@@ -5078,7 +5078,7 @@ function Step7ProductionPortal({ whoFor, experienceType, onBack, onNext }: Step7
 
   return (
     <div style={{
-      minHeight:"100vh", overflowY:"auto", overflowX:"hidden",
+      minHeight:"100%", overflowY:"auto", overflowX:"hidden",
       background:"#050B1A",
       display:"flex", flexDirection:"column", alignItems:"center",
       padding:"0 clamp(16px,3.5vw,80px)",
@@ -7475,7 +7475,7 @@ function Step8Checkout({
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
     <div style={{
-      minHeight: "100vh",
+      minHeight: "100%",
       background: "linear-gradient(180deg, #050B1A 0%, #07101F 50%, #050B1A 100%)",
       padding: isMobile ? "24px 16px 48px" : "40px 24px 80px",
       boxSizing: "border-box",
@@ -7983,7 +7983,7 @@ function Step9OrderConfirmation({ onViewOrder, onDashboard }: Step9Props) {
 
   return (
     <div style={{
-      minHeight:"100vh",
+      minHeight:"100%",
       background:"linear-gradient(180deg,#050B1A 0%,#020509 100%)",
       display:"flex", flexDirection:"column",
       alignItems:"center", justifyContent:"flex-start",
@@ -8675,80 +8675,62 @@ function S9OrderDetailsModal({ onClose }: { onClose: () => void }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GM_OB_STEP_KEY = "gm_ob_step";
+const MEMBER_BAR_H = 44; // px — height of member bar
 
 export default function Onboarding() {
   const { data: session, isPending: sessionLoading } = useSession();
   const isAuthed = !!session?.user;
-
-  // Determine initial step: URL param > localStorage (if authed) > 1
-  const _initStep = (() => {
-    if (typeof window === 'undefined') return 1;
-    const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') || '0') || 0;
-    if (urlStep >= 1) return urlStep;
-    // Only resume saved step if authenticated
-    if (isAuthed) {
-      const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || '1') || 1;
-      return Math.min(saved, 9);
-    }
-    return 1;
-  })();
-
-  const [step, setStep] = useState(_initStep);
-  const [authGateOpen, setAuthGateOpen] = useState(false);
   const [, setLocation] = useLocation();
-  const [memberData, setMemberData] = useState<{ memberId: string; status: string; tier: string; name: string } | null>(null);
-  const [obData, setObData] = useState<OnboardingData>({
-    whoFor: null,
-    experienceType: null,
-    storyText: "",
-    recordedAudio: null,
-    uploadedPhotos: [],
-    uploadedVideos: [],
-    uploadedVoiceNotes: [],
-    uploadedDocuments: [],
+
+  // Step init: URL param > localStorage > 1
+  const [step, setStep] = useState(() => {
+    if (typeof window === "undefined") return 1;
+    const urlStep = parseInt(new URLSearchParams(window.location.search).get("step") || "0") || 0;
+    if (urlStep >= 1 && urlStep <= 9) return urlStep;
+    const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || "1") || 1;
+    return Math.min(Math.max(saved, 1), 9);
   });
 
-  // Persist step to localStorage whenever it changes (only for authed users)
-  useEffect(() => {
-    if (isAuthed && step > 1 && step < 9) {
-      localStorage.setItem(GM_OB_STEP_KEY, String(step));
-    }
-  }, [step, isAuthed]);
+  const [authGateOpen, setAuthGateOpen] = useState(false);
+  const [memberData, setMemberData] = useState<{ memberId: string; status: string; tier: string; name: string } | null>(null);
+  const [obData, setObData] = useState<OnboardingData>({
+    whoFor: null, experienceType: null, storyText: "",
+    recordedAudio: null, uploadedPhotos: [], uploadedVideos: [],
+    uploadedVoiceNotes: [], uploadedDocuments: [],
+  });
 
-  // Auth gate: if session resolves and user came in authenticated, resume from saved step
+  // Always persist step — even unauthenticated (so desktop mode flip doesn't lose it)
   useEffect(() => {
-    if (!sessionLoading && isAuthed) {
-      const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || '1') || 1;
-      if (saved > 1 && step === 1) {
-        setStep(Math.min(saved, 9));
-      }
-      // Ensure member record exists (handles Google OAuth callback case)
-      fetch("/api/members/create", { method: "POST", headers: { "Content-Type": "application/json" } })
-        .catch(() => {});
-      // Load member data for the dashboard bar
-      fetch("/api/members/me")
-        .then(r => r.ok ? r.json() : null)
-        .then((data: { member: { memberId: string; status: string; tier: string } | null } | null) => {
-          if (data?.member) {
-            setMemberData({
-              memberId: data.member.memberId,
-              status: data.member.status,
-              tier: data.member.tier,
-              name: session?.user?.name ?? "",
-            });
-          }
-        })
-        .catch(() => {});
-    }
-  }, [sessionLoading, isAuthed]);
+    if (step >= 1 && step <= 9) localStorage.setItem(GM_OB_STEP_KEY, String(step));
+  }, [step]);
+
+  // On auth resolve: ensure member record + load member data
+  useEffect(() => {
+    if (sessionLoading || !isAuthed) return;
+    // Resume saved step if we landed on step 1 (e.g. after Google OAuth redirect)
+    const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || "1") || 1;
+    if (saved > 1 && step === 1) setStep(Math.min(saved, 9));
+    // Ensure member record exists
+    fetch("/api/members/create", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
+    // Load member data for bar
+    fetch("/api/members/me")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { member: { memberId: string; status: string; tier: string } | null } | null) => {
+        if (data?.member) {
+          setMemberData({
+            memberId: data.member.memberId,
+            status: data.member.status,
+            tier: data.member.tier,
+            name: session?.user?.name ?? "",
+          });
+        }
+      })
+      .catch(() => {});
+  }, [sessionLoading, isAuthed]); // eslint-disable-line
 
   const next = () => {
-    // Gate: S2+ require auth — but wait for session to resolve first
-    if (step === 1 && sessionLoading) return; // session still loading, do nothing
-    if (step === 1 && !isAuthed) {
-      setAuthGateOpen(true);
-      return;
-    }
+    if (step === 1 && sessionLoading) return;
+    if (step === 1 && !isAuthed) { setAuthGateOpen(true); return; }
     setStep(s => Math.min(s + 1, 9));
   };
   const back = () => setStep(s => Math.max(s - 1, 1));
@@ -8762,71 +8744,98 @@ export default function Onboarding() {
   const setVoiceNotes     = (v: UploadedFile[]) => setObData(d => ({ ...d, uploadedVoiceNotes: v }));
   const setDocuments      = (v: UploadedFile[]) => setObData(d => ({ ...d, uploadedDocuments: v }));
 
+  const showBar = isAuthed && memberData;
+  const barH = showBar ? MEMBER_BAR_H : 0;
+
   return (
-    <div style={{ background:"#06040f", minHeight:"100svh", height:"100svh", overflow:"hidden", position:"fixed", inset:0 }}>
-      {/* ── PERSISTENT MEMBER BAR (visible S1-S9 when authenticated) ── */}
-      {isAuthed && memberData && (
+    <div style={{ background:"#06040f", position:"fixed", inset:0, overflow:"hidden" }}>
+
+      {/* ── PERSISTENT MEMBER BAR — responsive 3-device ── */}
+      {showBar && (
         <div style={{
           position:"fixed", top:0, left:0, right:0, zIndex:9999,
-          height:38,
-          background:"linear-gradient(90deg,rgba(11,10,20,0.97) 0%,rgba(11,15,30,0.97) 50%,rgba(11,10,20,0.97) 100%)",
-          borderBottom:"1px solid rgba(212,175,55,0.18)",
-          backdropFilter:"blur(12px)",
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:"0 clamp(16px,3vw,48px)",
+          height: MEMBER_BAR_H,
+          background:"linear-gradient(90deg,rgba(8,7,18,0.98) 0%,rgba(10,13,26,0.98) 50%,rgba(8,7,18,0.98) 100%)",
+          borderBottom:"1px solid rgba(212,175,55,0.20)",
+          backdropFilter:"blur(16px)",
+          display:"flex", alignItems:"center",
+          padding:"0 16px",
           boxSizing:"border-box",
+          gap:0,
         }}>
-          {/* Left: GM ID + status */}
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-              <div style={{
-                width:7, height:7, borderRadius:"50%",
-                background: memberData.status === "active" ? "#22C55E" : "#F59E0B",
-                boxShadow: memberData.status === "active" ? "0 0 6px rgba(34,197,94,0.7)" : "0 0 6px rgba(245,158,11,0.7)",
-                flexShrink:0,
-              }}/>
-              <span style={{
-                fontFamily:"Inter,sans-serif", fontSize:11, fontWeight:700,
-                color:GOLD, letterSpacing:"0.12em",
-              }}>{memberData.memberId}</span>
-            </div>
-            <div style={{ width:1, height:16, background:"rgba(255,255,255,0.1)" }}/>
-            <span style={{
-              fontFamily:"Inter,sans-serif", fontSize:11,
-              color:"rgba(255,255,255,0.45)", letterSpacing:"0.04em",
-            }}>
-              {memberData.name || session?.user?.email?.split("@")[0] || "Member"}
-            </span>
-          </div>
-          {/* Center: step indicator */}
-          <div style={{
-            fontFamily:"Inter,sans-serif", fontSize:10,
-            color:"rgba(255,255,255,0.3)", letterSpacing:"0.14em",
-            textTransform:"uppercase",
-          }}>
-            Step {step} of 9 · {STEPS[step - 1]}
-          </div>
-          {/* Right: tier badge + dashboard link */}
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {/* Status dot + GM ID */}
+          <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
             <div style={{
-              padding:"3px 10px",
-              background:"rgba(212,175,55,0.1)",
-              border:"1px solid rgba(212,175,55,0.22)",
-              borderRadius:12,
-              fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:700,
-              color:GOLD, letterSpacing:"0.12em", textTransform:"uppercase",
-            }}>
-              {memberData.tier === "free" ? "FREE MEMBER" : memberData.tier.toUpperCase()}
-            </div>
-            <a href="/dashboard" style={{
-              fontFamily:"Inter,sans-serif", fontSize:11,
-              color:"rgba(255,255,255,0.38)", textDecoration:"none",
-              letterSpacing:"0.04em", transition:"color 0.2s",
-            }}
-              onMouseEnter={e=>(e.currentTarget.style.color=GOLD)}
-              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.38)")}
-            >Dashboard →</a>
+              width:6, height:6, borderRadius:"50%", flexShrink:0,
+              background: memberData.status === "active" ? "#22C55E" : "#F59E0B",
+              boxShadow: memberData.status === "active" ? "0 0 5px rgba(34,197,94,0.8)" : "0 0 5px rgba(245,158,11,0.8)",
+            }}/>
+            <span style={{
+              fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700,
+              color:GOLD, letterSpacing:"0.08em", whiteSpace:"nowrap",
+            }}>{memberData.memberId}</span>
           </div>
+
+          {/* Divider */}
+          <div style={{ width:1, height:14, background:"rgba(255,255,255,0.12)", margin:"0 10px", flexShrink:0 }}/>
+
+          {/* Name — hidden on very small screens via inline media workaround */}
+          <span className="gmbar-name" style={{
+            fontFamily:"Inter,sans-serif", fontSize:10,
+            color:"rgba(255,255,255,0.40)", whiteSpace:"nowrap",
+            overflow:"hidden", textOverflow:"ellipsis",
+            maxWidth:90, flexShrink:1,
+          }}>
+            {memberData.name || session?.user?.email?.split("@")[0] || "Member"}
+          </span>
+
+          {/* Spacer */}
+          <div style={{ flex:1 }}/>
+
+          {/* Step pill — center */}
+          <div style={{
+            fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:600,
+            color:"rgba(255,255,255,0.35)", letterSpacing:"0.10em",
+            textTransform:"uppercase", whiteSpace:"nowrap",
+            background:"rgba(255,255,255,0.04)",
+            border:"1px solid rgba(255,255,255,0.08)",
+            borderRadius:8, padding:"2px 8px", flexShrink:0,
+          }}>
+            {step}/9 · {STEPS[step - 1]}
+          </div>
+
+          {/* Spacer */}
+          <div style={{ flex:1 }}/>
+
+          {/* Tier badge */}
+          <div style={{
+            padding:"2px 8px",
+            background:"rgba(212,175,55,0.10)",
+            border:"1px solid rgba(212,175,55,0.22)",
+            borderRadius:10, flexShrink:0,
+            fontFamily:"Inter,sans-serif", fontSize:8, fontWeight:700,
+            color:GOLD, letterSpacing:"0.10em", textTransform:"uppercase",
+            whiteSpace:"nowrap",
+          }}>
+            {memberData.tier === "free" ? "FREE" : memberData.tier.toUpperCase()}
+          </div>
+
+          {/* Divider */}
+          <div style={{ width:1, height:14, background:"rgba(255,255,255,0.12)", margin:"0 10px", flexShrink:0 }}/>
+
+          {/* Dashboard link */}
+          <a href="/dashboard" style={{
+            fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:600,
+            color:GOLD, textDecoration:"none", whiteSpace:"nowrap",
+            letterSpacing:"0.04em", flexShrink:0,
+          }}>
+            Dashboard →
+          </a>
+
+          {/* Responsive: hide name on mobile */}
+          <style>{`
+            @media(max-width:420px){ .gmbar-name{ display:none!important; } }
+          `}</style>
         </div>
       )}
       <AuthGateModal
@@ -8837,7 +8846,7 @@ export default function Onboarding() {
       {/* Step content area — offset by member bar height when bar is visible */}
       <div style={{
         position:"absolute",
-        top: (isAuthed && memberData) ? 38 : 0,
+        top: barH,
         left:0, right:0, bottom:0,
         overflow:"hidden",
       }}>
@@ -8927,6 +8936,7 @@ export default function Onboarding() {
           <motion.div key="s6"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
+            style={{ height:"100%", overflowY:"auto", overflowX:"hidden" }}
           >
             <Step6PreviewCreation
               whoFor={obData.whoFor}
@@ -8941,6 +8951,7 @@ export default function Onboarding() {
           <motion.div key="s7"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
+            style={{ height:"100%", overflowY:"auto", overflowX:"hidden" }}
           >
             <Step7ProductionPortal
               whoFor={obData.whoFor}
@@ -8954,6 +8965,7 @@ export default function Onboarding() {
           <motion.div key="s8"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
+            style={{ height:"100%", overflowY:"auto", overflowX:"hidden" }}
           >
             <Step8Checkout
               whoFor={obData.whoFor}
