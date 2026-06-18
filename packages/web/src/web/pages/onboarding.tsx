@@ -8864,7 +8864,7 @@ export default function Onboarding() {
           <motion.div key="s2"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100%", overflow:"hidden" }}
+            style={{ height:"100%", overflowY:"auto" }}
           >
             <Step2WhoIsThisFor
               selected={obData.whoFor}
@@ -8878,7 +8878,7 @@ export default function Onboarding() {
           <motion.div key="s3"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100%", overflow:"hidden" }}
+            style={{ height:"100%", overflowY:"auto" }}
           >
             <Step3ChooseExperience
               selected={obData.experienceType}
