@@ -116,7 +116,7 @@ const URGENCY_TICKER = [
   "🔒 Your story is private & secure",
 ];
 
-function Step1Welcome({ onNext }: { onNext: () => void }) {
+function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionLoading?: boolean }) {
   const [hoverStart, setHoverStart] = useState(false);
   const [hoverDemo,  setHoverDemo]  = useState(false);
   const [tickerIdx,  setTickerIdx]  = useState(0);
@@ -327,28 +327,46 @@ function Step1Welcome({ onNext }: { onNext: () => void }) {
           >
             {/* Primary */}
             <button
-              onClick={onNext}
-              onMouseEnter={()=>setHoverStart(true)}
+              onClick={sessionLoading ? undefined : onNext}
+              onMouseEnter={()=>{ if (!sessionLoading) setHoverStart(true); }}
               onMouseLeave={()=>setHoverStart(false)}
+              disabled={sessionLoading}
               style={{
                 width:"100%", height:58,
                 borderRadius:10, border:"none",
-                background:hoverStart
-                  ? `linear-gradient(135deg,${GOLD2} 0%,${GOLD} 100%)`
-                  : `linear-gradient(135deg,${GOLD} 0%,#c9a020 100%)`,
+                background:sessionLoading
+                  ? "rgba(212,175,55,0.35)"
+                  : hoverStart
+                    ? `linear-gradient(135deg,${GOLD2} 0%,${GOLD} 100%)`
+                    : `linear-gradient(135deg,${GOLD} 0%,#c9a020 100%)`,
                 color:BG_DARK, fontSize:16,
                 fontFamily:"Inter, sans-serif", fontWeight:700,
-                cursor:"pointer", letterSpacing:"0.04em",
-                boxShadow:hoverStart
+                cursor:sessionLoading ? "not-allowed" : "pointer", letterSpacing:"0.04em",
+                boxShadow:sessionLoading ? "none" : hoverStart
                   ? `0 0 42px rgba(212,175,55,0.6), 0 6px 24px rgba(0,0,0,0.45)`
                   : `0 0 20px rgba(212,175,55,0.3), 0 4px 16px rgba(0,0,0,0.4)`,
-                transform:hoverStart?"translateY(-2px)":"none",
+                transform:(!sessionLoading && hoverStart) ? "translateY(-2px)" : "none",
                 transition:"all 0.22s ease",
                 display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                opacity: sessionLoading ? 0.7 : 1,
               }}
             >
-              Start My Journey
-              <span style={{ fontSize:16, marginLeft:2 }}>→</span>
+              {sessionLoading ? (
+                <>
+                  <span style={{
+                    display:"inline-block", width:15, height:15,
+                    border:"2px solid rgba(10,6,24,0.35)", borderTopColor:"#0a0618",
+                    borderRadius:"50%", animation:"obS1spin 0.75s linear infinite",
+                  }}/>
+                  <style>{`@keyframes obS1spin{to{transform:rotate(360deg)}}`}</style>
+                  Verifying…
+                </>
+              ) : (
+                <>
+                  Start My Journey
+                  <span style={{ fontSize:16, marginLeft:2 }}>→</span>
+                </>
+              )}
             </button>
 
             {/* Secondary */}
@@ -8678,6 +8696,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(_initStep);
   const [authGateOpen, setAuthGateOpen] = useState(false);
   const [, setLocation] = useLocation();
+  const [memberData, setMemberData] = useState<{ memberId: string; status: string; tier: string; name: string } | null>(null);
   const [obData, setObData] = useState<OnboardingData>({
     whoFor: null,
     experienceType: null,
@@ -8704,12 +8723,28 @@ export default function Onboarding() {
         setStep(Math.min(saved, 9));
       }
       // Ensure member record exists (handles Google OAuth callback case)
-      fetch("/api/members", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
+      fetch("/api/members/create", { method: "POST", headers: { "Content-Type": "application/json" } })
+        .catch(() => {});
+      // Load member data for the dashboard bar
+      fetch("/api/members/me")
+        .then(r => r.ok ? r.json() : null)
+        .then((data: { member: { memberId: string; status: string; tier: string } | null } | null) => {
+          if (data?.member) {
+            setMemberData({
+              memberId: data.member.memberId,
+              status: data.member.status,
+              tier: data.member.tier,
+              name: session?.user?.name ?? "",
+            });
+          }
+        })
+        .catch(() => {});
     }
   }, [sessionLoading, isAuthed]);
 
   const next = () => {
-    // Gate: S2+ require auth
+    // Gate: S2+ require auth — but wait for session to resolve first
+    if (step === 1 && sessionLoading) return; // session still loading, do nothing
     if (step === 1 && !isAuthed) {
       setAuthGateOpen(true);
       return;
@@ -8729,6 +8764,71 @@ export default function Onboarding() {
 
   return (
     <div style={{ background:"#06040f", minHeight:"100svh", height:"100svh", overflow:"hidden", position:"fixed", inset:0 }}>
+      {/* ── PERSISTENT MEMBER BAR (visible S1-S9 when authenticated) ── */}
+      {isAuthed && memberData && (
+        <div style={{
+          position:"fixed", top:0, left:0, right:0, zIndex:9999,
+          height:38,
+          background:"linear-gradient(90deg,rgba(11,10,20,0.97) 0%,rgba(11,15,30,0.97) 50%,rgba(11,10,20,0.97) 100%)",
+          borderBottom:"1px solid rgba(212,175,55,0.18)",
+          backdropFilter:"blur(12px)",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:"0 clamp(16px,3vw,48px)",
+          boxSizing:"border-box",
+        }}>
+          {/* Left: GM ID + status */}
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+              <div style={{
+                width:7, height:7, borderRadius:"50%",
+                background: memberData.status === "active" ? "#22C55E" : "#F59E0B",
+                boxShadow: memberData.status === "active" ? "0 0 6px rgba(34,197,94,0.7)" : "0 0 6px rgba(245,158,11,0.7)",
+                flexShrink:0,
+              }}/>
+              <span style={{
+                fontFamily:"Inter,sans-serif", fontSize:11, fontWeight:700,
+                color:GOLD, letterSpacing:"0.12em",
+              }}>{memberData.memberId}</span>
+            </div>
+            <div style={{ width:1, height:16, background:"rgba(255,255,255,0.1)" }}/>
+            <span style={{
+              fontFamily:"Inter,sans-serif", fontSize:11,
+              color:"rgba(255,255,255,0.45)", letterSpacing:"0.04em",
+            }}>
+              {memberData.name || session?.user?.email?.split("@")[0] || "Member"}
+            </span>
+          </div>
+          {/* Center: step indicator */}
+          <div style={{
+            fontFamily:"Inter,sans-serif", fontSize:10,
+            color:"rgba(255,255,255,0.3)", letterSpacing:"0.14em",
+            textTransform:"uppercase",
+          }}>
+            Step {step} of 9 · {STEPS[step - 1]}
+          </div>
+          {/* Right: tier badge + dashboard link */}
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{
+              padding:"3px 10px",
+              background:"rgba(212,175,55,0.1)",
+              border:"1px solid rgba(212,175,55,0.22)",
+              borderRadius:12,
+              fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:700,
+              color:GOLD, letterSpacing:"0.12em", textTransform:"uppercase",
+            }}>
+              {memberData.tier === "free" ? "FREE MEMBER" : memberData.tier.toUpperCase()}
+            </div>
+            <a href="/dashboard" style={{
+              fontFamily:"Inter,sans-serif", fontSize:11,
+              color:"rgba(255,255,255,0.38)", textDecoration:"none",
+              letterSpacing:"0.04em", transition:"color 0.2s",
+            }}
+              onMouseEnter={e=>(e.currentTarget.style.color=GOLD)}
+              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.38)")}
+            >Dashboard →</a>
+          </div>
+        </div>
+      )}
       <AuthGateModal
         open={authGateOpen}
         onClose={() => setAuthGateOpen(false)}
@@ -8741,7 +8841,7 @@ export default function Onboarding() {
             transition={{ duration:0.35 }}
             style={{ height:"100svh", overflow:"hidden", position:"absolute", inset:0 }}
           >
-            <Step1Welcome onNext={next}/>
+            <Step1Welcome onNext={next} sessionLoading={sessionLoading}/>
           </motion.div>
         )}
         {step === 2 && (
