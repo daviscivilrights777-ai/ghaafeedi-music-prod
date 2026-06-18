@@ -11,7 +11,7 @@ import { FinalCTA } from "../components/FinalCTA";
 import { Footer } from "../components/Footer";
 import { StickyCtaBar } from "../components/StickyCtaBar";
 import { SocialProofToast } from "../components/SocialProofToast";
-import { SplashGate } from "../components/SplashGate";
+import { SplashLandingPage } from "../components/SplashLandingPage";
 
 const SPLASH_KEY = "gm_splash_seen";
 
@@ -27,7 +27,7 @@ export default function Index() {
 
   return (
     <>
-      {!splashDone && <SplashGate onComplete={handleSplashComplete} />}
+      {!splashDone && <SplashLandingPage onComplete={handleSplashComplete} />}
       <div style={{ background: "#0A0B0F", minHeight: "100vh", overflowX: "hidden" }}>
         <Navbar />
         <HeroSection />
