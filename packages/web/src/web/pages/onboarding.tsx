@@ -592,8 +592,8 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
           }
         }
 
-        /* GLOBAL reset — prevent body scroll/margin from creating void */
-        html, body { margin:0!important; padding:0!important; overflow:hidden!important; height:100%!important; }
+        /* GLOBAL reset — scoped to step1 only, does NOT affect other pages */
+        .ob-step1-root ~ * { } /* isolate */
 
         /* MOBILE ≤600px — full-screen locked, text top 46%, portal bottom 54% */
         @media(max-width:600px){
@@ -1104,7 +1104,7 @@ function Step2WhoIsThisFor({ selected, onSelect, onNext, onBack }: Step2Props) {
         @media(max-width:600px){
           .ob2-root{
             height:auto!important;
-            min-height:100svh!important;
+            min-height:100%!important;
             overflow-y:auto!important;
           }
           .ob2-content{
@@ -8834,12 +8834,19 @@ export default function Onboarding() {
         onClose={() => setAuthGateOpen(false)}
         redirectTo="/onboarding"
       />
+      {/* Step content area — offset by member bar height when bar is visible */}
+      <div style={{
+        position:"absolute",
+        top: (isAuthed && memberData) ? 38 : 0,
+        left:0, right:0, bottom:0,
+        overflow:"hidden",
+      }}>
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div key="s1"
             initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100svh", overflow:"hidden", position:"absolute", inset:0 }}
+            style={{ height:"100%", overflow:"hidden", position:"absolute", inset:0 }}
           >
             <Step1Welcome onNext={next} sessionLoading={sessionLoading}/>
           </motion.div>
@@ -8848,7 +8855,7 @@ export default function Onboarding() {
           <motion.div key="s2"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100vh", overflow:"hidden" }}
+            style={{ height:"100%", overflow:"hidden" }}
           >
             <Step2WhoIsThisFor
               selected={obData.whoFor}
@@ -8862,7 +8869,7 @@ export default function Onboarding() {
           <motion.div key="s3"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100vh", overflow:"hidden" }}
+            style={{ height:"100%", overflow:"hidden" }}
           >
             <Step3ChooseExperience
               selected={obData.experienceType}
@@ -8876,7 +8883,7 @@ export default function Onboarding() {
           <motion.div key="s4"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100svh", overflow:"hidden" }}
+            style={{ height:"100%", overflow:"hidden" }}
           >
             <Step4TellYourStory
               storyText={obData.storyText}
@@ -8900,7 +8907,7 @@ export default function Onboarding() {
           <motion.div key="s5"
             initial={{ opacity:0, x:40 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-40 }}
             transition={{ duration:0.35 }}
-            style={{ height:"100svh", overflow:"hidden" }}
+            style={{ height:"100%", overflow:"hidden" }}
           >
             <Step5AIAnalysis
               whoFor={obData.whoFor}
@@ -8977,6 +8984,7 @@ export default function Onboarding() {
         )}
         {/* No steps beyond 9 — journey ends at Confirmation */}
       </AnimatePresence>
+      </div>{/* end step content wrapper */}
     </div>
   );
 }
