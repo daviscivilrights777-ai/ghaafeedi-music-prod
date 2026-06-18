@@ -22,6 +22,7 @@ import LegalPage from "./pages/legal";
 import LegalDocPage from "./pages/legal-doc";
 import ContactPage from "./pages/contact";
 import FaqPage from "./pages/faq";
+import RevisionsPage from "./pages/revisions";
 import { Provider } from "./components/provider";
 import { AgentFeedback, RunableBadge } from "@runablehq/website-runtime";
 
@@ -45,6 +46,7 @@ function App() {
         <Route path="/legal/:doc" component={LegalDocPage} />
         <Route path="/contact" component={ContactPage} />
         <Route path="/faq" component={FaqPage} />
+        <Route path="/revisions" component={RevisionsPage} />
         {/* Admin panel */}
         <Route path="/admin" component={AdminOverview} />
         <Route path="/admin/members" component={AdminMembers} />

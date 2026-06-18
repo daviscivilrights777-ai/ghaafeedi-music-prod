@@ -25,11 +25,13 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "SUPPORT",
     links: [
-      { label: "FAQ",                href: "/faq" },
-      { label: "Help Center",        href: "/contact" },
-      { label: "AI Transparency",    href: "/trust" },
-      { label: "Community Standards",href: "/trust" },
-      { label: "Refund Policy",      href: "/legal/refund-policy" },
+      { label: "FAQ",                   href: "/faq" },
+      { label: "Help Center",           href: "/contact" },
+      { label: "AI Transparency",       href: "/trust" },
+      { label: "Community Standards",   href: "/trust" },
+      { label: "Refund Policy",         href: "/legal/refund-policy" },
+      { label: "Revisions & Guarantee", href: "/revisions" },
+      { label: "Why We're Different",   href: "/revisions#why-us" },
     ],
   },
   {
