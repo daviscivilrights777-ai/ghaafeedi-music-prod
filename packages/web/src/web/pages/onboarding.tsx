@@ -7341,10 +7341,9 @@ function Step8Checkout({
 
   const pkg = S8_PACKAGES.find(p => p.id === selectedPkgId) ?? S8_PACKAGES[1];
 
-  // ── Dodo inline checkout state ─────────────────────────────────────────────
+  // ── Dodo overlay checkout state ────────────────────────────────────────────
   const [dodoCheckoutUrl,  setDodoCheckoutUrl]  = React.useState<string | null>(null);
   const [dodoSessionId,    setDodoSessionId]    = React.useState<string | null>(null);
-  const [dodoReady,        setDodoReady]        = React.useState(false);
   const dodoInitialized = React.useRef(false);
 
   // ── Initialize Dodo SDK once ───────────────────────────────────────────────
@@ -7353,11 +7352,8 @@ function Step8Checkout({
     dodoInitialized.current = true;
     DodoPayments.Initialize({
       mode: "live",
-      displayType: "inline",
+      displayType: "overlay",
       onEvent: (event) => {
-        if (event.event_type === "checkout.form_ready") {
-          setDodoReady(true);
-        }
         if (event.event_type === "checkout.pay_button_clicked") {
           setSubmitState("loading");
           startPolling();
@@ -7439,11 +7435,10 @@ function Step8Checkout({
       setSubmitState("idle");
       submitLock.current = false;
 
-      // Open inline checkout
+      // Open overlay checkout
       setTimeout(() => {
         DodoPayments.Checkout.open({
           checkoutUrl: data.checkoutUrl!,
-          elementId: "dodo-inline-checkout",
           options: {
             showTimer: true,
             showSecurityBadge: true,
@@ -7521,40 +7516,7 @@ function Step8Checkout({
             isMobile={isMobile}
           />
 
-          {/* ── Dodo Inline Checkout Frame ───────────────────────────────── */}
-          {dodoCheckoutUrl && (
-            <div style={{
-              marginTop: 24,
-              borderRadius: 16,
-              overflow: "hidden",
-              border: "1px solid rgba(212,175,55,0.25)",
-              background: "#0d0d0d",
-              minHeight: 500,
-              position: "relative",
-            }}>
-              {/* Loading skeleton */}
-              {!dodoReady && (
-                <div style={{
-                  position: "absolute", inset: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexDirection: "column", gap: 12,
-                  background: "#0d0d0d",
-                }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: "50%",
-                    border: "3px solid rgba(212,175,55,0.2)",
-                    borderTopColor: "#D4AF37",
-                    animation: "spin 0.8s linear infinite",
-                  }} />
-                  <span style={{ fontFamily:"Inter,sans-serif", fontSize:13, color:"rgba(255,255,255,0.4)" }}>
-                    Loading secure checkout…
-                  </span>
-                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                </div>
-              )}
-              <div id="dodo-inline-checkout" style={{ width: "100%", minHeight: 500 }} />
-            </div>
-          )}
+          {/* Dodo overlay opens as modal — no inline container needed */}
         </div>
 
         {/* Right — order review */}
