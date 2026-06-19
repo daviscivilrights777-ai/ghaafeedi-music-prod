@@ -74,6 +74,10 @@ const INJECT_CSS = `
   0%,100% { box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 0 50px rgba(212,175,55,.28); }
   50%      { box-shadow: 0 0 0 3px rgba(212,175,55,.85), 0 0 80px rgba(212,175,55,.50); }
 }
+@keyframes sef-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes sef-breathe {
   0%,100% { transform:scale(1.00); }
   50%      { transform:scale(1.02); }
@@ -766,6 +770,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [exiting,  setExiting]  = useState(false);
 
   // Simli state
+  const [userStarted,     setUserStarted]     = useState(false);  // lazy-init: only true after user clicks "Talk to Sophia"
   const [simliMode,       setSimliMode]       = useState<SimliMode>("pending");
   const [sessionToken,    setSessionToken]    = useState<string | null>(null);
   const [simliReady,      setSimliReady]      = useState(false);
@@ -773,6 +778,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [simlySpeaking,   setSimlySpeaking]   = useState(false);
   const [audioChunk,      setAudioChunk]      = useState<Uint8Array | null>(null);
   const [sophiaFaceReady, setSophiaFaceReady] = useState(false); // true when custom Sophia face is active
+  const [simliInitializing, setSimliInitializing] = useState(false); // loading state while fetching token
   const ttsInFlight = useRef(false);
 
   const isIntro   = step === 0;
@@ -802,9 +808,12 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     setSelected(null);
   }, [step]);
 
-  // ── Step 1: Fetch Simli session token on mount ──────────────────────────────
+  // ── Step 1: Fetch Simli session token — only when user explicitly starts ────
+  // Lazy-init: no Simli credits burned until user clicks "Talk to Sophia"
   useEffect(() => {
+    if (!userStarted) return;
     let cancelled = false;
+    setSimliInitializing(true);
     (async () => {
       try {
         const res = await fetch("/api/simli/token", { method: "POST" });
@@ -824,15 +833,18 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
           setSimliMode("fallback");
           setSimliFailed(true);
         }
+      } finally {
+        if (!cancelled) setSimliInitializing(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [userStarted]);
 
   // ── Step 2: Fetch TTS audio per step (once Simli is ready) ─────────────────
   useEffect(() => {
     // Wait until Simli WebRTC is ready before sending audio
-    if (simliMode !== "active" || !simliReady || !speechLine) return;
+    // Also guard: user must have explicitly started the session
+    if (!userStarted || simliMode !== "active" || !simliReady || !speechLine) return;
 
     let cancelled = false;
     ttsInFlight.current = true;
@@ -969,8 +981,54 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 gap:"clamp(12px,2vw,22px)",
                 width:"100%",
               }}>
-                {/* Avatar — Simli or fallback */}
-                {useSimli ? (
+                {/* Avatar — lazy-init: show prompt until user starts */}
+                {!userStarted ? (
+                  <div style={{ position:"relative", flexShrink:0 }}>
+                    <SophiaAvatarFallback speaking={false} />
+                    {/* Talk to Sophia overlay button */}
+                    <button
+                      onClick={() => setUserStarted(true)}
+                      style={{
+                        position:"absolute", inset:0,
+                        background:"rgba(5,11,26,0.55)",
+                        border:`1.5px solid ${GOLD}`,
+                        borderRadius:"50%",
+                        cursor:"pointer",
+                        display:"flex", flexDirection:"column",
+                        alignItems:"center", justifyContent:"center",
+                        gap:4,
+                        backdropFilter:"blur(4px)",
+                        transition:"background 0.2s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(212,175,55,0.18)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "rgba(5,11,26,0.55)")}
+                    >
+                      <span style={{ fontSize:18 }}>🎙</span>
+                      <span style={{
+                        fontSize:9, fontWeight:700, color:GOLD,
+                        letterSpacing:"0.10em", textTransform:"uppercase",
+                        fontFamily:"Inter,sans-serif", lineHeight:1.2,
+                        textAlign:"center", padding:"0 6px",
+                      }}>
+                        Talk to<br/>Sophia
+                      </span>
+                    </button>
+                  </div>
+                ) : simliInitializing ? (
+                  <div style={{
+                    flexShrink:0, width:72, height:72, borderRadius:"50%",
+                    border:`1.5px solid ${GOLD}`,
+                    background:"rgba(5,11,26,0.8)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                  }}>
+                    <div style={{
+                      width:20, height:20, borderRadius:"50%",
+                      border:`2px solid ${GOLD}`,
+                      borderTopColor:"transparent",
+                      animation:"sef-spin 0.8s linear infinite",
+                    }} />
+                  </div>
+                ) : useSimli ? (
                   <SimliAvatar
                     sessionToken={sessionToken}
                     audioData={audioChunk}
