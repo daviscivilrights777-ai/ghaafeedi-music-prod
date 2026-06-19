@@ -2,7 +2,8 @@ import { motion } from "framer-motion";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
-const VIDEO_SRC = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/ghaafeedi-demo-web.mp4";
+// Homepage storytelling showcase: full 3:30 cinematic experience
+const VIDEO_SRC = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/flagship-demo.mp4";
 const POSTER_SRC = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.webp";
 
 const PRODUCTS = [

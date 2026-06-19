@@ -403,16 +403,18 @@ const NAVY = "#0B1736";
 
 // ─── Video Duration Config ────────────────────────────────────────────────────
 // 5/10/15 group — cinematic-story-film, dream-ai-visualization, future-self-vision, couples-journey-film, memorial-legacy-film
+// Essential=$149 5min 1rev | Premium=$249 10min 2rev | Elite=$399 15min 3rev [Lawrence approved 2026-06-19]
 const DURATION_GROUP_A = [
-  { label: "5 min", tiers: [{ price: 79 }, { price: 129 }, { price: 199 }] },
+  { label: "5 min",  tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
   { label: "10 min", tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
-  { label: "15 min", tiers: [{ price: 249 }, { price: 399 }, { price: 599 }] },
+  { label: "15 min", tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
 ];
-// 20/25/30 group — cinematic-life-story
+// 20/25/30 group — cinematic-life-story (20-Min Cinematic Masterpiece)
+// Essential=$449 20min 2rev | Premium=$600 25min 3rev | Elite=$799 30min 4rev [Lawrence approved 2026-06-19]
 const DURATION_GROUP_B = [
-  { label: "20 min", tiers: [{ price: 349 }, { price: 549 }, { price: 799 }] },
-  { label: "25 min", tiers: [{ price: 449 }, { price: 699 }, { price: 999 }] },
-  { label: "30 min", tiers: [{ price: 599 }, { price: 899 }, { price: 1299 }] },
+  { label: "20 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
+  { label: "25 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
+  { label: "30 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
 ];
 const VIDEO_DURATION_CONFIG: Record<string, typeof DURATION_GROUP_A> = {
   "cinematic-story-film": DURATION_GROUP_A,

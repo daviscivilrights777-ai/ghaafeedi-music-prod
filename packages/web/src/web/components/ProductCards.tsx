@@ -3,58 +3,58 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 
 // ─── Duration selector configs ─────────────────────────────────────────────────
-// "5-min category" → dropdown: 5 / 10 / 15 min
+// "5-min category" → dropdown: 5 / 10 / 15 min  [Lawrence approved 2026-06-19]
 const DURATION_5_TIERS = [
   {
     label: "5 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$79",  compareAt: "$119", sub: "5-Min Film",  revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$129", compareAt: "$189", sub: "5-Min Film",  revisions: "2 Revisions", highlight: true, saving: "Save $60" },
-      { name: "ELITE",     price: "$199", compareAt: "$279", sub: "5-Min Film",  revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
+      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
     ],
   },
   {
     label: "10 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$149", compareAt: "$229", sub: "10-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$249", compareAt: "$369", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $120" },
-      { name: "ELITE",     price: "$399", compareAt: "$549", sub: "10-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
+      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
     ],
   },
   {
     label: "15 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$249", compareAt: "$369", sub: "15-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$399", compareAt: "$579", sub: "15-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $180" },
-      { name: "ELITE",     price: "$599", compareAt: "$829", sub: "15-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
+      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
     ],
   },
 ];
 
-// "10-min category" → dropdown: 20 / 25 / 30 min
+// "Cinematic Masterpiece" → dropdown: 20 / 25 / 30 min  [Lawrence approved 2026-06-19]
 const DURATION_10_TIERS = [
   {
     label: "20 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$349", compareAt: "$519", sub: "20-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$549", compareAt: "$799", sub: "20-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $250" },
-      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "20-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
+      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
     ],
   },
   {
     label: "25 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$449", compareAt: "$649", sub: "25-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$699", compareAt: "$999", sub: "25-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $300" },
-      { name: "ELITE",     price: "$999", compareAt: "$1,249", sub: "25-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
+      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
     ],
   },
   {
     label: "30 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$599", compareAt: "$849", sub: "30-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$899", compareAt: "$1,249", sub: "30-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $350" },
-      { name: "ELITE",     price: "$1,299", compareAt: "$1,699", sub: "30-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
+      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
     ],
   },
 ];
@@ -90,10 +90,10 @@ const PRODUCTS = [
     tags: ["AI Visuals", "Custom Score", "Voice Narration", "4K Output"],
     tiers: [
       { name: "ESSENTIAL", price: "$79",  compareAt: "$119", sub: "2-Min Film",  revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$129", compareAt: "$189", sub: "2-Min Film",  revisions: "2 Revisions", highlight: true, saving: "Save $60" },
-      { name: "ELITE",     price: "$199", compareAt: "$279", sub: "2-Min Film",  revisions: "4 Revisions" },
+      { name: "PREMIUM",   price: "$129", compareAt: "$189", sub: "4-Min Film",  revisions: "2 Revisions", highlight: true, saving: "Save $60" },
+      { name: "ELITE",     price: "$150", compareAt: "$219", sub: "6-Min Film",  revisions: "3 Revisions" },
     ],
-    durationOptions: null, // 2-min stays fixed
+    durationOptions: null,
     includes: ["AI-generated cinematic visuals", "Original custom score", "AI voice narration", "4K MP4 master file", "Private streaming link"],
     delivery: "Delivery: 5–7 Business Days",
     cta: "Create My Film",
@@ -123,7 +123,7 @@ const PRODUCTS = [
     num: "04",
     img: "/images/card-couples-v2.png",
     accent: "#10B981",
-    title: "10-Min Cinematic\nMasterpiece",
+    title: "20-Min Cinematic\nMasterpiece",
     outcome: "The ultimate legacy — a documentary-grade production of your life story.",
     tags: ["Feature Length", "Documentary Grade", "Legacy Archive", "Unlimited Share"],
     tiers: DURATION_10_TIERS[0]!.tiers, // default shown = 20 min
