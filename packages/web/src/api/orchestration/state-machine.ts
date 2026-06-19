@@ -20,20 +20,39 @@ export type JobStatus =
   | "retry"
   | "failover_dispatch"
   | "quality_review"
-  | "delivery";
+  | "delivery"
+  // ── Pipeline stage states (Phase 7+) ──────────────────────
+  | "story_bible_ready"        // StoryBible generated, awaiting ProductionBible dispatch
+  | "production_bible_ready"   // ProductionBible done, ShotList in progress
+  | "audio_ready"              // Song/narration generated, clips can start
+  | "clips_generating"         // clip_batch jobs running (may be multiple parallel)
+  | "assembling"               // edit_assemble job running
+  | "qc_failed";               // QC check failed (< maxRetries → auto-retry, else → quality_review)
 
 // ─── Allowed transitions ──────────────────────────────────────
 const TRANSITIONS: Record<JobStatus, JobStatus[]> = {
+  // ── Base states ─────────────────────────────────────────
   queued:            ["dispatched", "cancelled"],
-  dispatched:        ["processing", "retry", "failed", "cancelled"],
-  processing:        ["complete", "retry", "failed", "quality_review"],
+  dispatched:        ["processing", "retry", "failed", "cancelled",
+                      "story_bible_ready"],           // pipeline fast-dispatch
+  processing:        ["complete", "retry", "failed", "quality_review",
+                      "story_bible_ready", "production_bible_ready",
+                      "audio_ready", "clips_generating", "assembling",
+                      "qc_failed"],
   retry:             ["dispatched", "failover_dispatch", "failed"],
   failover_dispatch: ["processing", "failed"],
-  quality_review:    ["delivery", "failed", "dispatched"], // dispatched = re-gen approved
+  quality_review:    ["delivery", "failed", "dispatched"],  // dispatched = re-gen approved
   delivery:          ["complete"],
   complete:          [],  // terminal
   failed:            [],  // terminal
   cancelled:         [],  // terminal
+  // ── Pipeline stage transitions ──────────────────────────
+  story_bible_ready:       ["dispatched", "production_bible_ready", "failed", "cancelled"],
+  production_bible_ready:  ["dispatched", "audio_ready", "clips_generating", "failed", "cancelled"],
+  audio_ready:             ["clips_generating", "assembling", "failed"],
+  clips_generating:        ["assembling", "qc_failed", "failed"],
+  assembling:              ["quality_review", "qc_failed", "delivery", "failed"],
+  qc_failed:               ["dispatched", "quality_review", "failed"], // dispatched = auto-retry
 };
 
 // ─── State Machine ────────────────────────────────────────────
@@ -104,6 +123,14 @@ export class JobStateMachine {
       failover_dispatch: EVENTS.JOB_FAILOVER,
       cancelled:         EVENTS.JOB_CANCELLED,
       quality_review:    EVENTS.JOB_QUALITY_REVIEW,
+      // Pipeline stage events
+      story_bible_ready:      "pipeline.story_bible_ready",
+      production_bible_ready: "pipeline.production_bible_ready",
+      audio_ready:            "pipeline.audio_ready",
+      clips_generating:       "pipeline.clips_generating",
+      assembling:             "pipeline.assembling",
+      qc_failed:              "pipeline.qc_failed",
+      delivery:               "pipeline.delivery",
     };
 
     const eventType = eventMap[toStatus];

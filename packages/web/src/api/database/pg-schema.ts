@@ -172,6 +172,11 @@ export const aiJobs = pgTable("ai_jobs", {
   completedAt:      timestamp("completed_at", { withTimezone: true }),
   durationSeconds:  integer("duration_seconds"),
   metadata:         jsonb("metadata").default({}),
+  // ── Pipeline columns (Phase 7+) ──────────────────────────
+  parentJobId:      text("parent_job_id"),           // job that spawned this stage
+  pipelineRunId:    text("pipeline_run_id"),          // shared across all jobs in a production run
+  pipelineStage:    text("pipeline_stage"),           // story_bible | production_bible | shot_list | clip_batch | edit_assemble | qc_check | deliver
+  stageOutputs:     jsonb("stage_outputs"),           // structured output from this stage (StoryBible/ProductionBible/etc.)
 });
 
 // ─── Productions ──────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { automations } from "./routes/automations";
 import { sophia } from "./routes/sophia";
 import { simli } from "./routes/simli";
 import { dodo } from "./routes/dodo";
+import { pipeline } from "./routes/pipeline";
 
 const app = new Hono()
   .basePath('api')
@@ -41,7 +42,8 @@ const app = new Hono()
   .route("/automations", automations)
   .route("/sophia", sophia)
   .route("/simli", simli)
-  .route("/dodo", dodo);
+  .route("/dodo", dodo)
+  .route("/pipeline", pipeline);
 
 export type AppType = typeof app;
 export default app;

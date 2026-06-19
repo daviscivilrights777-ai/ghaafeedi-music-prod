@@ -19,6 +19,11 @@ import { aiJobs } from "../database/pg-schema";
 import { eq } from "drizzle-orm";
 import type { QueueTier } from "./redis-client";
 import { n8nDispatcher } from "./n8n-dispatcher";
+import { PipelineOrchestrator, type PipelineStage } from "./pipeline-orchestrator";
+import type { StoryBible } from "./schemas/story-bible.schema";
+import type { ProductionBible } from "./schemas/production-bible.schema";
+import type { ShotList } from "./schemas/shot-list.schema";
+import type { ProductionTier } from "./schemas/production-bible.schema";
 
 // --- Types ------------------------------------------------------------------
 
@@ -69,6 +74,14 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   lyrics:       2,
   sophia_intro: 4, // OpenAI script (~2¢) + 2x ElevenLabs renders (~1¢ each)
   lip_sync:     120, // FAL.ai LatentSync per clip (~$1.20 est.)
+  // ── Pipeline stage job costs ─────────────────────────────
+  story_bible:      3,   // GPT-4o-mini extraction ~3¢
+  production_bible: 10,  // Claude/GPT-4o creative brief ~10¢
+  shot_list:        8,   // Claude/GPT-4o shot breakdown ~8¢
+  clip_batch:       800, // FAL.ai/Modal per clip ~$8
+  edit_assemble:    50,  // Modal FFmpeg GPU assembly ~50¢
+  qc_check:         5,   // OpenAI vision QC ~5¢
+  deliver:          1,   // R2 upload + URL signing ~1¢
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
@@ -84,6 +97,14 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   lyrics:       50,
   sophia_intro: 500, // personalized AI voiceover — high perceived value
   lip_sync:     2900, // $29 customer charge
+  // ── Pipeline stage values ─────────────────────────────────
+  story_bible:      100,  // part of production value
+  production_bible: 200,
+  shot_list:        150,
+  clip_batch:       500,  // per clip value toward delivery
+  edit_assemble:    1000, // final assembled video is high value
+  qc_check:         50,
+  deliver:          200,
 };
 
 let _pgAvailable = true;
@@ -391,6 +412,64 @@ export class OrchestrationEngine {
         jobId: job.jobId, userId: job.userId, provider: actualProvider, outputPayload,
       }, { jobId: job.jobId });
 
+      // ── Pipeline stage advancement ─────────────────────────────────────────
+      // If this job has a pipelineRunId + pipelineStage, advance to next stage
+      const pipelineRunId  = job.pipelineRunId  ?? (job.metadata?.pipelineRunId  as string | undefined);
+      const pipelineStage  = job.pipelineStage  ?? (job.metadata?.pipelineStage  as string | undefined);
+      const productSlug    = (job.metadata?.productSlug as string | undefined)    ?? "";
+      const productionTier = (job.metadata?.productionTier as ProductionTier | undefined) ?? "starter";
+
+      if (pipelineRunId && pipelineStage) {
+        // Persist stage outputs to PG for downstream stages to read
+        if (_pgAvailable) {
+          try {
+            await db.update(aiJobs)
+              .set({ stageOutputs: outputPayload } as any)
+              .where(eq(aiJobs.id, job.jobId));
+          } catch { /* non-critical */ }
+        }
+
+        // Transition parent job to pipeline stage state
+        const stageStateMap: Partial<Record<string, Parameters<typeof JobStateMachine.transition>[1]>> = {
+          story_bible:      "story_bible_ready",
+          production_bible: "production_bible_ready",
+          audio:            "audio_ready",
+          shot_list:        "clips_generating",   // shot_list done → clips dispatched
+          clip_batch:       "assembling",         // last clip done → assemble
+          edit_assemble:    "quality_review",
+          qc_check:         "delivery",
+          deliver:          "complete",
+        };
+        const pipelineTransition = stageStateMap[pipelineStage];
+        if (pipelineTransition && pipelineTransition !== "complete") {
+          await JobStateMachine.transition(job.jobId, pipelineTransition, {
+            provider: actualProvider,
+            outputPayload,
+          }).catch((e) => console.warn("[OrchestrationEngine] pipeline transition:", (e as Error).message));
+        }
+
+        // Dispatch next pipeline stage
+        try {
+          const pipelineOrchestrator = PipelineOrchestrator.getInstance();
+          await pipelineOrchestrator.advanceStage({
+            completedJobId: job.jobId,
+            completedStage: pipelineStage as PipelineStage,
+            pipelineRunId,
+            productionId:   job.productionId ?? "",
+            userId:         job.userId,
+            orderId:        job.orderId,
+            productSlug,
+            tier:           productionTier,
+            queueTier:      job.tier,
+            stageOutput:    outputPayload,
+            metadata:       job.metadata as Record<string, unknown>,
+          });
+        } catch (pipeErr) {
+          console.error("[OrchestrationEngine] pipeline advance failed:", (pipeErr as Error).message);
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────────
+
       // Automation 3: notify n8n → customer delivery email
       n8nDispatcher.jobComplete({
         jobId:         job.jobId,
@@ -525,8 +604,16 @@ export class OrchestrationEngine {
       image:        ["fal-ai", "modal", "vast-ai"],
       visualization: ["fal-ai", "modal"],
       storyboard:   ["openai"],
-      sophia_intro: ["openai", "elevenlabs"], // script=openai, audio=elevenlabs (handled internally)
-      lip_sync:     ["fal-ai"],              // FAL.ai LatentSync — Phase 6 implementation
+      sophia_intro: ["openai", "elevenlabs"],
+      lip_sync:     ["fal-ai"],
+      // ── Pipeline stage fallbacks ──────────────────────────
+      story_bible:      ["openai"],
+      production_bible: ["openai"],   // Claude primary, GPT-4o fallback
+      shot_list:        ["openai"],
+      clip_batch:       ["fal-ai", "modal", "vast-ai"],
+      edit_assemble:    ["modal"],    // FFmpeg Modal only (Phase 9)
+      qc_check:         ["openai"],
+      deliver:          ["internal"], // R2 direct — no fallback needed
     };
     const fallbacks = ALL_FALLBACKS[jobType] ?? ["openai"];
     for (const f of fallbacks) {

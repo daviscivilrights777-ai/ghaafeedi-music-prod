@@ -19,6 +19,11 @@ export interface JobSpec {
   estimatedCostCents?: number;
   enqueuedAt:  string;       // ISO timestamp
   metadata?:   Record<string, unknown>;
+  // Pipeline fields
+  parentJobId?:   string;    // id of the upstream stage job
+  pipelineRunId?: string;    // shared across all jobs in one production run
+  pipelineStage?: string;    // story_bible | production_bible | shot_list | clip_batch | edit_assemble | qc_check | deliver
+  maxAttempts?:   number;    // default 3 — used by RetryManager + n8n dispatcher
 }
 
 export type JobType =
@@ -32,7 +37,15 @@ export type JobType =
   | "storyboard"
   | "lyrics"
   | "sophia_intro"
-  | "lip_sync";    // Sophia Lip Sync Narration upgrade — FAL.ai LatentSync (Phase 6)
+  | "lip_sync"       // Sophia Lip Sync Narration upgrade — FAL.ai LatentSync (Phase 6)
+  // ── Pipeline stage job types (Phase 7+) ──────────────────
+  | "story_bible"    // Phase 7: OpenAI → extract StoryBible from intake
+  | "production_bible" // Phase 7: Claude/GPT-4o → generate ProductionBible
+  | "shot_list"      // Phase 7: Claude/GPT-4o → generate ShotList
+  | "clip_batch"     // Phase 8: FAL.ai/Modal → generate individual clips
+  | "edit_assemble"  // Phase 9: Modal FFmpeg → assemble clips into final video
+  | "qc_check"       // Phase 9: OpenAI vision → quality check final output
+  | "deliver";       // Phase 10: R2 upload + signed URL + n8n notification
 
 export class JobQueue {
   /**
