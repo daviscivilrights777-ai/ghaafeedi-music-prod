@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { LivingLogoBackground } from "./LivingLogoBackground";
 import { motion } from "framer-motion";
 
@@ -17,12 +17,7 @@ const URGENCY_MSGS = [
 ];
 
 export function HeroSection() {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [urgencyIdx, setUrgencyIdx] = useState(0);
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.play().catch(() => {});
-  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setUrgencyIdx(i => (i + 1) % URGENCY_MSGS.length), 8000);
@@ -50,20 +45,12 @@ export function HeroSection() {
         background: "#01040B",
       }} />
 
-      {/* ── z:0  Cinematic video BG — very dim ── */}
-      <video
-        ref={videoRef}
-        autoPlay muted loop playsInline
-        style={{
-          position: "absolute", inset: 0, zIndex: 0,
-          width: "100%", height: "100%",
-          objectFit: "cover", opacity: 0.05,
-          filter: "brightness(0.3) saturate(0.4) grayscale(0.6)",
-          mixBlendMode: "luminosity",
-        }}
-      >
-        <source src="/videos/GHAAFEEDI_MUSIC_DEMO_FULL.mp4" type="video/mp4" />
-      </video>
+      {/* ── z:0  Cinematic static BG — zero loading cost ── */}
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 0,
+        background: "radial-gradient(ellipse 120% 80% at 50% 30%, rgba(11,23,54,0.6) 0%, #01040B 70%)",
+        opacity: 0.8,
+      }} />
 
       {/* ══════════════════════════════════════════════
           LIVING LOGO MONUMENT v9 — CINEMATIC MONUMENT

@@ -738,7 +738,7 @@ function HexCard({ product, size, left, top }: { product:Product; size:number; l
       onClick={() => nav(`/products/${product.id}`)}
     >
       {/* Image */}
-      <img src={product.image} alt={product.title} style={{
+      <img loading="lazy" src={product.image} alt={product.title} style={{
         width:"100%", height:"100%", objectFit:"cover",
         filter:"contrast(1.45) saturate(1.75) brightness(1.08)",
         display:"block",
@@ -807,7 +807,7 @@ function SophiaHex({ size, left, top, reduced }: { size:number; left:number; top
         background:"linear-gradient(135deg,#FFF8E7 0%,#FFC24D 18%,#F4D06F 36%,#FFFDE0 50%,#D4AF37 66%,#FFC24D 82%,#FFF8E7 100%)"}}/>
 
       <div className="hex-sophia-clip" style={{zIndex:3}} onClick={()=>nav("/products/sophia-ai")}>
-        <img src="/assets/prod-sophia-portrait.webp" alt="Sophia AI" style={{
+        <img loading="lazy" src="/assets/prod-sophia-portrait.webp" alt="Sophia AI" style={{
           width:"100%",height:"100%",objectFit:"cover",
           objectPosition:"center 12%",
           filter:"contrast(1.38) saturate(1.40) brightness(1.10)",
@@ -921,7 +921,7 @@ function MobileLayout() {
             style={{width:hexSize,height:hexH,position:"relative"}}
             onClick={()=>nav(`/products/${p.id}`)}
           >
-            <img src={p.image} alt={p.title} style={{
+            <img loading="lazy" src={p.image} alt={p.title} style={{
               width:"100%",height:"100%",objectFit:"cover",
               filter:"contrast(1.42) saturate(1.70) brightness(1.10)",display:"block",
             }}/>

@@ -507,7 +507,7 @@ export default function ProductDetail() {
       <div style={{ paddingTop: 72 }}>
         {/* Hero */}
         <div style={{ position: "relative", height: 420, overflow: "hidden" }}>
-          <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.62) saturate(1.85) contrast(1.18)" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <img loading="lazy" src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", filter: "brightness(0.62) saturate(1.85) contrast(1.18)" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, rgba(5,11,26,0.2) 0%, rgba(5,11,26,0.6) 60%, rgba(5,11,26,1) 100%)" }} />
           <div style={{ position: "absolute", bottom: 40, left: 0, right: 0, padding: "0 60px", maxWidth: 900, margin: "0 auto" }}>
             {product.badge && (

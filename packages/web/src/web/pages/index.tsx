@@ -8,21 +8,23 @@
  *
  * No localStorage. No one-time gate. Customer chooses every time.
  */
-import { useState } from "react";
-import { EntryGate }         from "../components/EntryGate";
-import { SplashLandingPage } from "../components/SplashLandingPage";
-import { Navbar }            from "../components/Navbar";
-import { HeroSection }       from "../components/HeroSection";
-import { HowItWorks }        from "../components/HowItWorks";
-import { ProductCards }      from "../components/ProductCards";
-import { TrustFeatures }     from "../components/TrustFeatures";
-import { SocialProof }       from "../components/SocialProof";
-import { SophiaConcierge }   from "../components/SophiaConcierge";
-import { StorytellingShowcase } from "../components/StorytellingShowcase";
-import { FinalCTA }          from "../components/FinalCTA";
-import { Footer }            from "../components/Footer";
-import { StickyCtaBar }      from "../components/StickyCtaBar";
-import { SocialProofToast }  from "../components/SocialProofToast";
+import { useState, Suspense, lazy } from "react";
+import { EntryGate }   from "../components/EntryGate";
+import { Navbar }      from "../components/Navbar";
+import { HeroSection } from "../components/HeroSection";
+
+// Lazy-load everything below the fold
+const SplashLandingPage  = lazy(() => import("../components/SplashLandingPage").then(m => ({ default: m.SplashLandingPage })));
+const HowItWorks         = lazy(() => import("../components/HowItWorks").then(m => ({ default: m.HowItWorks })));
+const ProductCards       = lazy(() => import("../components/ProductCards").then(m => ({ default: m.ProductCards })));
+const TrustFeatures      = lazy(() => import("../components/TrustFeatures").then(m => ({ default: m.TrustFeatures })));
+const SocialProof        = lazy(() => import("../components/SocialProof").then(m => ({ default: m.SocialProof })));
+const SophiaConcierge    = lazy(() => import("../components/SophiaConcierge").then(m => ({ default: m.SophiaConcierge })));
+const StorytellingShowcase = lazy(() => import("../components/StorytellingShowcase").then(m => ({ default: m.StorytellingShowcase })));
+const FinalCTA           = lazy(() => import("../components/FinalCTA").then(m => ({ default: m.FinalCTA })));
+const Footer             = lazy(() => import("../components/Footer").then(m => ({ default: m.Footer })));
+const StickyCtaBar       = lazy(() => import("../components/StickyCtaBar").then(m => ({ default: m.StickyCtaBar })));
+const SocialProofToast   = lazy(() => import("../components/SocialProofToast").then(m => ({ default: m.SocialProofToast })));
 
 type Stage = "gate" | "splash" | "home";
 
@@ -41,7 +43,9 @@ export default function Index() {
 
       {/* ── Stage 2a: Full splash (6 sections) → then homepage ── */}
       {stage === "splash" && (
-        <SplashLandingPage onComplete={() => setStage("home")} />
+        <Suspense fallback={<div style={{ background: "#050B1A", minHeight: "100vh" }} />}>
+          <SplashLandingPage onComplete={() => setStage("home")} />
+        </Suspense>
       )}
 
       {/* ── Stage 2b / 3: Homepage (only rendered when stage === "home") ── */}
@@ -49,16 +53,18 @@ export default function Index() {
         <div style={{ background: "#0A0B0F", minHeight: "100vh", overflowX: "hidden" }}>
           <Navbar />
           <HeroSection />
-          <HowItWorks />
-          <ProductCards />
-          <TrustFeatures />
-          <SocialProof />
-          <SophiaConcierge />
-          <StorytellingShowcase />
-          <FinalCTA />
-          <Footer />
-          <StickyCtaBar />
-          <SocialProofToast />
+          <Suspense fallback={null}>
+            <HowItWorks />
+            <ProductCards />
+            <TrustFeatures />
+            <SocialProof />
+            <SophiaConcierge />
+            <StorytellingShowcase />
+            <FinalCTA />
+            <Footer />
+            <StickyCtaBar />
+            <SocialProofToast />
+          </Suspense>
         </div>
       )}
     </>
