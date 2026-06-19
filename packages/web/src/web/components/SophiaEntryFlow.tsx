@@ -1,19 +1,19 @@
 /**
- * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW  (static portrait version)
- * ══════════════════════════════════════════════════════════════════
- * Sophia-guided Q&A — no external API, zero latency, works offline.
+ * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW  (Simli lip-sync + ElevenLabs TTS)
+ * ══════════════════════════════════════════════════════════════════════════
+ * Sophia-guided Q&A with real-time lip-synced video (Simli WebRTC)
+ * and ElevenLabs TTS narration.
  *
  * Flow:
- *   Step 0 — Sophia intro (typewriter)
+ *   Step 0 — Sophia intro (typewriter + lip sync)
  *   Step 1 — Q: What brings you here today? (4 options)
  *   Step 2 — Q: Who is this for? (4 options)
  *   Step 3 — Q: What matters most? (4 options)
  *   Step 4 — Personalized summary → "Enter Ghaafeedi Music" CTA
  *
- * SIMLI UPGRADE PATH:
- *   When SIMLI_API_KEY arrives, swap <SophiaAvatar> static image
- *   for <SimliClient> WebRTC component — zero other changes needed.
- *   Backup: SophiaEntryFlow.simli-ready.tsx
+ * Simli: WebRTC livekit transport, Zahra face afdb6a3e
+ * TTS:   ElevenLabs PCM16 via /api/simli/tts, sendAudioData → Simli
+ * Fallback: static portrait + breathing if Simli WebRTC unavailable
  */
 
 import React, {
@@ -65,6 +65,18 @@ const INJECT_CSS = `
 @keyframes sef-opt-in {
   from { opacity:0; transform:translateY(10px); }
   to   { opacity:1; transform:translateY(0);    }
+}
+@keyframes sef-video-glow {
+  0%,100% { box-shadow: 0 0 0 1.5px rgba(212,175,55,.28), 0 0 40px rgba(212,175,55,.12), inset 0 0 30px rgba(212,175,55,.04); }
+  50%      { box-shadow: 0 0 0 1.5px rgba(212,175,55,.65), 0 0 72px rgba(212,175,55,.30), inset 0 0 40px rgba(212,175,55,.08); }
+}
+@keyframes sef-simli-speaking {
+  0%,100% { box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 0 50px rgba(212,175,55,.28); }
+  50%      { box-shadow: 0 0 0 3px rgba(212,175,55,.85), 0 0 80px rgba(212,175,55,.50); }
+}
+@keyframes sef-breathe {
+  0%,100% { transform:scale(1.00); }
+  50%      { transform:scale(1.02); }
 }
 .sef-opt {
   width:100%;
@@ -240,8 +252,251 @@ function StarField() {
   );
 }
 
-// ─── Sophia portrait (static — swap for SimliClient when key arrives) ─────────
-function SophiaAvatar({ speaking }: { speaking: boolean }) {
+// ─── Simli lip-sync avatar ────────────────────────────────────────────────────
+type SimliStatus = "idle" | "connecting" | "ready" | "speaking" | "error";
+
+interface SimliAvatarProps {
+  sessionToken: string | null;
+  audioData: Uint8Array | null;    // queued PCM16 chunk to send
+  onSpeakingChange: (speaking: boolean) => void;
+  onReady: () => void;
+  onError: () => void;
+  onAudioConsumed: () => void;     // called after sendAudioData
+}
+
+function SimliAvatar({
+  sessionToken,
+  audioData,
+  onSpeakingChange,
+  onReady,
+  onError,
+  onAudioConsumed,
+}: SimliAvatarProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const clientRef = useRef<InstanceType<typeof import("simli-client")["SimliClient"]> | null>(null);
+  const [status, setStatus] = useState<SimliStatus>("idle");
+  const [speaking, setSpeaking] = useState(false);
+  const startedRef = useRef(false);
+
+  // Init SimliClient when sessionToken arrives
+  useEffect(() => {
+    if (!sessionToken || startedRef.current) return;
+    if (!videoRef.current || !audioRef.current) return;
+    startedRef.current = true;
+    setStatus("connecting");
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { SimliClient } = await import("simli-client");
+        const client = new SimliClient(
+          sessionToken,
+          videoRef.current!,
+          audioRef.current!,
+          null, // iceServers — null = use Simli defaults
+          undefined, // logLevel
+          "livekit", // transport
+        );
+        clientRef.current = client;
+
+        client.on("start", () => {
+          if (cancelled) return;
+          setStatus("ready");
+          onReady();
+        });
+        client.on("speaking", () => {
+          if (cancelled) return;
+          setSpeaking(true);
+          onSpeakingChange(true);
+        });
+        client.on("silent", () => {
+          if (cancelled) return;
+          setSpeaking(false);
+          onSpeakingChange(false);
+        });
+        client.on("error", (detail: string) => {
+          if (cancelled) return;
+          console.error("[Simli] error:", detail);
+          setStatus("error");
+          onError();
+        });
+        client.on("startup_error", (msg: string) => {
+          if (cancelled) return;
+          console.error("[Simli] startup_error:", msg);
+          setStatus("error");
+          onError();
+        });
+
+        await client.start();
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[Simli] init failed:", err);
+          setStatus("error");
+          onError();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      clientRef.current?.stop().catch(() => {});
+    };
+  }, [sessionToken]);
+
+  // Send audio whenever new chunk arrives
+  useEffect(() => {
+    if (!audioData || !clientRef.current || status !== "ready") return;
+    try {
+      clientRef.current.sendAudioData(audioData);
+    } catch (err) {
+      console.warn("[Simli] sendAudioData error:", err);
+    }
+    onAudioConsumed();
+  }, [audioData, status]);
+
+  const isLoading = status === "idle" || status === "connecting";
+
+  return (
+    <div style={{
+      position:"relative",
+      width:"clamp(90px,12vw,140px)",
+      height:"clamp(140px,19vw,220px)",
+      flexShrink:0,
+      borderRadius:14,
+      overflow:"hidden",
+    }}>
+      {/* Glow ring */}
+      <div style={{
+        position:"absolute", inset:-3, borderRadius:17, zIndex:0,
+        background:"transparent",
+        border: speaking
+          ? "2px solid rgba(212,175,55,0.85)"
+          : "1.5px solid rgba(212,175,55,0.28)",
+        animation: speaking
+          ? "sef-simli-speaking 1.4s ease-in-out infinite"
+          : "sef-video-glow 5s ease-in-out infinite",
+        transition:"border-color 400ms",
+        pointerEvents:"none",
+      }} />
+
+      {/* Outer pulse ring */}
+      <div style={{
+        position:"absolute", left:"50%", top:"50%",
+        width:"170%", height:"170%", borderRadius:"50%",
+        background:"transparent",
+        border:"1px solid rgba(212,175,55,0.10)",
+        animation:"sef-ring 4.8s ease-in-out infinite",
+        transform:"translate(-50%,-50%)",
+        pointerEvents:"none", zIndex:0,
+      }} />
+
+      {/* Loading overlay — shows portrait while Simli connects */}
+      {isLoading && (
+        <div style={{
+          position:"absolute", inset:0, zIndex:4,
+          borderRadius:14, overflow:"hidden",
+          animation:"sef-breathe 3s ease-in-out infinite",
+        }}>
+          <img
+            src="/assets/prod-sophia-portrait.webp"
+            alt="Sophia"
+            style={{
+              width:"100%", height:"100%",
+              objectFit:"cover", objectPosition:"center top",
+              filter:"brightness(0.95) saturate(1.05)",
+              display:"block",
+            }}
+          />
+          {/* Connecting indicator */}
+          <div style={{
+            position:"absolute", bottom:8, left:"50%",
+            transform:"translateX(-50%)",
+            background:"rgba(5,11,26,0.75)",
+            borderRadius:20, padding:"3px 10px",
+            display:"flex", alignItems:"center", gap:5,
+          }}>
+            <div style={{
+              width:5, height:5, borderRadius:"50%",
+              background:"#22C55E",
+              animation:"sef-bar-wave 1.0s ease-in-out infinite",
+            }} />
+            <span style={{
+              fontSize:9, color:"rgba(255,255,255,0.65)",
+              letterSpacing:"0.08em", fontFamily:"Inter,sans-serif",
+              textTransform:"uppercase",
+            }}>
+              {status === "connecting" ? "Connecting…" : "Loading…"}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {status === "error" && (
+        <div style={{
+          position:"absolute", inset:0, zIndex:4,
+          borderRadius:14, overflow:"hidden",
+        }}>
+          <img
+            src="/assets/prod-sophia-portrait.webp"
+            alt="Sophia"
+            style={{
+              width:"100%", height:"100%",
+              objectFit:"cover", objectPosition:"center top",
+              filter:"brightness(0.92) saturate(0.95)",
+              display:"block",
+              animation:"sef-breathe 3.5s ease-in-out infinite",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Simli video */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={false}
+        style={{
+          position:"absolute", inset:0, zIndex:3,
+          width:"100%", height:"100%",
+          objectFit:"cover", borderRadius:14,
+          opacity: (status === "ready" || status === "speaking") ? 1 : 0,
+          transition:"opacity 600ms ease",
+          background:"transparent",
+        }}
+      />
+      {/* Hidden Simli audio element */}
+      <audio ref={audioRef} autoPlay style={{ display:"none" }} />
+
+      {/* Speaking bars */}
+      <div style={{
+        position:"absolute", bottom:8, left:"50%",
+        transform:"translateX(-50%)",
+        display:"flex", gap:3, alignItems:"flex-end", height:20,
+        opacity: speaking ? 1 : 0,
+        transition:"opacity 400ms ease",
+        pointerEvents:"none", zIndex:5,
+      }}>
+        {[0,1,2,3,4].map(i => (
+          <div key={i} style={{
+            width:3, borderRadius:2,
+            background:GOLD2,
+            animation: speaking
+              ? `sef-bar-wave ${0.55+i*0.11}s ease-in-out ${i*0.09}s infinite`
+              : "none",
+            height:"8px",
+          }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Fallback static portrait (used if Simli not available) ──────────────────
+function SophiaAvatarFallback({ speaking }: { speaking: boolean }) {
   return (
     <div style={{
       position:"relative",
@@ -249,7 +504,6 @@ function SophiaAvatar({ speaking }: { speaking: boolean }) {
       height:"clamp(140px,19vw,213px)",
       flexShrink:0,
     }}>
-      {/* pulse ring */}
       <div style={{
         position:"absolute", left:"50%", top:"50%",
         width:"170%", height:"170%", borderRadius:"50%",
@@ -259,7 +513,6 @@ function SophiaAvatar({ speaking }: { speaking: boolean }) {
         transform:"translate(-50%,-50%)",
         pointerEvents:"none",
       }} />
-      {/* glow halo */}
       <div style={{
         position:"absolute", inset:"-10px", borderRadius:"16px",
         background:"radial-gradient(circle, rgba(212,175,55,0.16) 0%, transparent 70%)",
@@ -268,7 +521,6 @@ function SophiaAvatar({ speaking }: { speaking: boolean }) {
         transition:"opacity 600ms ease",
         pointerEvents:"none",
       }} />
-      {/* portrait */}
       <img
         src="/assets/prod-sophia-portrait.webp"
         alt="Sophia"
@@ -284,7 +536,6 @@ function SophiaAvatar({ speaking }: { speaking: boolean }) {
           display:"block", userSelect:"none",
         }}
       />
-      {/* speaking bars */}
       <div style={{
         position:"absolute", bottom:8, left:"50%",
         transform:"translateX(-50%)",
@@ -300,7 +551,7 @@ function SophiaAvatar({ speaking }: { speaking: boolean }) {
             animation: speaking
               ? `sef-bar-wave ${0.55+i*0.11}s ease-in-out ${i*0.09}s infinite`
               : "none",
-            height: speaking ? undefined : "8px",
+            height:"8px",
           }} />
         ))}
       </div>
@@ -505,21 +756,28 @@ interface SophiaEntryFlowProps {
   onComplete: () => void;
 }
 
+type SimliMode = "pending" | "active" | "fallback";
+
 export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [step,     setStep]     = useState(0);
-  const [spoken,   setSpoken]   = useState(false);   // typewriter done for current step
+  const [spoken,   setSpoken]   = useState(false);
   const [answers,  setAnswers]  = useState<Record<number, OptionKey>>({});
   const [selected, setSelected] = useState<OptionKey | null>(null);
   const [exiting,  setExiting]  = useState(false);
 
+  // Simli state
+  const [simliMode,     setSimliMode]     = useState<SimliMode>("pending");
+  const [sessionToken,  setSessionToken]  = useState<string | null>(null);
+  const [simliReady,    setSimliReady]    = useState(false);
+  const [simliFailed,   setSimliFailed]   = useState(false);
+  const [simlySpeaking, setSimlySpeaking] = useState(false);
+  const [audioChunk,    setAudioChunk]    = useState<Uint8Array | null>(null);
+  const ttsInFlight = useRef(false);
+
   const isIntro   = step === 0;
   const isSummary = step === 4;
   const curStep   = STEPS[Math.min(step, STEPS.length - 1)];
-
-  // Determine speech line
-  const speechLine = isSummary
-    ? buildSummary(answers)
-    : (curStep?.line ?? "");
+  const speechLine = isSummary ? buildSummary(answers) : (curStep?.line ?? "");
 
   // CSS
   useEffect(() => {
@@ -543,6 +801,65 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     setSelected(null);
   }, [step]);
 
+  // ── Step 1: Fetch Simli session token on mount ──────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/simli/token", { method: "POST" });
+        if (!res.ok) throw new Error(`Simli token ${res.status}`);
+        const data = (await res.json()) as { session_token?: string; error?: string };
+        if (cancelled) return;
+        if (data.session_token) {
+          setSessionToken(data.session_token);
+          setSimliMode("active");
+        } else {
+          throw new Error(data.error ?? "no token");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[SEF] Simli token fetch failed, using fallback:", err);
+          setSimliMode("fallback");
+          setSimliFailed(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Step 2: Fetch TTS audio per step (once Simli is ready) ─────────────────
+  useEffect(() => {
+    // Wait until Simli WebRTC is ready before sending audio
+    if (simliMode !== "active" || !simliReady || !speechLine) return;
+
+    let cancelled = false;
+    ttsInFlight.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/simli/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: speechLine }),
+        });
+        if (!res.ok) throw new Error(`TTS ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (!cancelled) {
+          setAudioChunk(new Uint8Array(buf));
+        }
+      } catch (err) {
+        console.warn("[SEF] TTS failed:", err);
+        // graceful: typewriter + static avatar still work
+      } finally {
+        if (!cancelled) ttsInFlight.current = false;
+      }
+    })();
+
+    return () => { cancelled = true; ttsInFlight.current = false; };
+  // step is the trigger — new step = new TTS call
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, simliReady, simliMode]);
+
   const handleSpoken = useCallback(() => setSpoken(true), []);
 
   const handleSelect = (k: OptionKey) => setSelected(k);
@@ -562,8 +879,10 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }, 520);
   };
 
-  // canContinue: intro = just wait for speech | questions = speech done + option picked | summary = speech done
   const canContinue = spoken && (isIntro || isSummary || !!selected);
+
+  // Which avatar to show
+  const useSimli = simliMode === "active" && !simliFailed;
 
   return (
     <AnimatePresence>
@@ -648,7 +967,23 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 gap:"clamp(12px,2vw,22px)",
                 width:"100%",
               }}>
-                <SophiaAvatar speaking={!spoken} />
+                {/* Avatar — Simli or fallback */}
+                {useSimli ? (
+                  <SimliAvatar
+                    sessionToken={sessionToken}
+                    audioData={audioChunk}
+                    onSpeakingChange={setSimlySpeaking}
+                    onReady={() => setSimliReady(true)}
+                    onError={() => {
+                      setSimliFailed(true);
+                      setSimliMode("fallback");
+                    }}
+                    onAudioConsumed={() => setAudioChunk(null)}
+                  />
+                ) : (
+                  <SophiaAvatarFallback speaking={!spoken} />
+                )}
+
                 <div style={{ flex:1, paddingTop:4 }}>
                   {/* Badge */}
                   <div style={{ display:"inline-flex", alignItems:"center", gap:6, marginBottom:8 }}>
@@ -664,6 +999,16 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     }}>
                       Sophia · AI Concierge
                     </span>
+                    {useSimli && simliReady && (
+                      <span style={{
+                        fontSize:9, color:"rgba(255,255,255,0.30)",
+                        fontFamily:"Inter,sans-serif",
+                        letterSpacing:"0.08em", marginLeft:4,
+                        textTransform:"uppercase",
+                      }}>
+                        · Live
+                      </span>
+                    )}
                   </div>
                   {speechLine && (
                     <SpeechBubble

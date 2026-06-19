@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
 			hmr: { overlay: false, },
 			cors: false
 		},
+		optimizeDeps: {
+			include: ["simli-client"],
+		},
 		build: {
 			target: "esnext",
 			minify: "esbuild",
