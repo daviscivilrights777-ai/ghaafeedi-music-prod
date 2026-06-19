@@ -17,7 +17,7 @@ import { getSecret, SECRET_KEYS } from "../secrets";
 // Modal deploy URL for the assembly function
 // Format: https://{org}--ghaafeedi-assemble-run.modal.run
 const MODAL_BASE_URL = process.env.MODAL_ASSEMBLY_URL
-  ?? "https://ghaafeedi--ghaafeedi-assemble-run.modal.run";
+  ?? "https://daviscivilrights777--ghaafeedi-assemble-run.modal.run";
 
 // Cost estimate: ~$0.50 per assembly (20-60s of GPU time @ $0.02-0.04/s)
 const ASSEMBLY_COST_CENTS = 50;

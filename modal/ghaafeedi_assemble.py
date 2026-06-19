@@ -27,7 +27,7 @@ app = modal.App("ghaafeedi")
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install("boto3", "requests", "pydantic")
+    .pip_install("boto3", "requests", "pydantic", "fastapi[standard]")
 )
 
 # In-memory job store (Modal volumes for persistence in production)
@@ -378,7 +378,7 @@ def assemble_video(req_dict: dict) -> dict:
 
 # ── HTTP Endpoints ────────────────────────────────────────────────────────────
 @app.function(image=image)
-@modal.web_endpoint(method="POST", label="ghaafeedi-assemble-run")
+@modal.fastapi_endpoint(method="POST", label="ghaafeedi-assemble-run")
 def run_endpoint(req_dict: dict) -> dict:
     """
     POST /  — Dispatch assembly job
@@ -397,7 +397,7 @@ def run_endpoint(req_dict: dict) -> dict:
 
 
 @app.function(image=image)
-@modal.web_endpoint(method="GET", label="ghaafeedi-assemble-status")
+@modal.fastapi_endpoint(method="GET", label="ghaafeedi-assemble-status")
 def status_endpoint(job_id: str) -> dict:
     """
     GET /status?job_id=xxx — Poll job status
