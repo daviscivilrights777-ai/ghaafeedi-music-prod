@@ -579,10 +579,10 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [simliReady,    setSimliReady]    = useState(false);
   const [simliFailed,   setSimliFailed]   = useState(false);
   const [simliSpeaking, setSimliSpeaking] = useState(false);
-  // speak() is injected by SimliAvatar once it's connected
   const speakRef    = useRef<((text: string) => Promise<void>) | null>(null);
-  const ttsQueueRef = useRef<string|null>(null); // line queued before Simli was ready
-  // Fallback audio player (used when Simli is unavailable)
+  const ttsQueueRef = useRef<string|null>(null);
+  // Persistent DOM audio element — avoids new Audio() autoplay blocks
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
   const fallbackSpeakingRef = useRef(false);
 
@@ -616,6 +616,73 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Reset spoken + selection on each step change
   useEffect(() => { setSpoken(false); setSelected(null); }, [step]);
 
+  // ── Create persistent DOM audio element on mount ─────────────────────────
+  // Using a real DOM <audio> element (not new Audio()) avoids Safari/Chrome
+  // autoplay blocks. We append it to the body so it stays in the DOM.
+  useEffect(() => {
+    const el = document.createElement("audio");
+    el.id = "sophia-tts-audio";
+    el.preload = "auto";
+    el.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;";
+    document.body.appendChild(el);
+    ttsAudioRef.current = el;
+    el.addEventListener("play",  () => setSimliSpeaking(true));
+    el.addEventListener("ended", () => setSimliSpeaking(false));
+    el.addEventListener("error", () => setSimliSpeaking(false));
+    return () => { el.remove(); ttsAudioRef.current = null; };
+  }, []);
+
+  // ── playTTS: fetch MP3 from ElevenLabs and play via DOM audio element ─────
+  const playTTS = useCallback(async (text: string) => {
+    const el = ttsAudioRef.current;
+    if (!el) return;
+    try {
+      // Stop any current playback
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
+
+      const res = await fetch("/api/simli/tts-fallback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) { console.warn("[TTS] API failed:", res.status); return; }
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      el.src = url;
+      el.onended = () => URL.revokeObjectURL(url);
+
+      // play() — will work because the DOM element was created before any gesture block
+      await el.play().catch(async (err) => {
+        // If autoplay blocked, wait for first click then retry
+        console.warn("[TTS] autoplay blocked, queuing for next gesture:", err.message);
+        pendingTTSRef.current = url;
+      });
+    } catch (err) {
+      console.warn("[TTS] error:", err);
+    }
+  }, []);
+
+  // Queue for autoplay-blocked audio — drained on first user gesture
+  const pendingTTSRef = useRef<string | null>(null);
+
+  // ── Unlock audio + drain pending TTS on first user gesture ───────────────
+  const audioUnlockedRef = useRef(false);
+  const unlockAndPlay = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    audioUnlockedRef.current = true;
+    const el = ttsAudioRef.current;
+    if (!el) return;
+    const pending = pendingTTSRef.current;
+    if (pending) {
+      pendingTTSRef.current = null;
+      el.src = pending;
+      el.play().catch(() => {});
+    }
+  }, []);
+
   // ── AUTO-START Simli on mount ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
@@ -625,12 +692,11 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
         if (!res.ok) throw new Error(`token ${res.status}`);
         const data = (await res.json()) as { session_token?: string; error?: string };
         if (cancelled) return;
-        if (data.session_token) {
-          setSessionToken(data.session_token);
-        } else throw new Error(data.error ?? "no token");
+        if (data.session_token) setSessionToken(data.session_token);
+        else throw new Error(data.error ?? "no token");
       } catch (err) {
         if (!cancelled) {
-          console.warn("[SEF] Simli token failed, using fallback:", err);
+          console.warn("[SEF] Simli token failed:", err);
           setSimliFailed(true);
         }
       }
@@ -638,64 +704,14 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     return () => { cancelled = true; };
   }, []);
 
-  // ── fallbackSpeak: ElevenLabs MP3 via HTML Audio (when Simli unavailable) ──
-  const fallbackSpeak = useCallback(async (text: string) => {
-    try {
-      console.log("[SEF] fallback TTS →", text.slice(0, 60) + "…");
-      // Stop any current playback
-      if (fallbackAudioRef.current) {
-        fallbackAudioRef.current.pause();
-        fallbackAudioRef.current.src = "";
-      }
-      const res = await fetch("/api/simli/tts-fallback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok || !res.body) {
-        console.warn("[SEF] fallback TTS failed:", res.status);
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      fallbackAudioRef.current = audio;
-      audio.onplay  = () => { fallbackSpeakingRef.current = true;  setSimliSpeaking(true);  };
-      audio.onended = () => { fallbackSpeakingRef.current = false; setSimliSpeaking(false); URL.revokeObjectURL(url); };
-      audio.onerror = () => { fallbackSpeakingRef.current = false; setSimliSpeaking(false); };
-      await audio.play();
-    } catch (err) {
-      console.warn("[SEF] fallback speak error:", err);
-    }
-  }, []);
-
-  // ── fireTTS: calls speak() from SimliAvatar OR fallback ──────────────────
-  const fireTTS = useCallback((text: string) => {
-    if (simliFailed) {
-      // Simli unavailable — use ElevenLabs audio fallback
-      fallbackSpeak(text).catch(e => console.warn("[SEF] fallback speak error:", e));
-      return;
-    }
-    if (!speakRef.current) {
-      // Simli not ready yet — queue it
-      ttsQueueRef.current = text;
-      return;
-    }
-    speakRef.current(text).catch(e => console.warn("[SEF] speak error:", e));
-  }, [simliFailed, fallbackSpeak]);
-
-  // Fire TTS when step changes
-  // Strategy: always fire fallback audio immediately (no waiting for Simli WebRTC).
-  // Simli lip-sync is a bonus — if it connects it picks up via speakRef queue.
+  // ── Fire TTS on every step change ────────────────────────────────────────
   useEffect(() => {
-    // Always play audio immediately via fallback (guaranteed sound)
-    fallbackSpeak(speechLine).catch(e => console.warn("[SEF] fallback speak error:", e));
-    // Also attempt Simli lip-sync if ready
-    if (!simliFailed && speakRef.current) {
-      speakRef.current(speechLine).catch(e => console.warn("[SEF] simli speak error:", e));
-    } else if (!simliFailed) {
-      // Queue for when Simli connects — but fallback already played audio
-      ttsQueueRef.current = null; // don't double-play via queue
+    playTTS(speechLine);
+    // Also pipe to Simli for lip-sync if connected
+    if (speakRef.current) {
+      speakRef.current(speechLine).catch(() => {});
+    } else {
+      ttsQueueRef.current = speechLine;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -717,32 +733,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const canContinue = spoken && (isIntro || isSummary || !!selected);
   const useSimli    = !!sessionToken && !simliFailed;
 
-  // ── Unlock browser audio context on first user interaction ───────────────
-  // Browsers block audio autoplay. Calling .play() on the audio element after
-  // a user gesture unlocks the audio context for all subsequent plays.
-  const audioUnlockedRef = useRef(false);
-  const unlockAudio = useCallback(() => {
-    if (audioUnlockedRef.current) return;
-    audioUnlockedRef.current = true;
-    // Unlock HTML Audio API
-    const silentAudio = new Audio();
-    silentAudio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-    silentAudio.volume = 0;
-    silentAudio.play().catch(() => {});
-    // Unlock Web Audio API (for Simli's AudioWorklet)
-    try {
-      const ctx = new AudioContext();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      src.onended = () => ctx.close();
-    } catch {}
-    // Re-trigger TTS now that audio is unlocked
-    fallbackSpeak(speechLine).catch(() => {});
-  }, [fallbackSpeak, speechLine]);
-
   return (
     <AnimatePresence>
       {!exiting && (
@@ -752,7 +742,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.5 }}
-          onClick={unlockAudio}
+          onClick={unlockAndPlay}
           style={{
             position: "fixed", inset: 0, zIndex: 99999,
             background: `radial-gradient(ellipse 130% 100% at 40% 10%, #0E1F4A 0%, #070F28 35%, ${BG} 70%, #020610 100%)`,
@@ -862,8 +852,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     onReady={(speak) => {
                       speakRef.current = speak;
                       setSimliReady(true);
-                      // Fallback audio already played — Simli lip-sync active for future steps
-                      console.log("[SEF] Simli ready — lip-sync active from next step");
+                      // Drain queued line for lip-sync (audio already playing via ttsAudioRef)
+                      const queued = ttsQueueRef.current;
+                      if (queued) { ttsQueueRef.current = null; speak(queued).catch(() => {}); }
                     }}
                     onError={() => { setSimliFailed(true); }}
                   />
