@@ -198,9 +198,15 @@ function useTypewriter(text: string, speed = 24) {
 }
 
 // ─── Simli WebRTC Avatar ──────────────────────────────────────────────────────
-// New architecture: audio pipeline is fully INTERNAL to this component.
-// speak(text) → fetch /api/simli/tts-stream → read chunks → sendAudioData() directly
-// No React state intermediary for audio — eliminates all timing/race conditions.
+// Transport: "p2p" (library default) — P2P WebRTC via RTCPeerConnection.
+//   Simli's own retry logic: tries p2p up to 2x, then auto-switches to livekit.
+//   We let the library handle retries — our timeout is 30s (> 15s internal × 2).
+//
+// Audio pipeline: speak(text) → /api/simli/tts-stream (ElevenLabs PCM16 chunks)
+//   → sendAudioData() → WebSocket signaling channel → Simli renders face.
+//
+// "start" event fires when first video frame arrives (requestVideoFrameCallback).
+// We listen to client "start" event AND await client.start() — both paths covered.
 interface SimliAvatarProps {
   sessionToken: string | null;
   onSpeakingChange: (v: boolean) => void;
@@ -214,13 +220,14 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef   = useRef<any>(null);
   const startedRef  = useRef(false);
+  const readyFiredRef = useRef(false);
   const speakingRef = useRef(false);
   const [status,   setStatus]   = useState<"idle"|"connecting"|"ready"|"error">("idle");
   const [speaking, setSpeaking] = useState(false);
 
   // ── speak() — streams ElevenLabs PCM directly into Simli ──────────────────
-  // Called internally after client.start() resolves (first video frame ready).
-  // Reads chunked PCM stream and pipes each chunk to sendAudioData immediately.
+  // Reads chunked PCM stream from /api/simli/tts-stream and pipes each chunk
+  // to sendAudioData() which forwards over the WebSocket signaling channel.
   const speakFn = useCallback(async (text: string) => {
     const client = clientRef.current;
     if (!client) return;
@@ -251,6 +258,18 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
     }
   }, []);
 
+  // ── Notify parent once — called from "start" event OR start() resolve ─────
+  const notifyReady = useCallback((client: unknown) => {
+    if (readyFiredRef.current) return;
+    readyFiredRef.current = true;
+    console.log("[Simli] ✅ READY — first frame received, priming buffer");
+    setStatus("ready");
+    // Prime Simli audio buffer (official recommendation: send silence first)
+    const silence = new Uint8Array(6000);
+    (client as { sendAudioData: (d: Uint8Array) => void }).sendAudioData(silence);
+    onReady(speakFn);
+  }, [speakFn, onReady]);
+
   // ── Auto-init as soon as session token is available ────────────────────────
   useEffect(() => {
     if (!sessionToken || startedRef.current) return;
@@ -262,17 +281,29 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
     (async () => {
       try {
         const { SimliClient } = await import("simli-client");
+
+        // Use default "p2p" transport — library's preferred mode.
+        // Simli's own retry logic will auto-switch to "livekit" after 2 p2p failures.
+        // We do NOT pass transport_mode so we get the default "p2p".
         const client = new SimliClient(
           sessionToken,
           videoRef.current!,
           audioRef.current!,
-          null,          // iceServers — livekit doesn't need them
-          undefined,     // logLevel
-          "livekit",
+          null,        // iceServers — null = use STUN defaults
+          undefined,   // logLevel — debug (default)
+          // transport_mode NOT specified → defaults to "p2p"
         );
         clientRef.current = client;
 
-        // speaking/silent events from signaling websocket (SPEAK/SILENT messages)
+        // ── Simli events ──────────────────────────────────────────────────────
+        client.on("start", () => {
+          // Fires when first video frame arrives (requestVideoFrameCallback inside LivekitTransport)
+          // Also fires for P2P on first track attachment. Belt-and-suspenders with start() resolve.
+          if (!cancelled) {
+            console.log("[Simli] 🎬 'start' event received");
+            notifyReady(client);
+          }
+        });
         client.on("speaking", () => {
           if (cancelled) return;
           console.log("[Simli] 🟢 SPEAKING");
@@ -287,50 +318,40 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
           setSpeaking(false);
           onSpeakingChange(false);
         });
+        client.on("ack", () => console.log("[Simli] ✓ ACK received"));
+        client.on("stop", () => console.log("[Simli] ■ STOP received"));
+        client.on("connection_info", (info: string) => console.log("[Simli] 🔗 connection_info:", info.slice(0, 80)));
         client.on("error", (d: string) => {
           if (cancelled) return;
           console.error("[Simli] ❌ error event:", d);
-          setStatus("error");
-          onError();
+          if (!readyFiredRef.current) { setStatus("error"); onError(); }
         });
         client.on("startup_error", (m: string) => {
           if (cancelled) return;
           console.error("[Simli] ❌ startup_error:", m);
-          setStatus("error");
-          onError();
+          if (!readyFiredRef.current) { setStatus("error"); onError(); }
         });
-        client.on("ack", () => console.log("[Simli] ✓ ACK received"));
-        client.on("stop", () => console.log("[Simli] ■ STOP received"));
+        client.on("unknown", (m: string) => console.log("[Simli] ❓ unknown msg:", m.slice(0, 100)));
 
-        // await client.start() resolves when first video frame renders (LiveKit "start" event)
-        // Wrap in a timeout — if LiveKit WebRTC hangs, fall back to audio-only after 8s
-        // SimliClient's internal timeout is 15s. Race with our own 10s max
-        // to fail fast and fall back to audio-only if WebRTC is blocked.
-        console.log("[Simli] calling client.start()…");
+        // await client.start() — resolves when first video frame renders.
+        // SimliClient internal timeout = 15s, retries up to 10x (every 2s).
+        // We race with 30s max to fail gracefully if WebRTC is fully blocked.
+        console.log("[Simli] calling client.start() — transport: p2p (default)…");
         await Promise.race([
           client.start(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Simli WebRTC timeout 10s — falling back to audio")), 10000)
+            setTimeout(() => reject(new Error("Simli timeout 30s")), 30000)
           ),
         ]);
 
         if (cancelled) return;
-
-        console.log("[Simli] connected + first frame received — priming buffer");
-        setStatus("ready");
-
-        // Send 6000 zero bytes to prime the Simli audio buffer (official recommendation)
-        const silence = new Uint8Array(6000);
-        client.sendAudioData(silence);
-
-        // Expose speak() to parent — parent will call it with the welcome line
-        onReady(speakFn);
+        // start() resolved — first frame confirmed
+        notifyReady(client);
 
       } catch (err) {
         if (!cancelled) {
           console.error("[Simli] init failed:", err);
-          setStatus("error");
-          onError();
+          if (!readyFiredRef.current) { setStatus("error"); onError(); }
         }
       }
     })();
@@ -339,8 +360,8 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
       cancelled = true;
       clientRef.current?.stop().catch(() => {});
     };
-  // speakFn is stable (useCallback with no deps) — safe to include
-  }, [sessionToken, speakFn]);
+  // speakFn + notifyReady are stable useCallbacks — safe to include
+  }, [sessionToken, speakFn, notifyReady]);
 
   const visible = status === "ready";
 
