@@ -570,6 +570,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // speak() is injected by SimliAvatar once it's connected
   const speakRef    = useRef<((text: string) => Promise<void>) | null>(null);
   const ttsQueueRef = useRef<string|null>(null); // line queued before Simli was ready
+  // Fallback audio player (used when Simli is unavailable)
+  const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fallbackSpeakingRef = useRef(false);
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -623,22 +626,57 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     return () => { cancelled = true; };
   }, []);
 
-  // ── fireTTS: calls speak() from SimliAvatar internal pipeline ────────────
+  // ── fallbackSpeak: ElevenLabs MP3 via HTML Audio (when Simli unavailable) ──
+  const fallbackSpeak = useCallback(async (text: string) => {
+    try {
+      console.log("[SEF] fallback TTS →", text.slice(0, 60) + "…");
+      // Stop any current playback
+      if (fallbackAudioRef.current) {
+        fallbackAudioRef.current.pause();
+        fallbackAudioRef.current.src = "";
+      }
+      const res = await fetch("/api/simli/tts-fallback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok || !res.body) {
+        console.warn("[SEF] fallback TTS failed:", res.status);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      fallbackAudioRef.current = audio;
+      audio.onplay  = () => { fallbackSpeakingRef.current = true;  setSimliSpeaking(true);  };
+      audio.onended = () => { fallbackSpeakingRef.current = false; setSimliSpeaking(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => { fallbackSpeakingRef.current = false; setSimliSpeaking(false); };
+      await audio.play();
+    } catch (err) {
+      console.warn("[SEF] fallback speak error:", err);
+    }
+  }, []);
+
+  // ── fireTTS: calls speak() from SimliAvatar OR fallback ──────────────────
   const fireTTS = useCallback((text: string) => {
+    if (simliFailed) {
+      // Simli unavailable — use ElevenLabs audio fallback
+      fallbackSpeak(text).catch(e => console.warn("[SEF] fallback speak error:", e));
+      return;
+    }
     if (!speakRef.current) {
       // Simli not ready yet — queue it
       ttsQueueRef.current = text;
       return;
     }
     speakRef.current(text).catch(e => console.warn("[SEF] speak error:", e));
-  }, []);
+  }, [simliFailed, fallbackSpeak]);
 
-  // Fire TTS when step changes (Simli must already be ready, or it queues)
+  // Fire TTS when step changes
   useEffect(() => {
-    if (simliFailed) return;  // fallback mode — no Simli TTS
     fireTTS(speechLine);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, [step, simliFailed]);
 
   const handleContinue = () => {
     const newAnswers = selected ? { ...answers, [step]: selected } : answers;

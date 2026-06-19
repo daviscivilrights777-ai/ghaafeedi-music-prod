@@ -206,6 +206,60 @@ app.post("/tts", async (c) => {
   }
 });
 
+// ─── POST /api/simli/tts-fallback ────────────────────────────────────────────
+// Returns ElevenLabs MP3 audio as a blob — used when Simli WebRTC is unavailable.
+// The client creates an Audio element, sets src to an object URL, and plays it.
+// Body: { text: string }
+// Returns: audio/mpeg binary
+app.post("/tts-fallback", async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as { text?: string };
+    const text = body.text?.trim();
+    if (!text) return c.json({ error: "text required" }, 400);
+    if (text.length > 1200) return c.json({ error: "text too long" }, 400);
+
+    const elKey =
+      (await getSecret("ELEVENLABS_API_KEY").catch(() => null)) ??
+      process.env.ELEVENLABS_API_KEY ??
+      "";
+    if (!elKey) return c.json({ error: "ElevenLabs not configured" }, 503);
+
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: { "xi-api-key": elKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_turbo_v2_5",
+          voice_settings: {
+            stability: 0.48,
+            similarity_boost: 0.82,
+            style: 0.35,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[Simli/TTS-Fallback] ElevenLabs error:", res.status, err);
+      return c.json({ error: "TTS failed" }, 502);
+    }
+    const audio = await res.arrayBuffer();
+    return new Response(audio, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    console.error("[Simli/TTS-Fallback] error:", err);
+    return c.json({ error: "TTS fallback error" }, 500);
+  }
+});
+
 // ─── POST /api/simli/tts-stream ───────────────────────────────────────────────
 // Streams ElevenLabs PCM16 chunks as Transfer-Encoding: chunked
 // Client reads stream chunk-by-chunk and pipes directly to Simli sendAudioData
