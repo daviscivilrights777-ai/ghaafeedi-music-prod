@@ -1010,7 +1010,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                         fontFamily:"Inter,sans-serif", lineHeight:1.2,
                         textAlign:"center", padding:"0 6px",
                       }}>
-                        Talk to<br/>Sophia
+                        Talk to<br/>Sophia Live
                       </span>
                     </button>
                   </div>
