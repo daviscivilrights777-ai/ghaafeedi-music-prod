@@ -237,13 +237,16 @@ function SimliAvatar({ sessionToken, audioData, onSpeakingChange, onReady, onErr
         );
         clientRef.current = client;
 
-        client.on("start", () => { if (!cancelled) { setStatus("ready"); onReady(); } });
+        // "start" is intercepted internally — do NOT use it for user state
         client.on("speaking", () => { if (!cancelled) { setSpeaking(true);  onSpeakingChange(true);  } });
         client.on("silent",   () => { if (!cancelled) { setSpeaking(false); onSpeakingChange(false); } });
         client.on("error",        (d: string) => { if (!cancelled) { console.error("[Simli] error:", d);   setStatus("error"); onError(); } });
         client.on("startup_error",(m: string) => { if (!cancelled) { console.error("[Simli] startup:", m); setStatus("error"); onError(); } });
 
+        // start() resolves when WebRTC connection is established
         await client.start();
+        // Connection succeeded — now mark ready
+        if (!cancelled) { setStatus("ready"); onReady(); }
       } catch (err) {
         if (!cancelled) { console.error("[Simli] init failed:", err); setStatus("error"); onError(); }
       }
