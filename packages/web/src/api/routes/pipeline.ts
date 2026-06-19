@@ -9,6 +9,8 @@ import { db } from "../database/pg-client";
 import { aiJobs } from "../database/pg-schema";
 import { eq, and, sql } from "drizzle-orm";
 import { up as migration007 } from "../database/migrations/007_pipeline_columns";
+import { up as migration008 } from "../database/migrations/008_style_embeddings";
+import { findSimilarProductions, generateSignedUrl } from "../orchestration/delivery";
 
 const pipeline = new Hono();
 const orchestrator = PipelineOrchestrator.getInstance();
@@ -172,15 +174,60 @@ pipeline.post("/:jobId/approve-qc", async (c) => {
 });
 
 // ─── POST /api/pipeline/migrate ──────────────────────────────
-// Run migration 007 (pipeline columns). Admin-only.
+// Run migrations 007 + 008 (pipeline columns + style embeddings). Admin-only.
 pipeline.post("/migrate", async (c) => {
+  const results: string[] = [];
+  const errors: string[] = [];
+
+  try { await migration007(); results.push("007 pipeline_columns"); }
+  catch (e) { errors.push(`007: ${(e as Error).message}`); }
+
+  try { await migration008(); results.push("008 style_embeddings"); }
+  catch (e) { errors.push(`008: ${(e as Error).message}`); }
+
+  if (errors.length > 0) {
+    return c.json({ success: false, completed: results, errors }, 500);
+  }
+  return c.json({ success: true, message: `Migrations complete: ${results.join(", ")}` });
+});
+
+// ─── GET /api/pipeline/similar-productions ───────────────────
+// Find productions with similar emotional profile (pgvector)
+pipeline.get("/similar-productions", async (c) => {
+  const emotionVectorRaw = c.req.query("emotions"); // "0.8,0.2,0.7,0.4,0.6"
+  const limit = parseInt(c.req.query("limit") ?? "5", 10);
+
+  if (!emotionVectorRaw) {
+    return c.json({ error: "emotions query param required (comma-separated 5 values)" }, 400);
+  }
+
+  const vector = emotionVectorRaw.split(",").map(Number).slice(0, 5);
+  if (vector.some(isNaN) || vector.length !== 5) {
+    return c.json({ error: "emotions must be 5 comma-separated numbers (0-1)" }, 400);
+  }
+
   try {
-    await migration007();
-    return c.json({ success: true, message: "Migration 007 complete" });
+    const results = await findSimilarProductions(vector, limit);
+    return c.json({ results, count: results.length });
   } catch (err) {
-    const e = err as Error;
-    console.error("[pipeline.migrate] Error:", e.message);
-    return c.json({ error: e.message }, 500);
+    return c.json({ error: (err as Error).message }, 500);
+  }
+});
+
+// ─── GET /api/pipeline/:productionId/signed-url ──────────────
+// Get a fresh 48h signed URL for a delivered production
+pipeline.get("/:productionId/signed-url", async (c) => {
+  const { productionId } = c.req.param();
+  const key = c.req.query("key"); // R2 object key
+
+  if (!key) return c.json({ error: "key query param required" }, 400);
+
+  try {
+    const signedUrl = await generateSignedUrl({ bucket: "ghaafeedi-media", key, expiresIn: 172800 });
+    const expiresAt = new Date(Date.now() + 172800 * 1000).toISOString();
+    return c.json({ signedUrl, expiresAt, productionId });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 500);
   }
 });
 

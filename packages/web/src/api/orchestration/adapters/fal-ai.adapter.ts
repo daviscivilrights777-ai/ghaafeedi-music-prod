@@ -31,7 +31,7 @@ const ESTIMATED_DURATION: Record<string, number> = {
 export const FalAiAdapter: ProviderAdapter = {
   name:        "fal_ai_kling",
   displayName: "FAL.ai Kling v3 Pro",
-  jobTypes:    ["video", "visualization", "image"],
+  jobTypes:    ["video", "visualization", "image", "clip_batch"],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
     const duration = (job.inputPayload?.durationSeconds as number) || ESTIMATED_DURATION[job.jobType] || 30;
@@ -50,6 +50,38 @@ export const FalAiAdapter: ProviderAdapter = {
     const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
     // Use kling_standard for draft/preview jobs to save cost; pro for all customer-facing delivery
     const isDraft = job.inputPayload?.draft === true;
+
+    // ── clip_batch: use shot-specific prompt from ShotList ────────────────────
+    if (job.jobType === "clip_batch") {
+      const shot = job.inputPayload?.shot as Record<string, unknown> | undefined;
+      const model = MODELS.kling_pro_txt; // text-to-video for shot generation
+      const payload = {
+        prompt:         (shot?.falPrompt as string) || (job.inputPayload?.prompt as string) || "",
+        negative_prompt: (shot?.negativePrompt as string) || "blurry, low quality, amateur, watermark",
+        duration:       (shot?.durationSeconds as number) || 5,
+        aspect_ratio:   "16:9",
+        generate_audio: false, // audio added in assembly stage
+      };
+      const res = await fetch(`https://queue.fal.run/${model}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Key ${apiKey}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`[FAL.ai clip_batch] Dispatch failed: ${res.status} ${err}`);
+      }
+      const data = await res.json() as { request_id: string };
+      return {
+        externalJobId:  data.request_id,
+        provider:       this.name,
+        dispatchedAt:   new Date(),
+        pollIntervalMs: 5_000,
+        metadata:       { model, shotIndex: job.inputPayload?.shotIndex, pipelineRunId: job.pipelineRunId },
+      };
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const model = (job.inputPayload?.model as string)
       || (isDraft ? MODELS.kling_standard : MODELS.kling_pro);
 
@@ -89,7 +121,8 @@ export const FalAiAdapter: ProviderAdapter = {
 
   async getStatus(handle: JobHandle): Promise<ProviderJobResult> {
     const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
-    const model = MODELS.kling_pro;
+    // Use the model stored in handle metadata if available (clip_batch uses text-to-video model)
+    const model = (handle.metadata?.model as string) || MODELS.kling_pro;
 
     const res = await fetch(
       `https://queue.fal.run/${model}/requests/${handle.externalJobId}/status`,
@@ -110,7 +143,15 @@ export const FalAiAdapter: ProviderAdapter = {
       );
       const result = await resultRes.json() as { video?: { url: string }; images?: Array<{ url: string }> };
       const url = result.video?.url || result.images?.[0]?.url;
-      return { status: "complete", outputUrl: url };
+      return {
+        status:    "complete",
+        outputUrl: url,
+        metadata:  {
+          shotIndex:     handle.metadata?.shotIndex,
+          pipelineRunId: handle.metadata?.pipelineRunId,
+          clipUrl:       url,
+        },
+      };
     }
 
     if (data.status === "FAILED") {

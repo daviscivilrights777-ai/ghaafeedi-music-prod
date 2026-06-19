@@ -20,6 +20,7 @@ export interface JobHandle {
   dispatchedAt:  Date;
   webhookUrl?:   string;
   pollIntervalMs?: number;
+  metadata?:     Record<string, unknown>;  // Pass-through for clip_batch shot tracking
 }
 
 export type ProviderJobStatus =

@@ -249,7 +249,7 @@ export class PipelineOrchestrator {
       shot_list:        { jobType: "shot_list",         provider: "openai",     costCents: 8   },
       audio:            { jobType: "song",              provider: "sunor_cc",   costCents: 10  },
       clip_batch:       { jobType: "clip_batch",        provider: "fal-ai",     costCents: 800 },
-      edit_assemble:    { jobType: "edit_assemble",     provider: "modal",      costCents: 50  },
+      edit_assemble:    { jobType: "edit_assemble",     provider: "modal_ffmpeg", costCents: 50  },
       qc_check:         { jobType: "qc_check",          provider: "openai",     costCents: 5   },
       deliver:          { jobType: "deliver",           provider: "internal",   costCents: 1   },
     };

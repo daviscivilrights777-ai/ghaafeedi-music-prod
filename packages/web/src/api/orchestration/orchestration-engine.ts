@@ -16,7 +16,7 @@ import { BillingEmitter } from "./billing-emitter";
 import { EventBus, EVENTS } from "./event-bus";
 import { db } from "../database/pg-client";
 import { aiJobs } from "../database/pg-schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { QueueTier } from "./redis-client";
 import { n8nDispatcher } from "./n8n-dispatcher";
 import { PipelineOrchestrator, type PipelineStage } from "./pipeline-orchestrator";
@@ -24,6 +24,7 @@ import type { StoryBible } from "./schemas/story-bible.schema";
 import type { ProductionBible } from "./schemas/production-bible.schema";
 import type { ShotList } from "./schemas/shot-list.schema";
 import type { ProductionTier } from "./schemas/production-bible.schema";
+import { deliverProduction, saveStyleEmbedding } from "./delivery";
 
 // --- Types ------------------------------------------------------------------
 
@@ -307,6 +308,185 @@ export class OrchestrationEngine {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── Pipeline stage short-circuits ─────────────────────────────────────────
+    // story_bible, production_bible, shot_list, qc_check, deliver run through
+    // the OpenAI adapter synchronously. We handle them here to piggyback on
+    // the pipeline advancement logic in the success path.
+    const PIPELINE_STAGES = new Set(["story_bible", "production_bible", "shot_list", "qc_check", "deliver"]);
+    if (PIPELINE_STAGES.has(job.jobType)) {
+      const openaiAdapter = ProviderRegistry.get("openai");
+      if (!openaiAdapter) {
+        await JobStateMachine.transition(job.jobId, "failed", { errorMessage: "OpenAI adapter not found" });
+        return true;
+      }
+
+      try {
+        await JobStateMachine.transition(job.jobId, "processing", { provider: "openai" }).catch(() => {});
+        const handle    = await openaiAdapter.dispatch(job);
+        const result    = await openaiAdapter.getStatus(handle);
+
+        if (result.status !== "complete") {
+          throw new Error(result.errorMessage ?? `${job.jobType} stage failed`);
+        }
+
+        // Parse the JSON output from the stage
+        let stageOutput: Record<string, unknown> = {};
+        const content = result.metadata?.content as string || handle.webhookUrl || "";
+        try {
+          stageOutput = content ? JSON.parse(content) : result.metadata ?? {};
+        } catch {
+          stageOutput = result.metadata ?? {};
+        }
+
+        // For qc_check: check if QC passed
+        if (job.jobType === "qc_check") {
+          const qcResult = stageOutput as { passed?: boolean; score?: number; issues?: string[]; recommendation?: string };
+          if (!qcResult.passed && (qcResult.score ?? 0) < 0.7) {
+            const qcReason = `QC failed (score: ${qcResult.score?.toFixed(2) ?? "N/A"}): ${qcResult.issues?.join(", ") ?? "Unknown issues"}`;
+            const pipeOrch = PipelineOrchestrator.getInstance();
+            const retryCount = job.metadata?.qcRetryCount as number ?? 0;
+            const action = await pipeOrch.handleQcFailed({
+              jobId:         job.jobId,
+              pipelineRunId: job.pipelineRunId ?? (job.metadata?.pipelineRunId as string) ?? "",
+              productionId:  job.productionId ?? "",
+              userId:        job.userId,
+              retryCount,
+              qcReason,
+            });
+            if (action === "quality_review") {
+              await this._updateJobInPg(job.jobId, { status: "quality_review", errorMessage: qcReason, completedAt: new Date() });
+            }
+            console.warn(`[OrchestrationEngine] qc_check job=${job.jobId} FAILED — action=${action}`);
+            return true;
+          }
+        }
+
+        // For deliver: trigger R2 signed URL + n8n notification
+        if (job.jobType === "deliver") {
+          const r2Key = (stageOutput.r2Key as string)
+            || (job.inputPayload?.r2Key as string)
+            || (job.inputPayload?.outputKey as string)
+            || `productions/${job.productionId ?? "unknown"}/${job.pipelineRunId ?? "pipe"}/final.mp4`;
+          try {
+            const delivResult = await deliverProduction({
+              productionId:  job.productionId ?? "",
+              userId:        job.userId,
+              orderId:       job.orderId,
+              pipelineRunId: job.pipelineRunId ?? (job.metadata?.pipelineRunId as string) ?? "",
+              r2Key,
+              productSlug:   (job.metadata?.productSlug as string) ?? "",
+              customerEmail: job.inputPayload?.customerEmail as string | undefined,
+              customerName:  job.inputPayload?.customerName  as string | undefined,
+            });
+            Object.assign(stageOutput, delivResult);
+          } catch (delivErr) {
+            console.warn("[OrchestrationEngine] deliverProduction failed:", (delivErr as Error).message);
+          }
+
+          // Save style genome to pgvector (best-effort)
+          const storyBible = job.metadata?.storyBible as Record<string, unknown> | undefined;
+          if (storyBible) {
+            saveStyleEmbedding({
+              productionId: job.productionId ?? "",
+              userId:       job.userId,
+              genome: {
+                productionId:   job.productionId,
+                userId:         job.userId,
+                primaryEmotion: storyBible.primaryEmotion as string,
+                emotionVector:  [], // built inside saveStyleEmbedding from scores
+              },
+              qualityScore: 0.85,
+            }).catch(() => {}); // fire-and-forget
+          }
+        }
+
+        // Merge orchestration metadata back into stage output
+        const outputPayload: Record<string, unknown> = {
+          ...stageOutput,
+          productionId:   job.productionId,
+          productSlug:    job.metadata?.productSlug,
+          pipelineRunId:  job.pipelineRunId ?? job.metadata?.pipelineRunId,
+          productionTier: job.metadata?.productionTier,
+          storyBible:     job.metadata?.storyBible ?? stageOutput,       // carry forward
+          productionBible: job.metadata?.productionBible ?? (job.jobType === "production_bible" ? stageOutput : undefined),
+        };
+
+        // Transition to complete
+        await JobStateMachine.transition(job.jobId, "complete", {
+          provider: "openai",
+          outputPayload,
+          actualCostCents: JOB_TYPE_COST_CENTS[job.jobType],
+        });
+
+        await this._updateJobInPg(job.jobId, {
+          status:           "complete",
+          outputPayload,
+          actualCostCents:  JOB_TYPE_COST_CENTS[job.jobType],
+          retryCount:       0,
+          completedAt:      new Date(),
+          durationSeconds:  Math.round((Date.now() - startMs) / 1000),
+        });
+
+        // Update stage_outputs column directly via raw sql
+        if (_pgAvailable) {
+          try {
+            await db.execute(sql`
+              UPDATE ai_jobs SET stage_outputs = ${JSON.stringify(stageOutput)}::jsonb
+              WHERE id = ${job.jobId}
+            `);
+          } catch { /* non-critical */ }
+        }
+
+        await this.logger.jobCompleted(job.jobId, "openai", Date.now() - startMs, JOB_TYPE_COST_CENTS[job.jobType] / 100);
+
+        await EventBus.publish(EVENTS.JOB_COMPLETE as any, {
+          jobId: job.jobId, userId: job.userId, provider: "openai", outputPayload,
+        }, { jobId: job.jobId });
+
+        // ── Pipeline stage advancement ──────────────────────────────────────
+        const pipelineRunId  = job.pipelineRunId  ?? (job.metadata?.pipelineRunId  as string | undefined);
+        const pipelineStage  = job.pipelineStage  ?? (job.metadata?.pipelineStage  as string | undefined);
+        const productSlug    = (job.metadata?.productSlug as string | undefined)    ?? "";
+        const productionTier = (job.metadata?.productionTier as ProductionTier | undefined) ?? "starter";
+
+        if (pipelineRunId && pipelineStage) {
+          await db.execute(sql`UPDATE ai_jobs SET stage_outputs = ${JSON.stringify(stageOutput)}::jsonb WHERE id = ${job.jobId}`).catch(() => {});
+          const pipelineOrchestrator = PipelineOrchestrator.getInstance();
+          await pipelineOrchestrator.advanceStage({
+            completedJobId: job.jobId,
+            completedStage: pipelineStage as PipelineStage,
+            pipelineRunId,
+            productionId:   job.productionId ?? "",
+            userId:         job.userId,
+            orderId:        job.orderId,
+            productSlug,
+            tier:           productionTier,
+            queueTier:      job.tier,
+            stageOutput:    outputPayload,
+            metadata:       job.metadata as Record<string, unknown>,
+          });
+        }
+        // ───────────────────────────────────────────────────────────────────
+
+        console.log(`[OrchestrationEngine] ${job.jobType} job=${job.jobId} COMPLETE in ${Date.now() - startMs}ms`);
+      } catch (err) {
+        const errMsg = (err as Error).message;
+        await JobStateMachine.transition(job.jobId, "failed", { errorMessage: errMsg });
+        await this._updateJobInPg(job.jobId, { status: "failed", errorMessage: errMsg, retryCount: 1, completedAt: new Date() });
+        await this.logger.jobFailed(job.jobId, "openai", errMsg, 1);
+        console.error(`[OrchestrationEngine] ${job.jobType} job=${job.jobId} FAILED:`, errMsg);
+      }
+      return true;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── clip_batch all-complete check ─────────────────────────────────────────
+    // After each clip_batch job completes, check if ALL clips for this pipeline
+    // run are done → dispatch edit_assemble
+    const _isClipBatch = job.jobType === "clip_batch";
+    // (handled in the main success path below after adapter dispatch)
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Get adapter
     const adapter = ProviderRegistry.get(provider);
     if (!adapter) {
@@ -447,6 +627,32 @@ export class OrchestrationEngine {
             outputPayload,
           }).catch((e) => console.warn("[OrchestrationEngine] pipeline transition:", (e as Error).message));
         }
+
+        // ── clip_batch: only advance when ALL clips in this run are complete ──
+        if (pipelineStage === "clip_batch" && _pgAvailable) {
+          try {
+            type ClipRow = { id: string; status: string };
+            const clipRows = await db.execute<ClipRow>(
+              sql`SELECT id, status FROM ai_jobs WHERE pipeline_run_id = ${pipelineRunId} AND pipeline_stage = 'clip_batch'`
+            );
+            const clips = Array.isArray(clipRows) ? clipRows : (clipRows as any).rows ?? [];
+            const allDone = clips.every((r: ClipRow) => r.status === "complete");
+            const anyFailed = clips.some((r: ClipRow) => r.status === "failed");
+
+            if (!allDone) {
+              console.log(`[OrchestrationEngine] clip_batch job=${job.jobId} complete — ${clips.filter((r: ClipRow) => r.status === "complete").length}/${clips.length} clips done`);
+              return true; // More clips pending — don't advance yet
+            }
+            if (anyFailed) {
+              console.warn(`[OrchestrationEngine] clip_batch: some clips failed for run=${pipelineRunId}`);
+              // Still advance with completed clips — edit_assemble handles partial
+            }
+          } catch (checkErr) {
+            console.warn("[OrchestrationEngine] clip_batch all-complete check failed:", (checkErr as Error).message);
+            return true; // Fail safe — don't advance
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         // Dispatch next pipeline stage
         try {
@@ -611,7 +817,7 @@ export class OrchestrationEngine {
       production_bible: ["openai"],   // Claude primary, GPT-4o fallback
       shot_list:        ["openai"],
       clip_batch:       ["fal-ai", "modal", "vast-ai"],
-      edit_assemble:    ["modal"],    // FFmpeg Modal only (Phase 9)
+      edit_assemble:    ["modal_ffmpeg"],  // FFmpeg Modal only (Phase 9)
       qc_check:         ["openai"],
       deliver:          ["internal"], // R2 direct — no fallback needed
     };
