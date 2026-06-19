@@ -7,8 +7,8 @@ export default function runableAnalyticsPlugin(): Plugin {
 		enforce: "pre",
 		async transformIndexHtml(html) {
 			const applicationId = process.env.APPLICATION_ID ?? "";
-			// Only inject in Runable sandbox (APPLICATION_ID is set and not empty)
-			if (!applicationId) {
+			// Only inject in Runable sandbox (APPLICATION_ID is set, not empty, and not localhost)
+			if (!applicationId || applicationId === "localhost") {
 				return html;
 			}
 
