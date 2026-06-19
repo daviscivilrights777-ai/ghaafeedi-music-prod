@@ -68,6 +68,7 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   storyboard:   20,
   lyrics:       2,
   sophia_intro: 4, // OpenAI script (~2¢) + 2x ElevenLabs renders (~1¢ each)
+  lip_sync:     120, // FAL.ai LatentSync per clip (~$1.20 est.)
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
@@ -82,6 +83,7 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   storyboard:   100,
   lyrics:       50,
   sophia_intro: 500, // personalized AI voiceover — high perceived value
+  lip_sync:     2900, // $29 customer charge
 };
 
 let _pgAvailable = true;
@@ -524,6 +526,7 @@ export class OrchestrationEngine {
       visualization: ["fal-ai", "modal"],
       storyboard:   ["openai"],
       sophia_intro: ["openai", "elevenlabs"], // script=openai, audio=elevenlabs (handled internally)
+      lip_sync:     ["fal-ai"],              // FAL.ai LatentSync — Phase 6 implementation
     };
     const fallbacks = ALL_FALLBACKS[jobType] ?? ["openai"];
     for (const f of fallbacks) {

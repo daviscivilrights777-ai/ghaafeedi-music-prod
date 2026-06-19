@@ -6978,9 +6978,11 @@ const GM_ADDON_CATALOG: AddonProduct[] = [
   { id:"sophia-ai",            name:"Sophia AI Companion",    sub:"Emotional AI Concierge",      price:49,   priceStr:"$49/mo",  category:"AI",      icon:"✨", accent:"#D4AF37", isMonthly:true },
   { id:"emotional-soundtrack", name:"Emotional Soundtrack",   sub:"Feel Every Moment",           price:19,   priceStr:"$19/mo",  category:"Music",   icon:"🎶", accent:"#F472B6", isMonthly:true },
   { id:"cinematic-story-film", name:"Cinematic Story Film",   sub:"Your Life. The Movie.",       price:79,   priceStr:"$79",     category:"Video",   icon:"🎞️", accent:"#FB923C" },
+  // ── Upgrades ──────────────────────────────────────────────────────────────
+  { id:"sophia-lipsync",       name:"Sophia Lip Sync Narration", sub:"Sophia narrates your film with full lip sync — Elite members free", price:29, priceStr:"$29", category:"Upgrades", icon:"💋", accent:"#D4AF37" },
 ];
 
-const GM_ADDON_CATEGORIES = ["Membership","Songs","Short Films","Feature Films","Masterpiece","AI","Studio","Music","Video","NFT","Legacy","Premium"];
+const GM_ADDON_CATEGORIES = ["Membership","Songs","Short Films","Feature Films","Masterpiece","AI","Studio","Music","Video","NFT","Legacy","Premium","Upgrades"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ─── S8 ADD-ON DRAWER ────────────────────────────────────────────────────────

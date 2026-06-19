@@ -31,7 +31,8 @@ export type JobType =
   | "image"
   | "storyboard"
   | "lyrics"
-  | "sophia_intro";
+  | "sophia_intro"
+  | "lip_sync";    // Sophia Lip Sync Narration upgrade — FAL.ai LatentSync (Phase 6)
 
 export class JobQueue {
   /**
