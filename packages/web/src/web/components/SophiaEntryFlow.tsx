@@ -200,7 +200,7 @@ function useTypewriter(text: string, speed = 24) {
 // ─── Simli WebRTC Avatar ──────────────────────────────────────────────────────
 // Transport: "p2p" (library default) — P2P WebRTC via RTCPeerConnection.
 //   Simli's own retry logic: tries p2p up to 2x, then auto-switches to livekit.
-//   We let the library handle retries — our timeout is 30s (> 15s internal × 2).
+//   Our timeout: 12s — one clean P2P attempt. Audio fallback already playing.
 //
 // Audio pipeline: speak(text) → /api/simli/tts-stream (ElevenLabs PCM16 chunks)
 //   → sendAudioData() → WebSocket signaling channel → Simli renders face.
@@ -335,12 +335,13 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
 
         // await client.start() — resolves when first video frame renders.
         // SimliClient internal timeout = 15s, retries up to 10x (every 2s).
-        // We race with 30s max to fail gracefully if WebRTC is fully blocked.
+        // We race with 12s max — enough for one clean P2P attempt (ICE + WS + first frame).
+        // Audio fallback is already playing via ttsAudioRef — user never waits.
         console.log("[Simli] calling client.start() — transport: p2p (default)…");
         await Promise.race([
           client.start(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Simli timeout 30s")), 30000)
+            setTimeout(() => reject(new Error("Simli timeout 12s")), 12000)
           ),
         ]);
 
