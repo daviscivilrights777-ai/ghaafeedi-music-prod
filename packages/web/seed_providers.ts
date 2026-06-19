@@ -2,7 +2,7 @@ import { db } from "./src/api/database/pg-client";
 import { randomUUID } from "crypto";
 
 const providers = [
-  { name: 'fal_ai_kling', display_name: 'FAL.ai Kling', job_types: ['video'], config: { model: 'kling-v1', endpoint: 'https://fal.run/fal-ai/kling-video' }, priority: 1, cost_per_unit: 0.045, unit: 'second', max_concurrent: 10, api_key_ref: 'FAL_AI_API_KEY' },
+  { name: 'fal_ai_kling', display_name: 'FAL.ai Kling v3 Pro', job_types: ['video'], config: { model: 'fal-ai/kling-video/v3/pro/image-to-video', endpoint: 'https://queue.fal.run/fal-ai/kling-video/v3/pro/image-to-video' }, priority: 1, cost_per_unit: 0.168, unit: 'second', max_concurrent: 10, api_key_ref: 'FAL_AI_API_KEY' },
   { name: 'fal_ai_hailuo', display_name: 'FAL.ai Hailuo', job_types: ['video'], config: { model: 'hailuo-video', endpoint: 'https://fal.run/fal-ai/hailuo-video' }, priority: 2, cost_per_unit: 0.038, unit: 'second', max_concurrent: 8, api_key_ref: 'FAL_AI_API_KEY' },
   { name: 'suno', display_name: 'Suno Music', job_types: ['music'], config: { endpoint: 'https://api.sunor.cc/v1', version: 'v4' }, priority: 1, cost_per_unit: 0.12, unit: 'song', max_concurrent: 5, api_key_ref: 'SUNO_API_KEY' },
   { name: 'elevenlabs', display_name: 'ElevenLabs Voice', job_types: ['voice'], config: { model: 'eleven_multilingual_v2', endpoint: 'https://api.elevenlabs.io/v1' }, priority: 1, cost_per_unit: 0.003, unit: 'character', max_concurrent: 20, api_key_ref: 'ELEVENLABS_API_KEY' },

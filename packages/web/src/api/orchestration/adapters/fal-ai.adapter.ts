@@ -1,21 +1,25 @@
 // ============================================================
 // Ghaafeedi Music — FAL.ai Adapter
 // Primary video generation provider.
-// Models: Kling 2.6 Pro (primary), Hailuo 02 Standard (fallback)
+// Models: Kling v3 Pro (primary), Kling v3 Standard (draft), Hailuo 02 Standard (fallback)
+// Kling v3 Pro: $0.168/s (audio on) — 40% cheaper than v2 Master, newer architecture
+// Updated: June 2026
 // ============================================================
 import type { ProviderAdapter, CostEstimate, JobHandle, ProviderJobResult, ProviderHealth } from "./provider-adapter";
 import type { JobSpec } from "../job-queue";
 import { getSecret, SECRET_KEYS } from "../secrets";
 
 const MODELS = {
-  kling_pro:      "fal-ai/kling-video/v2.6/pro/image-to-video",
-  hailuo:         "fal-ai/minimax-video/image-to-video",
-  text_to_video:  "fal-ai/kling-video/v2.6/pro/text-to-video",
+  kling_pro:           "fal-ai/kling-video/v3/pro/image-to-video",       // primary — cinematic delivery
+  kling_standard:      "fal-ai/kling-video/v3/standard/image-to-video",  // drafts / storyboards
+  kling_pro_txt:       "fal-ai/kling-video/v3/pro/text-to-video",        // text-to-video variant
+  hailuo:              "fal-ai/minimax-video/image-to-video",             // fallback
 } as const;
 
 const COST_PER_SECOND_CENTS = {
-  kling_pro: 7,    // $0.07/s
-  hailuo:    4.5,  // $0.045/s
+  kling_pro:      16.8,  // $0.168/s (audio on) — Kling v3 Pro
+  kling_standard: 12.6,  // $0.126/s (audio on) — Kling v3 Standard
+  hailuo:         4.5,   // $0.045/s
 } as const;
 
 // Estimated durations by job type (seconds)
@@ -26,7 +30,7 @@ const ESTIMATED_DURATION: Record<string, number> = {
 
 export const FalAiAdapter: ProviderAdapter = {
   name:        "fal_ai_kling",
-  displayName: "FAL.ai Kling 2.6 Pro",
+  displayName: "FAL.ai Kling v3 Pro",
   jobTypes:    ["video", "visualization", "image"],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
@@ -44,14 +48,20 @@ export const FalAiAdapter: ProviderAdapter = {
 
   async dispatch(job: JobSpec): Promise<JobHandle> {
     const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
-    const model = (job.inputPayload?.model as string) || MODELS.kling_pro;
+    // Use kling_standard for draft/preview jobs to save cost; pro for all customer-facing delivery
+    const isDraft = job.inputPayload?.draft === true;
+    const model = (job.inputPayload?.model as string)
+      || (isDraft ? MODELS.kling_standard : MODELS.kling_pro);
 
     const payload = {
-      prompt:        job.inputPayload?.prompt || "",
-      image_url:     job.inputPayload?.imageUrl,
-      duration:      job.inputPayload?.durationSeconds || 5,
-      aspect_ratio:  job.inputPayload?.aspectRatio || "16:9",
+      prompt:          job.inputPayload?.prompt || "",
+      start_image_url: job.inputPayload?.imageUrl,   // v3 uses start_image_url
+      image_url:       job.inputPayload?.imageUrl,   // keep for backward compat
+      duration:        job.inputPayload?.durationSeconds || 5,
+      aspect_ratio:    job.inputPayload?.aspectRatio || "16:9",
+      generate_audio:  job.inputPayload?.generateAudio !== false, // default ON for v3
       ...(job.inputPayload?.negativePrompt && { negative_prompt: job.inputPayload.negativePrompt }),
+      ...(job.inputPayload?.endImageUrl   && { end_image_url:   job.inputPayload.endImageUrl }),
     };
 
     const res = await fetch(`https://queue.fal.run/${model}`, {
