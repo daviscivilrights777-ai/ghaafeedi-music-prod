@@ -304,9 +304,15 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
 
         // await client.start() resolves when first video frame renders (LiveKit "start" event)
         // Wrap in a timeout — if LiveKit WebRTC hangs, fall back to audio-only after 8s
-        // Let SimliClient use its own CONNECTION_TIMEOUT_MS (15s) — don't race it
+        // SimliClient's internal timeout is 15s. Race with our own 10s max
+        // to fail fast and fall back to audio-only if WebRTC is blocked.
         console.log("[Simli] calling client.start()…");
-        await client.start();
+        await Promise.race([
+          client.start(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Simli WebRTC timeout 10s — falling back to audio")), 10000)
+          ),
+        ]);
 
         if (cancelled) return;
 
