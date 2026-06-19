@@ -7,6 +7,7 @@
 import crypto from "crypto";
 import { bootstrapAdapters, ProviderRegistry } from "./adapters/index";
 import { JobQueue, type JobSpec, type JobType } from "./job-queue";
+import { SophiaIntroGenerator, type SophiaIntroRequest } from "./sophia-intro-generator";
 import { JobStateMachine } from "./state-machine";
 import { CostOptimizer } from "./cost-optimizer";
 import { AuditLogger } from "./audit-logger";
@@ -57,28 +58,30 @@ export interface JobStatusResult {
 
 // Provider cost estimates (cents) per job type
 const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
-  video:       800,
-  song:        10,
-  voice_clone: 5,
+  video:        800,
+  song:         10,
+  voice_clone:  5,
   visualization: 300,
-  narration:   100,
-  analysis:    2,
-  image:       50,
-  storyboard:  20,
-  lyrics:      2,
+  narration:    100,
+  analysis:     2,
+  image:        50,
+  storyboard:   20,
+  lyrics:       2,
+  sophia_intro: 4, // OpenAI script (~2¢) + 2x ElevenLabs renders (~1¢ each)
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
 const JOB_VALUE_CENTS: Record<JobType, number> = {
-  video:       4000,
-  song:        833,
-  voice_clone: 6000,
+  video:        4000,
+  song:         833,
+  voice_clone:  6000,
   visualization: 800,
-  narration:   300,
-  analysis:    50,
-  image:       200,
-  storyboard:  100,
-  lyrics:      50,
+  narration:    300,
+  analysis:     50,
+  image:        200,
+  storyboard:   100,
+  lyrics:       50,
+  sophia_intro: 500, // personalized AI voiceover — high perceived value
 };
 
 let _pgAvailable = true;
@@ -228,6 +231,58 @@ export class OrchestrationEngine {
     }
 
     await this.logger.jobStarted(job.jobId, provider);
+
+    // ── sophia_intro short-circuit ────────────────────────────────────────────
+    // This job type is fully self-contained (OpenAI + ElevenLabs inside
+    // SophiaIntroGenerator). No generic adapter needed.
+    if (job.jobType === "sophia_intro") {
+      try {
+        const introReq = job.inputPayload as unknown as SophiaIntroRequest;
+        const result = await SophiaIntroGenerator.generate(introReq);
+
+        await JobStateMachine.transition(job.jobId, "complete", {
+          provider: "openai+elevenlabs",
+          outputPayload: result as unknown as Record<string, unknown>,
+          actualCostCents: JOB_TYPE_COST_CENTS.sophia_intro,
+        });
+
+        await this._updateJobInPg(job.jobId, {
+          status: "complete",
+          outputPayload: result as unknown as Record<string, unknown>,
+          actualCostCents: JOB_TYPE_COST_CENTS.sophia_intro,
+          retryCount: 0,
+          completedAt: new Date(),
+          durationSeconds: Math.round((Date.now() - startMs) / 1000),
+        });
+
+        await this.billing.emit({
+          userId:      job.userId,
+          orderId:     job.orderId,
+          jobId:       job.jobId,
+          eventType:   "job_cost",
+          amountCents: JOB_VALUE_CENTS.sophia_intro,
+          provider:    "openai+elevenlabs",
+          meta:        { durationMs: Date.now() - startMs },
+        });
+
+        await this.logger.jobCompleted(job.jobId, "openai+elevenlabs", Date.now() - startMs, JOB_TYPE_COST_CENTS.sophia_intro / 100);
+
+        await EventBus.publish(EVENTS.JOB_COMPLETE as any, {
+          jobId: job.jobId, userId: job.userId, provider: "openai+elevenlabs",
+          outputPayload: result as unknown as Record<string, unknown>,
+        }, { jobId: job.jobId });
+
+        console.log(`[OrchestrationEngine] sophia_intro job=${job.jobId} COMPLETE in ${Date.now() - startMs}ms`);
+      } catch (err) {
+        const errMsg = (err as Error).message;
+        await JobStateMachine.transition(job.jobId, "failed", { errorMessage: errMsg });
+        await this._updateJobInPg(job.jobId, { status: "failed", errorMessage: errMsg, retryCount: 1, completedAt: new Date() });
+        await this.logger.jobFailed(job.jobId, "openai+elevenlabs", errMsg, 1);
+        console.error(`[OrchestrationEngine] sophia_intro job=${job.jobId} FAILED:`, errMsg);
+      }
+      return true;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Get adapter
     const adapter = ProviderRegistry.get(provider);
@@ -459,15 +514,16 @@ export class OrchestrationEngine {
   private _getFailoverChain(jobType: JobType, primary: string): string[] {
     const chain = [primary];
     const ALL_FALLBACKS: Partial<Record<JobType, string[]>> = {
-      video:       ["fal-ai", "fal-ai-hailuo", "modal", "vast-ai"],
-      song:        ["sunor_cc"],
-      voice_clone: ["elevenlabs"],
-      narration:   ["elevenlabs", "openai"],
-      analysis:    ["openai"],
-      lyrics:      ["openai"],
-      image:       ["fal-ai", "modal", "vast-ai"],
+      video:        ["fal-ai", "fal-ai-hailuo", "modal", "vast-ai"],
+      song:         ["sunor_cc"],
+      voice_clone:  ["elevenlabs"],
+      narration:    ["elevenlabs", "openai"],
+      analysis:     ["openai"],
+      lyrics:       ["openai"],
+      image:        ["fal-ai", "modal", "vast-ai"],
       visualization: ["fal-ai", "modal"],
-      storyboard:  ["openai"],
+      storyboard:   ["openai"],
+      sophia_intro: ["openai", "elevenlabs"], // script=openai, audio=elevenlabs (handled internally)
     };
     const fallbacks = ALL_FALLBACKS[jobType] ?? ["openai"];
     for (const f of fallbacks) {

@@ -30,7 +30,8 @@ export type JobType =
   | "analysis"
   | "image"
   | "storyboard"
-  | "lyrics";
+  | "lyrics"
+  | "sophia_intro";
 
 export class JobQueue {
   /**

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { auth } from "../auth";
 import { getSecret } from "../orchestration/secrets";
+import { SophiaIntroGenerator, type SophiaIntroRequest } from "../orchestration/sophia-intro-generator";
 
 const app = new Hono();
 
@@ -122,6 +123,80 @@ Keep responses under 120 words. Be warm, personal, and direct.`;
   } catch (err) {
     console.error("[Sophia] Chat error:", err);
     return c.json({ error: "Sophia is unavailable right now. Please try again." }, 500);
+  }
+});
+
+// ─── POST /api/sophia/intro ───────────────────────────────────────────────────
+// Generate personalized intro + outro scripts + audio for a customer production.
+// Accepts: { userId, customerFirstName, customerLastName, story,
+//            emotionalScores, eventType, productType, suggestedTitle? }
+// Returns: SophiaIntroResult
+
+const _introRateLimit = new Map<string, { count: number; resetAt: number }>();
+const INTRO_RATE_LIMIT = 5; // max 5 generates per user per minute
+
+app.post("/intro", async (c) => {
+  // Auth check (allow QA bypass via X-Admin-QA-Key)
+  const qaKey = process.env.GM_ADMIN_QA_KEY ?? "";
+  const isQA  = qaKey && c.req.header("X-Admin-QA-Key") === qaKey;
+
+  const session = isQA ? null : await auth.api.getSession({ headers: c.req.raw.headers });
+  const userId  = isQA ? "qa-admin" : (session?.user?.id ?? c.req.header("x-user-id") ?? null);
+
+  if (!userId) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  // Rate limit
+  const now = Date.now();
+  const rl   = _introRateLimit.get(userId);
+  if (rl && now < rl.resetAt) {
+    if (rl.count >= INTRO_RATE_LIMIT) {
+      return c.json({ error: "Rate limit: max 5 intro generations per minute." }, 429);
+    }
+    rl.count++;
+  } else {
+    _introRateLimit.set(userId, { count: 1, resetAt: now + 60_000 });
+  }
+
+  // Parse body
+  let body: Partial<SophiaIntroRequest>;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { customerFirstName, customerLastName, story, emotionalScores, eventType, productType, suggestedTitle } = body;
+
+  if (!customerFirstName || !customerLastName) {
+    return c.json({ error: "customerFirstName and customerLastName are required" }, 400);
+  }
+  if (!story || story.length < 10) {
+    return c.json({ error: "story must be at least 10 characters" }, 400);
+  }
+  if (!emotionalScores || Object.keys(emotionalScores).length === 0) {
+    return c.json({ error: "emotionalScores is required (at least one emotion)" }, 400);
+  }
+  if (!eventType) return c.json({ error: "eventType is required" }, 400);
+  if (!productType) return c.json({ error: "productType is required" }, 400);
+
+  try {
+    const result = await SophiaIntroGenerator.generate({
+      userId:            body.userId ?? userId,
+      customerFirstName,
+      customerLastName,
+      story,
+      emotionalScores,
+      eventType,
+      productType,
+      suggestedTitle,
+    });
+
+    return c.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[Sophia] /intro error:", err);
+    return c.json({ error: "Intro generation failed. Please try again." }, 500);
   }
 });
 
