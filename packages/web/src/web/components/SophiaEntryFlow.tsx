@@ -198,25 +198,60 @@ function useTypewriter(text: string, speed = 24) {
 }
 
 // ─── Simli WebRTC Avatar ──────────────────────────────────────────────────────
+// New architecture: audio pipeline is fully INTERNAL to this component.
+// speak(text) → fetch /api/simli/tts-stream → read chunks → sendAudioData() directly
+// No React state intermediary for audio — eliminates all timing/race conditions.
 interface SimliAvatarProps {
   sessionToken: string | null;
-  audioData: Uint8Array | null;
   onSpeakingChange: (v: boolean) => void;
-  onReady: () => void;
+  onReady: (speak: (text: string) => Promise<void>) => void;
   onError: () => void;
-  onAudioConsumed: () => void;
 }
 
-function SimliAvatar({ sessionToken, audioData, onSpeakingChange, onReady, onError, onAudioConsumed }: SimliAvatarProps) {
-  const videoRef   = useRef<HTMLVideoElement>(null);
-  const audioRef   = useRef<HTMLAudioElement>(null);
+function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: SimliAvatarProps) {
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const audioRef    = useRef<HTMLAudioElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientRef  = useRef<any>(null);
-  const startedRef = useRef(false);
-  const [status, setStatus]   = useState<"idle"|"connecting"|"ready"|"error">("idle");
+  const clientRef   = useRef<any>(null);
+  const startedRef  = useRef(false);
+  const speakingRef = useRef(false);
+  const [status,   setStatus]   = useState<"idle"|"connecting"|"ready"|"error">("idle");
   const [speaking, setSpeaking] = useState(false);
 
-  // Auto-init as soon as token is available
+  // ── speak() — streams ElevenLabs PCM directly into Simli ──────────────────
+  // Called internally after client.start() resolves (first video frame ready).
+  // Reads chunked PCM stream and pipes each chunk to sendAudioData immediately.
+  const speakFn = useCallback(async (text: string) => {
+    const client = clientRef.current;
+    if (!client) return;
+    try {
+      console.log("[Simli] speak →", text.slice(0, 60) + "…");
+      const res = await fetch("/api/simli/tts-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok || !res.body) {
+        console.warn("[Simli] TTS stream failed:", res.status);
+        return;
+      }
+      const reader = res.body.getReader();
+      let totalBytes = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.length > 0) {
+          client.sendAudioData(value);
+          totalBytes += value.length;
+        }
+      }
+      console.log("[Simli] speak done, total PCM bytes:", totalBytes);
+    } catch (err) {
+      console.warn("[Simli] speak error:", err);
+    }
+  }, []);
+
+  // ── Auto-init as soon as session token is available ────────────────────────
   useEffect(() => {
     if (!sessionToken || startedRef.current) return;
     if (!videoRef.current || !audioRef.current) return;
@@ -231,24 +266,61 @@ function SimliAvatar({ sessionToken, audioData, onSpeakingChange, onReady, onErr
           sessionToken,
           videoRef.current!,
           audioRef.current!,
-          null,
-          undefined,
+          null,          // iceServers — livekit doesn't need them
+          undefined,     // logLevel
           "livekit",
         );
         clientRef.current = client;
 
-        // "start" is intercepted internally — do NOT use it for user state
-        client.on("speaking", () => { if (!cancelled) { setSpeaking(true);  onSpeakingChange(true);  } });
-        client.on("silent",   () => { if (!cancelled) { setSpeaking(false); onSpeakingChange(false); } });
-        client.on("error",        (d: string) => { if (!cancelled) { console.error("[Simli] error:", d);   setStatus("error"); onError(); } });
-        client.on("startup_error",(m: string) => { if (!cancelled) { console.error("[Simli] startup:", m); setStatus("error"); onError(); } });
+        // speaking/silent events from signaling websocket (SPEAK/SILENT messages)
+        client.on("speaking", () => {
+          if (cancelled) return;
+          speakingRef.current = true;
+          setSpeaking(true);
+          onSpeakingChange(true);
+        });
+        client.on("silent", () => {
+          if (cancelled) return;
+          speakingRef.current = false;
+          setSpeaking(false);
+          onSpeakingChange(false);
+        });
+        client.on("error", (d: string) => {
+          if (cancelled) return;
+          console.error("[Simli] error event:", d);
+          setStatus("error");
+          onError();
+        });
+        client.on("startup_error", (m: string) => {
+          if (cancelled) return;
+          console.error("[Simli] startup_error:", m);
+          setStatus("error");
+          onError();
+        });
 
-        // start() resolves when WebRTC connection is established
+        // await client.start() resolves when first video frame renders (LiveKit "start" event)
+        // This is the correct moment to prime Simli and begin speaking
+        console.log("[Simli] calling client.start()…");
         await client.start();
-        // Connection succeeded — now mark ready
-        if (!cancelled) { setStatus("ready"); onReady(); }
+
+        if (cancelled) return;
+
+        console.log("[Simli] connected + first frame received — priming buffer");
+        setStatus("ready");
+
+        // Send 6000 zero bytes to prime the Simli audio buffer (official recommendation)
+        const silence = new Uint8Array(6000);
+        client.sendAudioData(silence);
+
+        // Expose speak() to parent — parent will call it with the welcome line
+        onReady(speakFn);
+
       } catch (err) {
-        if (!cancelled) { console.error("[Simli] init failed:", err); setStatus("error"); onError(); }
+        if (!cancelled) {
+          console.error("[Simli] init failed:", err);
+          setStatus("error");
+          onError();
+        }
       }
     })();
 
@@ -256,14 +328,8 @@ function SimliAvatar({ sessionToken, audioData, onSpeakingChange, onReady, onErr
       cancelled = true;
       clientRef.current?.stop().catch(() => {});
     };
-  }, [sessionToken]);
-
-  // Send audio chunk
-  useEffect(() => {
-    if (!audioData || !clientRef.current || status !== "ready") return;
-    try { clientRef.current.sendAudioData(audioData); } catch (e) { console.warn("[Simli] sendAudio:", e); }
-    onAudioConsumed();
-  }, [audioData, status]);
+  // speakFn is stable (useCallback with no deps) — safe to include
+  }, [sessionToken, speakFn]);
 
   const visible = status === "ready";
 
@@ -501,9 +567,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [simliReady,    setSimliReady]    = useState(false);
   const [simliFailed,   setSimliFailed]   = useState(false);
   const [simliSpeaking, setSimliSpeaking] = useState(false);
-  const [audioChunk,    setAudioChunk]    = useState<Uint8Array|null>(null);
-  const ttsInFlight = useRef(false);
-  const ttsQueueRef = useRef<string|null>(null); // holds pending line if TTS was called before ready
+  // speak() is injected by SimliAvatar once it's connected
+  const speakRef    = useRef<((text: string) => Promise<void>) | null>(null);
+  const ttsQueueRef = useRef<string|null>(null); // line queued before Simli was ready
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -557,50 +623,22 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     return () => { cancelled = true; };
   }, []);
 
-  // ── TTS: fires whenever step changes or Simli becomes ready ──────────────
-  const fireTTS = useCallback(async (text: string) => {
-    if (ttsInFlight.current) { ttsQueueRef.current = text; return; }
-    ttsInFlight.current = true;
-    try {
-      const res = await fetch("/api/simli/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) throw new Error(`TTS ${res.status}`);
-      const buf = await res.arrayBuffer();
-      setAudioChunk(new Uint8Array(buf));
-    } catch (err) {
-      console.warn("[SEF] TTS failed:", err);
-    } finally {
-      ttsInFlight.current = false;
-      // drain queue
-      if (ttsQueueRef.current) {
-        const queued = ttsQueueRef.current;
-        ttsQueueRef.current = null;
-        fireTTS(queued);
-      }
-    }
-  }, []);
-
-  // Fire TTS when step changes and Simli is ready
-  useEffect(() => {
-    if (simliFailed) return;       // fallback mode — no TTS to Simli
-    if (!simliReady) {
-      // queue the line for when Simli connects
-      ttsQueueRef.current = speechLine;
+  // ── fireTTS: calls speak() from SimliAvatar internal pipeline ────────────
+  const fireTTS = useCallback((text: string) => {
+    if (!speakRef.current) {
+      // Simli not ready yet — queue it
+      ttsQueueRef.current = text;
       return;
     }
+    speakRef.current(text).catch(e => console.warn("[SEF] speak error:", e));
+  }, []);
+
+  // Fire TTS when step changes (Simli must already be ready, or it queues)
+  useEffect(() => {
+    if (simliFailed) return;  // fallback mode — no Simli TTS
     fireTTS(speechLine);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, simliReady]);
-
-  // When Simli becomes ready, drain the queue
-  useEffect(() => {
-    if (!simliReady) return;
-    const queued = ttsQueueRef.current;
-    if (queued) { ttsQueueRef.current = null; fireTTS(queued); }
-  }, [simliReady, fireTTS]);
+  }, [step]);
 
   const handleContinue = () => {
     const newAnswers = selected ? { ...answers, [step]: selected } : answers;
@@ -733,11 +771,18 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 {useSimli ? (
                   <SimliAvatar
                     sessionToken={sessionToken}
-                    audioData={audioChunk}
                     onSpeakingChange={setSimliSpeaking}
-                    onReady={() => setSimliReady(true)}
+                    onReady={(speak) => {
+                      speakRef.current = speak;
+                      setSimliReady(true);
+                      // Drain any queued line (usually the welcome message)
+                      const queued = ttsQueueRef.current;
+                      if (queued) {
+                        ttsQueueRef.current = null;
+                        speak(queued).catch(e => console.warn("[SEF] queued speak error:", e));
+                      }
+                    }}
                     onError={() => { setSimliFailed(true); }}
-                    onAudioConsumed={() => setAudioChunk(null)}
                   />
                 ) : (
                   // Fallback — large static portrait
