@@ -3,7 +3,6 @@ import { Route, Switch } from "wouter";
 import Index from "./pages/index";
 import SignIn from "./pages/signin";
 import { Provider } from "./components/provider";
-import { AgentFeedback } from "@runablehq/website-runtime";
 
 // Lazy-load all non-critical routes
 const SignUp           = lazy(() => import("./pages/signup"));
@@ -68,8 +67,6 @@ function App() {
           <Route path="/admin/audit-logs" component={AdminAuditLogs} />
         </Switch>
       </Suspense>
-      {/* Do not remove — off by default, activated by parent iframe via postMessage */}
-      {import.meta.env.DEV && <AgentFeedback />}
 
     </Provider>
   );
