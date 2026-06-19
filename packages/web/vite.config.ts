@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
 	Object.assign(process.env, env);
 
 	return {
-		plugins: [honoDevPlugin(), react(), runableAnalyticsPlugin(), tailwind()],
+		// Only inject runable analytics in sandbox (never in production builds)
+		plugins: [honoDevPlugin(), react(), ...(mode !== "production" ? [runableAnalyticsPlugin()] : []), tailwind()],
 		resolve: {
 			alias: {
 				"@": path.resolve(__dirname, "./src/web"),
