@@ -282,16 +282,16 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
       try {
         const { SimliClient } = await import("simli-client");
 
-        // Use default "p2p" transport — library's preferred mode.
-        // Simli's own retry logic will auto-switch to "livekit" after 2 p2p failures.
-        // We do NOT pass transport_mode so we get the default "p2p".
+        // Force "livekit" transport — P2P is broken server-side for this account.
+        // wss://api.simli.ai/compose/webrtc/p2p → "SERVER ERROR IN INITIALIZATION"
+        // wss://api.simli.ai/compose/webrtc/livekit → sends DESTINATION + livekit_url ✅
         const client = new SimliClient(
           sessionToken,
           videoRef.current!,
           audioRef.current!,
           null,        // iceServers — null = use STUN defaults
           undefined,   // logLevel — debug (default)
-          // transport_mode NOT specified → defaults to "p2p"
+          "livekit",   // FORCED: p2p broken server-side, livekit is the only working transport
         );
         clientRef.current = client;
 
@@ -428,8 +428,10 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
           width: "100%", height: "100%",
           objectFit: "cover", objectPosition: "center top",
           borderRadius: "inherit",
-          // Must stay visible (not display:none) for requestVideoFrameCallback to fire
-          opacity: visible ? 1 : 0,
+          // MUST be > 0: opacity:0 throttles requestVideoFrameCallback in Chrome/Safari.
+          // rVFC never fires → "start" never emits → visible never becomes true → chicken-and-egg.
+          // 0.001 is invisible to human eye but keeps rVFC alive in the browser.
+          opacity: visible ? 1 : 0.001,
           transition: "opacity 800ms ease",
           background: "transparent",
         }}
