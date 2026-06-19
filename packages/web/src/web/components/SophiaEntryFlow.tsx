@@ -289,7 +289,7 @@ function SimliAvatar({ sessionToken, audioData, onSpeakingChange, onReady, onErr
           alt="Sophia"
           style={{
             width: "100%", height: "100%",
-            objectFit: "cover", objectPosition: "center top",
+            objectFit: "cover", objectPosition: "center 15%",
             display: "block",
             animation: "sef-breathe 3.5s ease-in-out infinite",
           }}
@@ -744,7 +744,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                       alt="Sophia"
                       style={{
                         width: "100%", height: "100%",
-                        objectFit: "cover", objectPosition: "center top",
+                        objectFit: "cover", objectPosition: "center 15%",
                         display: "block",
                         animation: "sef-breathe 3.5s ease-in-out infinite",
                       }}
@@ -900,7 +900,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
           <style>{`
             @media (max-width: 640px) {
               .sef-main-layout { flex-direction: column !important; }
-              .sef-left-panel  { width: 100% !important; height: 56vw !important; min-width: unset !important; flex-shrink: 0; }
+              .sef-left-panel  { width: 100% !important; height: 64vw !important; min-width: unset !important; flex-shrink: 0; }
+              .sef-left-panel img { object-position: center 20% !important; }
+              .sef-left-panel video { object-position: center 20% !important; }
               .sef-right-panel { flex: 1; padding: 16px 18px 60px !important; overflow-y: auto; }
             }
           `}</style>
