@@ -295,6 +295,29 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
         );
         clientRef.current = client;
 
+        // ── CRITICAL: Resume AudioContext immediately after construction ──────
+        // SimliClient creates AudioContext at construction time. If constructed
+        // before a user gesture, Chrome/Safari put it in "suspended" state.
+        // sendAudioData() silently drops all PCM until context is resumed.
+        // We force-resume here AND on every user gesture to be safe.
+        try {
+          const ctx = (client as unknown as { audioContext: AudioContext }).audioContext;
+          if (ctx && ctx.state === "suspended") {
+            ctx.resume().catch(() => {});
+          }
+          // Also attach a one-time gesture listener to resume on next interaction
+          const resumeCtx = () => {
+            ctx?.resume().catch(() => {});
+            document.removeEventListener("click",     resumeCtx);
+            document.removeEventListener("touchstart", resumeCtx);
+            document.removeEventListener("keydown",   resumeCtx);
+          };
+          document.addEventListener("click",     resumeCtx, { once: true, passive: true });
+          document.addEventListener("touchstart", resumeCtx, { once: true, passive: true });
+          document.addEventListener("keydown",   resumeCtx, { once: true, passive: true });
+          console.log("[Simli] AudioContext state after construct:", ctx?.state);
+        } catch { /* ignore — non-critical */ }
+
         // ── Simli events ──────────────────────────────────────────────────────
         client.on("start", () => {
           // Fires when first video frame arrives (requestVideoFrameCallback inside LivekitTransport)
@@ -337,11 +360,11 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
         // SimliClient internal timeout = 15s, retries up to 10x (every 2s).
         // We race with 12s max — enough for one clean P2P attempt (ICE + WS + first frame).
         // Audio fallback is already playing via ttsAudioRef — user never waits.
-        console.log("[Simli] calling client.start() — transport: p2p (default)…");
+        console.log("[Simli] calling client.start() — transport: livekit…");
         await Promise.race([
           client.start(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Simli timeout 12s")), 12000)
+            setTimeout(() => reject(new Error("Simli timeout 20s")), 20000)
           ),
         ]);
 
