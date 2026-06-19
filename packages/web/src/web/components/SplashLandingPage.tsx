@@ -473,7 +473,7 @@ function LivingLogoHero({ onEnter }: { onEnter: () => void }) {
 
           {/* THE LOGO */}
           <motion.img
-            src="/assets/ghaafeedi-logo-dark.png"
+            src="/assets/ghaafeedi-logo-dark.webp"
             alt="Ghaafeedi Music"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

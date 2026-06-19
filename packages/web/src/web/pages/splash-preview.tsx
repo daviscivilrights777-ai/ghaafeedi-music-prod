@@ -19,7 +19,7 @@ export default function SplashPreview() {
         fontFamily: "Inter, sans-serif", color: "#fff", gap: 24,
       }}>
         <img
-          src="/assets/ghaafeedi-logo-dark.png"
+          src="/assets/ghaafeedi-logo-dark.webp"
           alt="Ghaafeedi Music"
           style={{ width: 280, opacity: 0.9 }}
         />

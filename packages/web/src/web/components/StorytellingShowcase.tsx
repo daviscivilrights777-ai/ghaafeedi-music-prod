@@ -2,6 +2,9 @@ import { motion } from "framer-motion";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
+const VIDEO_SRC = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/flagship-demo.mp4";
+const POSTER_SRC = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.png";
+
 const PRODUCTS = [
   "Cinematic Life Story",
   "Emotional Soundtrack",
@@ -38,7 +41,26 @@ export function StorytellingShowcase() {
   const [loaded, setLoaded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const sectionRef = useRef<HTMLElement>(null);
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lazy-load video src only when section enters viewport
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVideoSrc(VIDEO_SRC);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const resetControlsTimer = useCallback(() => {
     setShowControls(true);
@@ -107,6 +129,7 @@ export function StorytellingShowcase() {
 
   return (
     <section
+      ref={sectionRef}
       id="flagship-showcase"
       style={{
         padding: "80px 24px 100px",
@@ -196,11 +219,11 @@ export function StorytellingShowcase() {
         >
           <video
             ref={videoRef}
-            src="https://pub-bc7b203485814e1186102277ad450211.r2.dev/flagship-demo.mp4"
-            poster="https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.png"
+            src={videoSrc}
+            poster={POSTER_SRC}
             muted={muted}
             playsInline
-            preload="metadata"
+            preload="none"
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
 

@@ -37,7 +37,7 @@ export function GhaafeediLogo({ height, variant = "navbar", style }: GhaafeediLo
 
   return (
     <img
-      src="/assets/ghaafeedi-logo-dark.png"
+      src="/assets/ghaafeedi-logo-dark.webp"
       alt="Ghaafeedi Music"
       style={{
         height: h,

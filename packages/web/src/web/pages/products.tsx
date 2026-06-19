@@ -250,20 +250,20 @@ interface Product {
   memberOnly?: boolean; isSophia?: boolean;
 }
 const ALL_PRODUCTS: Product[] = [
-  { id:"sophia-ai",            title:"Sophia AI",              subtitle:"Emotional Companion",      price:"From $29/mo", category:"AI",     image:"/assets/prod-sophia-ai.png",            isSophia:true },
-  { id:"voice-cloning-studio",  title:"Voice Cloning Studio",   subtitle:"Your Voice. Immortalized.", price:"From $299",   category:"Studio", image:"/assets/prod-voice-cloning.png" },
-  { id:"signature-masterpiece",title:"Signature Masterpiece",  subtitle:"Your Story in Music",       price:"From $99",    category:"Music",  image:"/assets/prod-signature-masterpiece.png" },
-  { id:"emotional-soundtrack", title:"Emotional Soundtrack",   subtitle:"Feel Every Moment",         price:"From $19/mo", category:"Music",  image:"/assets/prod-emotional-soundtrack.png" },
-  { id:"cinematic-story-film", title:"Cinematic Story Film",   subtitle:"Your Life. The Movie.",     price:"From $79",    category:"Video",  image:"/assets/prod-cinematic-story-film.png" },
-  { id:"dream-ai-visualization",title:"Dream AI Visualization", subtitle:"See Your Dreams",           price:"From $79",    category:"AI",     image:"/assets/prod-dream-visualization.png" },
-  { id:"future-self-vision",   title:"Future Self Vision",     subtitle:"Meet Tomorrow's You",       price:"From $79",    category:"AI",     image:"/assets/prod-future-self.png" },
-  { id:"nft-collection",       title:"NFT Collection",         subtitle:"Own Your Legacy",           price:"From $299",   category:"NFT",    image:"/assets/prod-nft-collection.png",       memberOnly:true },
-  { id:"memorial-legacy-film",  title:"Memorial Legacy Film",   subtitle:"Honor & Remember",          price:"From $399",   category:"Video",  image:"/assets/prod-memorial-legacy.png" },
-  { id:"family-vault",         title:"Family Vault",           subtitle:"Generations of Memory",     price:"From $199",   category:"Legacy", image:"/assets/prod-family-vault.png" },
-  { id:"couples-journey-film",  title:"Couples Journey Film",   subtitle:"Your Love Story",           price:"From $149",   category:"Video",  image:"/assets/prod-couples-journey.png" },
-  { id:"relationship-healing", title:"Relationship Healing",   subtitle:"Heal Through Music",        price:"From $69",    category:"Music",  image:"/assets/prod-relationship-healing.png", memberOnly:true },
-  { id:"cinematic-life-story", title:"Cinematic Life Story",   subtitle:"Epic. Personal. Yours.",    price:"From $499",   category:"Video",  image:"/assets/prod-cinematic-life-story.png", memberOnly:true },
-  { id:"social-ready-clips",    title:"Social Ready Clips",     subtitle:"Share Your Journey",        price:"From $49",    category:"Video",  image:"/assets/prod-social-clips.png" },
+  { id:"sophia-ai",            title:"Sophia AI",              subtitle:"Emotional Companion",      price:"From $29/mo", category:"AI",     image:"/assets/prod-sophia-ai.webp",            isSophia:true },
+  { id:"voice-cloning-studio",  title:"Voice Cloning Studio",   subtitle:"Your Voice. Immortalized.", price:"From $299",   category:"Studio", image:"/assets/prod-voice-cloning.webp" },
+  { id:"signature-masterpiece",title:"Signature Masterpiece",  subtitle:"Your Story in Music",       price:"From $99",    category:"Music",  image:"/assets/prod-signature-masterpiece.webp" },
+  { id:"emotional-soundtrack", title:"Emotional Soundtrack",   subtitle:"Feel Every Moment",         price:"From $19/mo", category:"Music",  image:"/assets/prod-emotional-soundtrack.webp" },
+  { id:"cinematic-story-film", title:"Cinematic Story Film",   subtitle:"Your Life. The Movie.",     price:"From $79",    category:"Video",  image:"/assets/prod-cinematic-story-film.webp" },
+  { id:"dream-ai-visualization",title:"Dream AI Visualization", subtitle:"See Your Dreams",           price:"From $79",    category:"AI",     image:"/assets/prod-dream-visualization.webp" },
+  { id:"future-self-vision",   title:"Future Self Vision",     subtitle:"Meet Tomorrow's You",       price:"From $79",    category:"AI",     image:"/assets/prod-future-self.webp" },
+  { id:"nft-collection",       title:"NFT Collection",         subtitle:"Own Your Legacy",           price:"From $299",   category:"NFT",    image:"/assets/prod-nft-collection.webp",       memberOnly:true },
+  { id:"memorial-legacy-film",  title:"Memorial Legacy Film",   subtitle:"Honor & Remember",          price:"From $399",   category:"Video",  image:"/assets/prod-memorial-legacy.webp" },
+  { id:"family-vault",         title:"Family Vault",           subtitle:"Generations of Memory",     price:"From $199",   category:"Legacy", image:"/assets/prod-family-vault.webp" },
+  { id:"couples-journey-film",  title:"Couples Journey Film",   subtitle:"Your Love Story",           price:"From $149",   category:"Video",  image:"/assets/prod-couples-journey.webp" },
+  { id:"relationship-healing", title:"Relationship Healing",   subtitle:"Heal Through Music",        price:"From $69",    category:"Music",  image:"/assets/prod-relationship-healing.webp", memberOnly:true },
+  { id:"cinematic-life-story", title:"Cinematic Life Story",   subtitle:"Epic. Personal. Yours.",    price:"From $499",   category:"Video",  image:"/assets/prod-cinematic-life-story.webp", memberOnly:true },
+  { id:"social-ready-clips",    title:"Social Ready Clips",     subtitle:"Share Your Journey",        price:"From $49",    category:"Video",  image:"/assets/prod-social-clips.webp" },
 ];
 const CATEGORIES = ["All","AI","Music","Video","Studio","Legacy","NFT"];
 
@@ -807,7 +807,7 @@ function SophiaHex({ size, left, top, reduced }: { size:number; left:number; top
         background:"linear-gradient(135deg,#FFF8E7 0%,#FFC24D 18%,#F4D06F 36%,#FFFDE0 50%,#D4AF37 66%,#FFC24D 82%,#FFF8E7 100%)"}}/>
 
       <div className="hex-sophia-clip" style={{zIndex:3}} onClick={()=>nav("/products/sophia-ai")}>
-        <img src="/assets/prod-sophia-portrait.png" alt="Sophia AI" style={{
+        <img src="/assets/prod-sophia-portrait.webp" alt="Sophia AI" style={{
           width:"100%",height:"100%",objectFit:"cover",
           objectPosition:"center 12%",
           filter:"contrast(1.38) saturate(1.40) brightness(1.10)",

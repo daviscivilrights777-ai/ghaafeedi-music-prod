@@ -23,6 +23,24 @@ export default defineConfig(({ mode }) => {
 			allowedHosts: true,
 			hmr: { overlay: false, },
 			cors: false
-		}
+		},
+		build: {
+			target: "esnext",
+			minify: "esbuild",
+			rollupOptions: {
+				output: {
+					manualChunks: (id) => {
+						// Keep all node_modules in a single vendor bundle to avoid circular deps
+						if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) return "vendor-react";
+						if (id.includes("node_modules/framer-motion/")) return "vendor-framer";
+						if (id.includes("node_modules/")) return "vendor-libs";
+						if (id.includes("/pages/admin/")) return "chunk-admin";
+						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
+						if (id.includes("/pages/demo")) return "chunk-demo";
+						if (id.includes("/pages/product")) return "chunk-products";
+					},
+				},
+			},
+		},
 	};
 });

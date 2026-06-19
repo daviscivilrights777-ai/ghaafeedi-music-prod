@@ -499,7 +499,7 @@ function LogoWithFilmStrips() {
 
       {/* ── THE LOGO — full color, full visible, breathing animation ── */}
       <img
-        src="/assets/ghaafeedi-logo-dark.png"
+        src="/assets/ghaafeedi-logo-dark.webp"
         alt="Ghaafeedi Music"
         style={{
           position:    "absolute",

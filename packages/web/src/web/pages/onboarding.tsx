@@ -3676,11 +3676,10 @@ function Step5AIAnalysis({
                     <button
                       onClick={() => setShowRecs(r => !r)}
                       style={{
-                        width:"100%", background:"none", border:"none", cursor:"pointer",
+                        width:"100%", background: showRecs ? "rgba(212,175,55,0.08)" : "rgba(212,175,55,0.04)", border:`1px solid rgba(212,175,55,${showRecs?"0.35":"0.18"})`, cursor:"pointer",
                         display:"flex", alignItems:"center", justifyContent:"space-between",
                         padding:"10px 14px", borderRadius:12,
-                        background: showRecs ? "rgba(212,175,55,0.08)" : "rgba(212,175,55,0.04)",
-                        border:`1px solid rgba(212,175,55,${showRecs?"0.35":"0.18"})`,
+                        outline:"none",
                         transition:"all 220ms ease",
                       }}
                     >

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 
 /* ─── GOLD SYSTEM ─── */
@@ -16,14 +16,14 @@ const HERO_VIDEO = "https://pub-bc7b203485814e1186102277ad450211.r2.dev/GHAAFEED
 const GALAXY_BG  = "/assets/galaxy-bg.png";
 
 const CARDS = [
-  { id:"voice",        title:"Voice Cloning Studio",      badge:"AI VOICE",    tagline:"Your voice. Immortalized.",         img:"/assets/prod-voice-cloning.png"           },
-  { id:"relationship", title:"Relationship Healing",       badge:"AI STORY",    tagline:"Emotions turned to music.",          img:"/assets/prod-relationship-healing.png"    },
-  { id:"memorial",     title:"Memorial Legacy Film",       badge:"AI FILM",     tagline:"A life worth remembering.",          img:"/assets/prod-memorial-legacy.png"         },
-  { id:"couples",      title:"Couples Journey Film",       badge:"AI STORY",    tagline:"Your love story, on screen.",        img:"/assets/prod-couples-journey.png"         },
-  { id:"cinematic",    title:"Cinematic Story Film",       badge:"AI CINEMATIC",tagline:"One chapter. Cinematic forever.",   img:"/assets/prod-cinematic-story-film.png"    },
-  { id:"dream",        title:"Dream AI Visualization",     badge:"AI VISUAL",   tagline:"Your visions rendered in 4K.",      img:"/assets/prod-dream-visualization.png"     },
-  { id:"future",       title:"Future Self Vision",         badge:"AI TRANSFORM",tagline:"See your highest potential.",       img:"/assets/prod-future-self.png"             },
-  { id:"soundtrack",   title:"Emotional Soundtrack",       badge:"AI MUSIC",    tagline:"Music born from your story.",       img:"/assets/prod-emotional-soundtrack.png"    },
+  { id:"voice",        title:"Voice Cloning Studio",      badge:"AI VOICE",    tagline:"Your voice. Immortalized.",         img:"/assets/prod-voice-cloning.webp"           },
+  { id:"relationship", title:"Relationship Healing",       badge:"AI STORY",    tagline:"Emotions turned to music.",          img:"/assets/prod-relationship-healing.webp"    },
+  { id:"memorial",     title:"Memorial Legacy Film",       badge:"AI FILM",     tagline:"A life worth remembering.",          img:"/assets/prod-memorial-legacy.webp"         },
+  { id:"couples",      title:"Couples Journey Film",       badge:"AI STORY",    tagline:"Your love story, on screen.",        img:"/assets/prod-couples-journey.webp"         },
+  { id:"cinematic",    title:"Cinematic Story Film",       badge:"AI CINEMATIC",tagline:"One chapter. Cinematic forever.",   img:"/assets/prod-cinematic-story-film.webp"    },
+  { id:"dream",        title:"Dream AI Visualization",     badge:"AI VISUAL",   tagline:"Your visions rendered in 4K.",      img:"/assets/prod-dream-visualization.webp"     },
+  { id:"future",       title:"Future Self Vision",         badge:"AI TRANSFORM",tagline:"See your highest potential.",       img:"/assets/prod-future-self.webp"             },
+  { id:"soundtrack",   title:"Emotional Soundtrack",       badge:"AI MUSIC",    tagline:"Music born from your story.",       img:"/assets/prod-emotional-soundtrack.webp"    },
 ];
 
 /* ─── PARTICLE CANVAS ─── */
@@ -372,6 +372,7 @@ function PosterCard({ card }: { card: typeof CARDS[0] }) {
 export default function DemoPage() {
   const [, setLocation] = useLocation();
   const videoRef  = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
   const [playing,  setPlaying]  = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(86);
@@ -381,6 +382,24 @@ export default function DemoPage() {
   const [hoverCTA1,  setHoverCTA1]  = useState(false);
   const [hoverCTA2,  setHoverCTA2]  = useState(false);
   const ctrlTimer = useRef<ReturnType<typeof setTimeout>>();
+  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+
+  // Lazy-load video: only fetch when player enters viewport
+  useEffect(() => {
+    const el = playerRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVideoSrc(HERO_VIDEO);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -514,7 +533,7 @@ export default function DemoPage() {
       }}>
         <div onClick={() => setLocation("/")} style={{ cursor:"pointer", display:"flex", alignItems:"center" }}>
           <img
-            src="/assets/ghaafeedi-logo-dark.png"
+            src="/assets/ghaafeedi-logo-dark.webp"
             alt="Ghaafeedi Music"
             style={{ height:40, width:"auto", objectFit:"contain", filter:`drop-shadow(0 0 12px rgba(212,175,55,0.35))` }}
           />
@@ -683,6 +702,7 @@ export default function DemoPage() {
             position:"relative", zIndex:1,
           }}>
             <div
+              ref={playerRef}
               onClick={togglePlay}
               onMouseMove={onPlayerMove}
               onMouseEnter={() => { setHoverPlay(true); setShowCtrl(true); }}
@@ -702,7 +722,7 @@ export default function DemoPage() {
 
               {/* Poster image */}
               <img
-                src="/assets/hero-poster.png"
+                src="/assets/hero-poster.webp"
                 alt="Cinematic Legacy"
                 style={{
                   position:"absolute", inset:0, width:"100%", height:"100%",
@@ -713,7 +733,7 @@ export default function DemoPage() {
               />
               <video
                 ref={videoRef}
-                src={HERO_VIDEO}
+                src={videoSrc}
                 style={{
                   width:"100%", height:"100%", display:"block",
                   objectFit:"cover", borderRadius:24,
@@ -725,7 +745,7 @@ export default function DemoPage() {
                 onEnded={() => { setPlaying(false); setProgress(0); }}
                 onTimeUpdate={onTimeUpdate}
                 onLoadedMetadata={() => setDuration(videoRef.current?.duration || 86)}
-                playsInline preload="metadata"
+                playsInline preload="none"
               />
 
               {/* Letterbox bars */}

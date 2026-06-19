@@ -194,7 +194,7 @@ export function EntryGate({ onWatchStory, onGoHome }: EntryGateProps) {
           {/* ── Logo ── */}
           {logoW > 0 && (
             <motion.img
-              src="/assets/ghaafeedi-logo-dark.png"
+              src="/assets/ghaafeedi-logo-dark.webp"
               alt="Ghaafeedi Music"
               initial={{ opacity: 0, y: 20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
