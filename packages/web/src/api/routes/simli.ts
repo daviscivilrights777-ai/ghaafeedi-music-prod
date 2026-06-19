@@ -154,7 +154,7 @@ app.post("/tts", async (c) => {
     const text = body.text?.trim();
 
     if (!text) return c.json({ error: "text required" }, 400);
-    if (text.length > 500) return c.json({ error: "text too long (max 500 chars)" }, 400);
+    if (text.length > 1200) return c.json({ error: "text too long (max 1200 chars)" }, 400);
 
     const elKey =
       (await getSecret("ELEVENLABS_API_KEY").catch(() => null)) ??
