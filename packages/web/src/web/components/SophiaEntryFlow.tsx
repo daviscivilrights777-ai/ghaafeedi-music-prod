@@ -11,7 +11,7 @@
  *   Step 3 — Q: What matters most? (4 options)
  *   Step 4 — Personalized summary → "Enter Ghaafeedi Music" CTA
  *
- * Simli: WebRTC livekit transport, Zahra face afdb6a3e
+ * Simli: WebRTC livekit transport, Sophia custom face 9c402979-2e74-47f5-a4ed-ae235b092dc9 (fallback: Zahra afdb6a3e)
  * TTS:   ElevenLabs PCM16 via /api/simli/tts, sendAudioData → Simli
  * Fallback: static portrait + breathing if Simli WebRTC unavailable
  */
@@ -1008,7 +1008,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                         letterSpacing:"0.08em", marginLeft:4,
                         textTransform:"uppercase",
                       }}>
-                        · {sophiaFaceReady ? "Sophia Face" : "Live"}
+                        · {sophiaFaceReady ? "✦ Sophia AI" : "Live"}
                       </span>
                     )}
                   </div>
