@@ -53,7 +53,7 @@ export const dashboard = new Hono()
         .where(
           and(
             eq(schema.auditLogs.actorId, user.id),
-            sql`action LIKE 'referral%'`
+            sql`${schema.auditLogs.action} LIKE ${'referral%'}`
           )
         )
         .limit(50);
@@ -258,7 +258,7 @@ export const dashboard = new Hono()
     const [member] = await db
       .select()
       .from(schema.members)
-      .where(sql`UPPER(member_id) LIKE ${`%${memberId}%`}`)
+      .where(sql`UPPER(${schema.members.memberId}) LIKE UPPER(${'%' + memberId + '%'})`)
       .limit(1);
     if (member) {
       await db.insert(schema.auditLogs).values({

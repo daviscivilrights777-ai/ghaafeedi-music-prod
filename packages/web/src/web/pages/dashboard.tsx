@@ -114,7 +114,19 @@ export default function Dashboard() {
       ]);
       const summaryJson = await summaryRes.json();
       const notifJson   = await notifRes.json();
-      setData(summaryJson as DashSummary);
+      // Only set data if the response has the expected shape (not an error object)
+      if (summaryJson && !summaryJson.error) {
+        setData({
+          member:        summaryJson.member ?? null,
+          orders:        Array.isArray(summaryJson.orders)        ? summaryJson.orders        : [],
+          productions:   Array.isArray(summaryJson.productions)   ? summaryJson.productions   : [],
+          subscriptions: Array.isArray(summaryJson.subscriptions) ? summaryJson.subscriptions : [],
+          billing:       Array.isArray(summaryJson.billing)       ? summaryJson.billing       : [],
+          assets:        Array.isArray(summaryJson.assets)        ? summaryJson.assets        : [],
+          referral:      summaryJson.referral ?? { code: "", clicks: 0, conversions: 0, creditsCents: 0 },
+          tickets:       Array.isArray(summaryJson.tickets)       ? summaryJson.tickets       : [],
+        } as DashSummary);
+      }
       setNotifications((notifJson.notifications ?? []) as Notification[]);
     } catch (e) {
       console.error("[Dashboard]", e);
