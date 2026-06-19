@@ -394,18 +394,25 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
         ref={videoRef}
         autoPlay
         playsInline
-        muted={false}
+        muted
         style={{
           position: "absolute", inset: 0, zIndex: 3,
           width: "100%", height: "100%",
           objectFit: "cover", objectPosition: "center top",
           borderRadius: "inherit",
+          // Must stay visible (not display:none) for requestVideoFrameCallback to fire
           opacity: visible ? 1 : 0,
           transition: "opacity 800ms ease",
           background: "transparent",
         }}
       />
-      <audio ref={audioRef} autoPlay style={{ display: "none" }} />
+      {/* Audio must NOT be display:none — browsers block autoplay on hidden audio */}
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none", zIndex: -1 }}
+      />
 
       {/* Speaking bars overlay */}
       <div style={{
@@ -710,6 +717,32 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const canContinue = spoken && (isIntro || isSummary || !!selected);
   const useSimli    = !!sessionToken && !simliFailed;
 
+  // ── Unlock browser audio context on first user interaction ───────────────
+  // Browsers block audio autoplay. Calling .play() on the audio element after
+  // a user gesture unlocks the audio context for all subsequent plays.
+  const audioUnlockedRef = useRef(false);
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    audioUnlockedRef.current = true;
+    // Unlock HTML Audio API
+    const silentAudio = new Audio();
+    silentAudio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    silentAudio.volume = 0;
+    silentAudio.play().catch(() => {});
+    // Unlock Web Audio API (for Simli's AudioWorklet)
+    try {
+      const ctx = new AudioContext();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      src.onended = () => ctx.close();
+    } catch {}
+    // Re-trigger TTS now that audio is unlocked
+    fallbackSpeak(speechLine).catch(() => {});
+  }, [fallbackSpeak, speechLine]);
+
   return (
     <AnimatePresence>
       {!exiting && (
@@ -719,6 +752,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.5 }}
+          onClick={unlockAudio}
           style={{
             position: "fixed", inset: 0, zIndex: 99999,
             background: `radial-gradient(ellipse 130% 100% at 40% 10%, #0E1F4A 0%, #070F28 35%, ${BG} 70%, #020610 100%)`,
