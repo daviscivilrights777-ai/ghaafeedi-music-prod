@@ -26,12 +26,13 @@ export default defineConfig(({ mode }) => {
 			cors: false
 		},
 		optimizeDeps: {
-			include: ["simli-client"],
+			exclude: ["simli-client"],
 		},
 		build: {
 			target: "esnext",
 			minify: "esbuild",
 			rollupOptions: {
+				external: ["simli-client"],
 				output: {
 					manualChunks: (id) => {
 						// All node_modules in ONE vendor chunk — prevents React/libs circular dependency deadlock

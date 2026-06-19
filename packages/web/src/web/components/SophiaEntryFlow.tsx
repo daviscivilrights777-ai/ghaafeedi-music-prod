@@ -278,7 +278,8 @@ function SimliAvatar({
 }: SimliAvatarProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const clientRef = useRef<InstanceType<typeof import("simli-client")["SimliClient"]> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clientRef = useRef<any>(null);
   const [status, setStatus] = useState<SimliStatus>("idle");
   const [speaking, setSpeaking] = useState(false);
   const startedRef = useRef(false);
