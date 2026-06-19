@@ -31,10 +31,8 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				output: {
 					manualChunks: (id) => {
-						// Keep all node_modules in a single vendor bundle to avoid circular deps
-						if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) return "vendor-react";
-						if (id.includes("node_modules/framer-motion/")) return "vendor-framer";
-						if (id.includes("node_modules/")) return "vendor-libs";
+						// All node_modules in ONE vendor chunk — prevents React/libs circular dependency deadlock
+						if (id.includes("node_modules/")) return "vendor";
 						if (id.includes("/pages/admin/")) return "chunk-admin";
 						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
 						if (id.includes("/pages/demo")) return "chunk-demo";
