@@ -275,38 +275,38 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
         // speaking/silent events from signaling websocket (SPEAK/SILENT messages)
         client.on("speaking", () => {
           if (cancelled) return;
+          console.log("[Simli] 🟢 SPEAKING");
           speakingRef.current = true;
           setSpeaking(true);
           onSpeakingChange(true);
         });
         client.on("silent", () => {
           if (cancelled) return;
+          console.log("[Simli] ⬛ SILENT");
           speakingRef.current = false;
           setSpeaking(false);
           onSpeakingChange(false);
         });
         client.on("error", (d: string) => {
           if (cancelled) return;
-          console.error("[Simli] error event:", d);
+          console.error("[Simli] ❌ error event:", d);
           setStatus("error");
           onError();
         });
         client.on("startup_error", (m: string) => {
           if (cancelled) return;
-          console.error("[Simli] startup_error:", m);
+          console.error("[Simli] ❌ startup_error:", m);
           setStatus("error");
           onError();
         });
+        client.on("ack", () => console.log("[Simli] ✓ ACK received"));
+        client.on("stop", () => console.log("[Simli] ■ STOP received"));
 
         // await client.start() resolves when first video frame renders (LiveKit "start" event)
         // Wrap in a timeout — if LiveKit WebRTC hangs, fall back to audio-only after 8s
+        // Let SimliClient use its own CONNECTION_TIMEOUT_MS (15s) — don't race it
         console.log("[Simli] calling client.start()…");
-        await Promise.race([
-          client.start(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Simli start() timeout after 8s")), 8000)
-          ),
-        ]);
+        await client.start();
 
         if (cancelled) return;
 
@@ -856,7 +856,12 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                       const queued = ttsQueueRef.current;
                       if (queued) { ttsQueueRef.current = null; speak(queued).catch(() => {}); }
                     }}
-                    onError={() => { setSimliFailed(true); }}
+                    onError={() => {
+                      setSimliFailed(true);
+                      // Drain lip-sync queue to fallback audio if Simli failed
+                      // (playTTS already fired — audio is playing or pending)
+                      console.log("[SEF] Simli failed — falling back to audio-only mode");
+                    }}
                   />
                 ) : (
                   // Fallback — large static portrait

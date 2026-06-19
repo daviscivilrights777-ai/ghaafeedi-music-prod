@@ -16,7 +16,7 @@ const app = new Hono();
 
 // Preset fallback — Mediterranean woman, closest to Sophia
 const SIMLI_ZAHRA_FACE_ID    = "afdb6a3e-3939-40aa-92df-01604c23101c";
-const ELEVENLABS_VOICE_ID    = "CwhRBWXzGAHq8TQ4Fs17"; // Sophia voice
+const ELEVENLABS_VOICE_ID    = "EXAVITQu4vr4xnSDxMaL"; // Sophia voice — Sarah (warm, confident, American)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
