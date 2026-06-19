@@ -1,51 +1,143 @@
 /**
- * GHAAFEEDI MUSIC — Simli Session Token Route
+ * GHAAFEEDI MUSIC — Simli Routes
  * ══════════════════════════════════════════════════════════════════
- * Keeps Simli API key server-side. Client requests a session token,
- * never sees the raw key.
+ * POST /api/simli/token        → { session_token, face_id, face_ready }
+ * POST /api/simli/tts          → PCM16 audio ArrayBuffer (ElevenLabs → Simli)
+ * GET  /api/simli/face-status  → { status, face_id, face_ready }
  *
- * POST /api/simli/token   → { session_token }
- * POST /api/sophia/tts    → PCM16 audio ArrayBuffer (for Simli sendAudioData)
+ * Face priority:
+ *   1. SIMLI_SOPHIA_FACE_ID (env) — custom Sophia face (processed from portrait)
+ *   2. Zahra preset afdb6a3e     — fallback while Sophia face is processing
  */
 import { Hono } from "hono";
 import { getSecret } from "../orchestration/secrets";
 
 const app = new Hono();
 
-const SIMLI_FACE_ID = "afdb6a3e-3939-40aa-92df-01604c23101c"; // Zahra — Mediterranean woman
-const ELEVENLABS_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"; // Sophia voice
+// Preset fallback — Mediterranean woman, closest to Sophia
+const SIMLI_ZAHRA_FACE_ID    = "afdb6a3e-3939-40aa-92df-01604c23101c";
+const ELEVENLABS_VOICE_ID    = "CwhRBWXzGAHq8TQ4Fs17"; // Sophia voice
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function getSimliKey(): Promise<string> {
+  return (
+    (await getSecret("SIMLI_API_KEY").catch(() => null)) ??
+    process.env.SIMLI_API_KEY ??
+    ""
+  );
+}
+
+/** Returns Sophia's custom face ID if processed, otherwise Zahra preset */
+async function resolveActiveFaceId(simliKey: string): Promise<{ faceId: string; faceReady: boolean }> {
+  const sophiaFaceId = process.env.SIMLI_SOPHIA_FACE_ID ?? "";
+
+  if (!sophiaFaceId) {
+    return { faceId: SIMLI_ZAHRA_FACE_ID, faceReady: false };
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.simli.ai/faces/legacy/generation_status?face_id=${sophiaFaceId}`,
+      { headers: { "x-simli-api-key": simliKey } }
+    );
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const data = (await res.json()) as { status?: string; face_id?: string };
+
+    if (data.status === "done" || data.status === "completed" || data.status === "success") {
+      return { faceId: sophiaFaceId, faceReady: true };
+    }
+  } catch (err) {
+    console.warn("[Simli] face status check failed:", err);
+  }
+
+  // Still processing — use Zahra preset
+  return { faceId: SIMLI_ZAHRA_FACE_ID, faceReady: false };
+}
+
+// ─── GET /api/simli/face-status ───────────────────────────────────────────────
+// Client polls this to know when Sophia's custom face is ready
+app.get("/face-status", async (c) => {
+  try {
+    const simliKey = await getSimliKey();
+    if (!simliKey) return c.json({ error: "Simli not configured" }, 503);
+
+    const sophiaFaceId = process.env.SIMLI_SOPHIA_FACE_ID ?? "";
+    if (!sophiaFaceId) {
+      return c.json({ status: "no_custom_face", face_id: null, face_ready: false });
+    }
+
+    const res = await fetch(
+      `https://api.simli.ai/faces/legacy/generation_status?face_id=${sophiaFaceId}`,
+      { headers: { "x-simli-api-key": simliKey } }
+    );
+
+    if (!res.ok) {
+      return c.json({ status: "error", face_id: sophiaFaceId, face_ready: false });
+    }
+
+    const data = (await res.json()) as { status?: string };
+    const faceReady = ["done", "completed", "success"].includes(data.status ?? "");
+
+    return c.json({
+      status: data.status ?? "unknown",
+      face_id: faceReady ? sophiaFaceId : SIMLI_ZAHRA_FACE_ID,
+      sophia_face_id: sophiaFaceId,
+      face_ready: faceReady,
+    });
+  } catch (err) {
+    console.error("[Simli] /face-status error:", err);
+    return c.json({ error: "Internal error" }, 500);
+  }
+});
 
 // ─── POST /api/simli/token ────────────────────────────────────────────────────
 app.post("/token", async (c) => {
   try {
-    const simliKey =
-      (await getSecret("SIMLI_API_KEY").catch(() => null)) ??
-      process.env.SIMLI_API_KEY ??
-      "";
-
+    const simliKey = await getSimliKey();
     if (!simliKey) return c.json({ error: "Simli not configured" }, 503);
 
-    const res = await fetch("https://api.simli.ai/startAudioToVideoSession", {
+    // Use Sophia's face if ready, else Zahra preset
+    const { faceId, faceReady } = await resolveActiveFaceId(simliKey);
+
+    // Try new compose/token endpoint first, fall back to legacy
+    const res = await fetch("https://api.simli.ai/compose/token", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-simli-api-key": simliKey },
       body: JSON.stringify({
-        apiKey: simliKey,
-        faceId: SIMLI_FACE_ID,
+        faceId,
         handleSilence: true,
-        maxSessionLength: 300, // 5 min max — free tier safe
+        maxSessionLength: 300,
         maxIdleTime: 60,
-        model: "fasttalk", // lower latency
+        model: "fasttalk",
       }),
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      console.error("[Simli] token error:", err);
-      return c.json({ error: "Failed to create session" }, 502);
+      // Fallback to legacy endpoint
+      const res2 = await fetch("https://api.simli.ai/startAudioToVideoSession", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: simliKey,
+          faceId,
+          handleSilence: true,
+          maxSessionLength: 300,
+          maxIdleTime: 60,
+          model: "fasttalk",
+        }),
+      });
+      if (!res2.ok) {
+        const err = await res2.text();
+        console.error("[Simli] token error (legacy):", err);
+        return c.json({ error: "Failed to create session" }, 502);
+      }
+      const data2 = (await res2.json()) as { session_token: string };
+      return c.json({ session_token: data2.session_token, face_id: faceId, face_ready: faceReady });
     }
 
     const data = (await res.json()) as { session_token: string };
-    return c.json({ session_token: data.session_token });
+    return c.json({ session_token: data.session_token, face_id: faceId, face_ready: faceReady });
   } catch (err) {
     console.error("[Simli] /token error:", err);
     return c.json({ error: "Internal error" }, 500);
@@ -53,7 +145,7 @@ app.post("/token", async (c) => {
 });
 
 // ─── POST /api/simli/tts ──────────────────────────────────────────────────────
-// Converts text → ElevenLabs PCM16 audio (16kHz mono) for Simli
+// Converts text → ElevenLabs PCM16 audio (16kHz mono) for Simli sendAudioData
 // Body: { text: string }
 // Returns: raw PCM16 binary (application/octet-stream)
 app.post("/tts", async (c) => {

@@ -766,12 +766,13 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [exiting,  setExiting]  = useState(false);
 
   // Simli state
-  const [simliMode,     setSimliMode]     = useState<SimliMode>("pending");
-  const [sessionToken,  setSessionToken]  = useState<string | null>(null);
-  const [simliReady,    setSimliReady]    = useState(false);
-  const [simliFailed,   setSimliFailed]   = useState(false);
-  const [simlySpeaking, setSimlySpeaking] = useState(false);
-  const [audioChunk,    setAudioChunk]    = useState<Uint8Array | null>(null);
+  const [simliMode,       setSimliMode]       = useState<SimliMode>("pending");
+  const [sessionToken,    setSessionToken]    = useState<string | null>(null);
+  const [simliReady,      setSimliReady]      = useState(false);
+  const [simliFailed,     setSimliFailed]     = useState(false);
+  const [simlySpeaking,   setSimlySpeaking]   = useState(false);
+  const [audioChunk,      setAudioChunk]      = useState<Uint8Array | null>(null);
+  const [sophiaFaceReady, setSophiaFaceReady] = useState(false); // true when custom Sophia face is active
   const ttsInFlight = useRef(false);
 
   const isIntro   = step === 0;
@@ -808,10 +809,11 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
       try {
         const res = await fetch("/api/simli/token", { method: "POST" });
         if (!res.ok) throw new Error(`Simli token ${res.status}`);
-        const data = (await res.json()) as { session_token?: string; error?: string };
+        const data = (await res.json()) as { session_token?: string; face_ready?: boolean; error?: string };
         if (cancelled) return;
         if (data.session_token) {
           setSessionToken(data.session_token);
+          if (data.face_ready) setSophiaFaceReady(true);
           setSimliMode("active");
         } else {
           throw new Error(data.error ?? "no token");
@@ -1006,7 +1008,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                         letterSpacing:"0.08em", marginLeft:4,
                         textTransform:"uppercase",
                       }}>
-                        · Live
+                        · {sophiaFaceReady ? "Sophia Face" : "Live"}
                       </span>
                     )}
                   </div>
