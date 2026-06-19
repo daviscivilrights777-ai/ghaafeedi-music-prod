@@ -299,9 +299,14 @@ function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: Simli
         });
 
         // await client.start() resolves when first video frame renders (LiveKit "start" event)
-        // This is the correct moment to prime Simli and begin speaking
+        // Wrap in a timeout — if LiveKit WebRTC hangs, fall back to audio-only after 8s
         console.log("[Simli] calling client.start()…");
-        await client.start();
+        await Promise.race([
+          client.start(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Simli start() timeout after 8s")), 8000)
+          ),
+        ]);
 
         if (cancelled) return;
 
@@ -673,10 +678,20 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   }, [simliFailed, fallbackSpeak]);
 
   // Fire TTS when step changes
+  // Strategy: always fire fallback audio immediately (no waiting for Simli WebRTC).
+  // Simli lip-sync is a bonus — if it connects it picks up via speakRef queue.
   useEffect(() => {
-    fireTTS(speechLine);
+    // Always play audio immediately via fallback (guaranteed sound)
+    fallbackSpeak(speechLine).catch(e => console.warn("[SEF] fallback speak error:", e));
+    // Also attempt Simli lip-sync if ready
+    if (!simliFailed && speakRef.current) {
+      speakRef.current(speechLine).catch(e => console.warn("[SEF] simli speak error:", e));
+    } else if (!simliFailed) {
+      // Queue for when Simli connects — but fallback already played audio
+      ttsQueueRef.current = null; // don't double-play via queue
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, simliFailed]);
+  }, [step]);
 
   const handleContinue = () => {
     const newAnswers = selected ? { ...answers, [step]: selected } : answers;
@@ -813,12 +828,8 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     onReady={(speak) => {
                       speakRef.current = speak;
                       setSimliReady(true);
-                      // Drain any queued line (usually the welcome message)
-                      const queued = ttsQueueRef.current;
-                      if (queued) {
-                        ttsQueueRef.current = null;
-                        speak(queued).catch(e => console.warn("[SEF] queued speak error:", e));
-                      }
+                      // Fallback audio already played — Simli lip-sync active for future steps
+                      console.log("[SEF] Simli ready — lip-sync active from next step");
                     }}
                     onError={() => { setSimliFailed(true); }}
                   />
