@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { generateText } from "ai";
 import { gateway } from "../lib/ai";
+import { logAICall } from "../lib/braintrust";
 
 // All 14 Ghaafeedi Music products + memberships for recommendation engine
 const GM_CATALOG = [
@@ -122,6 +123,21 @@ RULES:
         model: gateway("openai/gpt-4o-mini"),
         prompt,
         maxTokens: 900,
+      });
+
+      // Log to Braintrust for fine-tuning dataset collection
+      logAICall({
+        name: "emotional-analysis",
+        model: "openai/gpt-4o-mini",
+        prompt,
+        output: text,
+        metadata: {
+          whoFor,
+          experienceType,
+          hasStory,
+          mediaCount,
+          storyLength: storyText.trim().length,
+        },
       });
 
       // Parse response

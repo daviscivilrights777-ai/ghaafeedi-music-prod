@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { auth } from "../auth";
 import { getSecret } from "../orchestration/secrets";
 import { SophiaIntroGenerator, type SophiaIntroRequest } from "../orchestration/sophia-intro-generator";
+import { logAICall } from "../lib/braintrust";
 
 const app = new Hono();
 
@@ -113,6 +114,19 @@ Keep responses under 120 words. Be warm, personal, and direct.`;
 
     const data = await response.json() as any;
     const reply = data.choices?.[0]?.message?.content?.trim() ?? "I'm here to help. Could you tell me more?";
+
+    // Log to Braintrust for fine-tuning dataset collection
+    logAICall({
+      name: "sophia-chat",
+      model: "gpt-4o-mini",
+      prompt: message.trim(),
+      output: reply,
+      metadata: {
+        userId: userId ?? "anonymous",
+        isPaidMember,
+        historyLength: history.length,
+      },
+    });
 
     const key = userId
       ? `user:${userId}:${new Date().toISOString().slice(0,10)}`

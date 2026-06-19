@@ -401,6 +401,64 @@ const GOLD2 = "#FFC24D";
 const BG = "#050B1A";
 const NAVY = "#0B1736";
 
+// ─── Video Duration Config ────────────────────────────────────────────────────
+// 5/10/15 group — cinematic-story-film, dream-ai-visualization, future-self-vision, couples-journey-film, memorial-legacy-film
+const DURATION_GROUP_A = [
+  { label: "5 min", tiers: [{ price: 79 }, { price: 129 }, { price: 199 }] },
+  { label: "10 min", tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
+  { label: "15 min", tiers: [{ price: 249 }, { price: 399 }, { price: 599 }] },
+];
+// 20/25/30 group — cinematic-life-story
+const DURATION_GROUP_B = [
+  { label: "20 min", tiers: [{ price: 349 }, { price: 549 }, { price: 799 }] },
+  { label: "25 min", tiers: [{ price: 449 }, { price: 699 }, { price: 999 }] },
+  { label: "30 min", tiers: [{ price: 599 }, { price: 899 }, { price: 1299 }] },
+];
+const VIDEO_DURATION_CONFIG: Record<string, typeof DURATION_GROUP_A> = {
+  "cinematic-story-film": DURATION_GROUP_A,
+  "dream-ai-visualization": DURATION_GROUP_A,
+  "future-self-vision": DURATION_GROUP_A,
+  "couples-journey-film": DURATION_GROUP_A,
+  "memorial-legacy-film": DURATION_GROUP_A,
+  "cinematic-life-story": DURATION_GROUP_B,
+};
+
+// ─── Duration Selector Component ──────────────────────────────────────────────
+function DurationSelector({ durations, selected, onSelect }: {
+  durations: typeof DURATION_GROUP_A;
+  selected: number;
+  onSelect: (i: number) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>Select Duration</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        {durations.map((d, i) => (
+          <button
+            key={i}
+            onClick={() => onSelect(i)}
+            style={{
+              flex: 1,
+              padding: "10px 8px",
+              borderRadius: 10,
+              border: selected === i ? `1.5px solid ${GOLD}` : "1px solid rgba(255,255,255,0.12)",
+              background: selected === i ? "rgba(212,175,55,0.1)" : "rgba(11,23,54,0.5)",
+              color: selected === i ? GOLD : "rgba(255,255,255,0.65)",
+              fontSize: 13,
+              fontWeight: selected === i ? 700 : 500,
+              cursor: "pointer",
+              fontFamily: "Inter, sans-serif",
+              boxShadow: selected === i ? "0 0 16px rgba(212,175,55,0.12)" : "none",
+              transition: "all 0.18s",
+            }}>
+            {d.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Product Detail Page ───────────────────────────────────────────────────────
 export default function ProductDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -409,6 +467,7 @@ export default function ProductDetail() {
   const { data: session } = authClient.useSession();
 
   const [selectedTier, setSelectedTier] = useState(1); // default: premium
+  const [selectedDuration, setSelectedDuration] = useState(0); // default: first duration option
   const [showAckModal, setShowAckModal] = useState(false);
   const [ackChecked, setAckChecked] = useState<boolean[]>([]);
   const [ackDone, setAckDone] = useState(false);
@@ -424,8 +483,10 @@ export default function ProductDetail() {
   useEffect(() => {
     if (!session || !product) return;
     api.acknowledgements[":productSlug"].$get({ param: { productSlug: product.slug } })
-      .then(r => r.json())
-      .then(d => { if (d.acknowledged) setAckDone(true); })
+      .then(async r => {
+        const d = await r.json() as { acknowledged?: boolean };
+        if (d.acknowledged) setAckDone(true);
+      })
       .catch(() => {});
   }, [session, product?.slug]);
 
@@ -440,7 +501,12 @@ export default function ProductDetail() {
     );
   }
 
-  const tier = product.tiers[selectedTier];
+  const durationOptions = VIDEO_DURATION_CONFIG[product.slug];
+  const activeTierPrice: number = durationOptions
+    ? (durationOptions[selectedDuration]?.tiers[selectedTier]?.price ?? product.tiers[selectedTier]?.price ?? 0)
+    : (product.tiers[selectedTier]?.price ?? 0);
+  const activeDurationLabel = durationOptions ? (durationOptions[selectedDuration]?.label ?? null) : null;
+  const tier = product.tiers[selectedTier] ?? product.tiers[0]!;
 
   const handleBeginJourney = () => {
     if (!session) {
@@ -565,6 +631,15 @@ export default function ProductDetail() {
                 </div>
               </div>
 
+              {/* Duration Selector (video products only) */}
+              {durationOptions && (
+                <DurationSelector
+                  durations={durationOptions}
+                  selected={selectedDuration}
+                  onSelect={setSelectedDuration}
+                />
+              )}
+
               {/* Tier comparison */}
               <div>
                 <h3 style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: "#FFFFFF", margin: "0 0 20px" }}>Choose Your Tier</h3>
@@ -588,7 +663,17 @@ export default function ProductDetail() {
                           <span style={{ fontFamily: "Playfair Display, serif", fontSize: 16, fontWeight: 700, color: selectedTier === i ? GOLD : "#FFFFFF" }}>{t.name}</span>
                         </div>
                         <div style={{ textAlign: "right" }}>
-                          <span style={{ fontSize: 22, fontWeight: 700, color: selectedTier === i ? GOLD : "#FFFFFF", fontFamily: "Playfair Display, serif" }}>${t.price.toLocaleString()}</span>
+                          <AnimatePresence mode="wait">
+                            <motion.span
+                              key={durationOptions ? `${selectedDuration}-${i}` : `fixed-${i}`}
+                              initial={{ opacity: 0, y: -6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: 6 }}
+                              transition={{ duration: 0.18 }}
+                              style={{ fontSize: 22, fontWeight: 700, color: selectedTier === i ? GOLD : "#FFFFFF", fontFamily: "Playfair Display, serif", display: "inline-block" }}>
+                              ${(durationOptions ? (durationOptions[selectedDuration]?.tiers[i]?.price ?? t.price) : t.price).toLocaleString()}
+                            </motion.span>
+                          </AnimatePresence>
                           <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginLeft: 4 }}>/{t.period}</span>
                         </div>
                       </div>
@@ -614,9 +699,24 @@ export default function ProductDetail() {
               <div style={{ background: "rgba(11,23,54,0.92)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 20, padding: "32px 28px", boxShadow: "0 24px 64px rgba(0,0,0,0.5), 0 0 40px rgba(212,175,55,0.06)" }}>
                 <div style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", marginBottom: 4 }}>SELECTED TIER</div>
-                  <div style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: GOLD, fontWeight: 700 }}>{tier.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: GOLD, fontWeight: 700 }}>{tier.name}</div>
+                    {activeDurationLabel && (
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", background: "rgba(212,175,55,0.08)", border: "1px solid rgba(212,175,55,0.2)", borderRadius: 20, padding: "3px 10px", fontFamily: "Inter, sans-serif" }}>{activeDurationLabel}</div>
+                    )}
+                  </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 8 }}>
-                    <span style={{ fontFamily: "Playfair Display, serif", fontSize: 36, fontWeight: 700, color: "#FFFFFF" }}>${tier.price.toLocaleString()}</span>
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={`cta-price-${selectedTier}-${selectedDuration}`}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ fontFamily: "Playfair Display, serif", fontSize: 36, fontWeight: 700, color: "#FFFFFF", display: "inline-block" }}>
+                        ${activeTierPrice.toLocaleString()}
+                      </motion.span>
+                    </AnimatePresence>
                     <span style={{ fontSize: 14, color: "rgba(255,255,255,0.5)" }}>/{tier.period}</span>
                   </div>
                   {tier.deliveryDays && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>Est. delivery: {tier.deliveryDays} business days</div>}

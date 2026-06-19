@@ -74,6 +74,24 @@ export const OpenAIAdapter: ProviderAdapter = {
       });
       if (!res.ok) throw new Error(`[OpenAI] Chat failed: ${res.status}`);
       result = await res.json();
+
+      // Log to Braintrust for fine-tuning dataset collection
+      try {
+        const { logAICall } = await import("../../../api/lib/braintrust");
+        const outputText = result?.choices?.[0]?.message?.content ?? "";
+        logAICall({
+          name: `orchestration-${job.jobType}`,
+          model: "gpt-4o",
+          prompt: userPrompt,
+          output: outputText,
+          metadata: {
+            jobId: job.id,
+            jobType: job.jobType,
+            userId: job.userId,
+            tier: job.tier,
+          },
+        });
+      } catch { /* never block job on logging */ }
     }
 
     // OpenAI is synchronous — embed result in handle

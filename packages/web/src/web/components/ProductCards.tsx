@@ -2,6 +2,63 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
 
+// ─── Duration selector configs ─────────────────────────────────────────────────
+// "5-min category" → dropdown: 5 / 10 / 15 min
+const DURATION_5_TIERS = [
+  {
+    label: "5 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$79",  compareAt: "$119", sub: "5-Min Film",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$129", compareAt: "$189", sub: "5-Min Film",  revisions: "2 Revisions", highlight: true, saving: "Save $60" },
+      { name: "ELITE",     price: "$199", compareAt: "$279", sub: "5-Min Film",  revisions: "4 Revisions" },
+    ],
+  },
+  {
+    label: "10 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$149", compareAt: "$229", sub: "10-Min Film", revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$249", compareAt: "$369", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $120" },
+      { name: "ELITE",     price: "$399", compareAt: "$549", sub: "10-Min Film", revisions: "4 Revisions" },
+    ],
+  },
+  {
+    label: "15 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$249", compareAt: "$369", sub: "15-Min Film", revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$399", compareAt: "$579", sub: "15-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $180" },
+      { name: "ELITE",     price: "$599", compareAt: "$829", sub: "15-Min Film", revisions: "4 Revisions" },
+    ],
+  },
+];
+
+// "10-min category" → dropdown: 20 / 25 / 30 min
+const DURATION_10_TIERS = [
+  {
+    label: "20 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$349", compareAt: "$519", sub: "20-Min Film", revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$549", compareAt: "$799", sub: "20-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $250" },
+      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "20-Min Film", revisions: "4 Revisions" },
+    ],
+  },
+  {
+    label: "25 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$449", compareAt: "$649", sub: "25-Min Film", revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$699", compareAt: "$999", sub: "25-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $300" },
+      { name: "ELITE",     price: "$999", compareAt: "$1,249", sub: "25-Min Film", revisions: "4 Revisions" },
+    ],
+  },
+  {
+    label: "30 Min",
+    tiers: [
+      { name: "ESSENTIAL", price: "$599", compareAt: "$849", sub: "30-Min Film", revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$899", compareAt: "$1,249", sub: "30-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $350" },
+      { name: "ELITE",     price: "$1,299", compareAt: "$1,699", sub: "30-Min Film", revisions: "4 Revisions" },
+    ],
+  },
+];
+
 const PRODUCTS = [
   {
     num: "01",
@@ -15,6 +72,7 @@ const PRODUCTS = [
       { name: "CREATOR",   price: "$39", compareAt: "$59",  sub: "5 Songs/mo",  revisions: "2 Revisions", highlight: true, saving: "Save $20" },
       { name: "PRO",       price: "$69", compareAt: "$99",  sub: "12 Songs/mo", revisions: "3 Revisions" },
     ],
+    durationOptions: null,
     includes: ["Original AI lyrics", "Cinematic orchestral scoring", "Studio-quality mix & master", "Full commercial rights", "MP3 + WAV delivery"],
     delivery: "Delivery: 3–5 Business Days",
     cta: "Start Creating",
@@ -35,6 +93,7 @@ const PRODUCTS = [
       { name: "PREMIUM",   price: "$129", compareAt: "$189", sub: "2-Min Film",  revisions: "2 Revisions", highlight: true, saving: "Save $60" },
       { name: "ELITE",     price: "$199", compareAt: "$279", sub: "2-Min Film",  revisions: "4 Revisions" },
     ],
+    durationOptions: null, // 2-min stays fixed
     includes: ["AI-generated cinematic visuals", "Original custom score", "AI voice narration", "4K MP4 master file", "Private streaming link"],
     delivery: "Delivery: 5–7 Business Days",
     cta: "Create My Film",
@@ -50,11 +109,8 @@ const PRODUCTS = [
     title: "5-Min Cinematic\nExperience",
     outcome: "A full cinematic film with AI scenes, orchestral score, and your narrative.",
     tags: ["AI Scenes", "Orchestral Score", "AI Narration", "4K Master"],
-    tiers: [
-      { name: "ESSENTIAL", price: "$149", compareAt: "$229", sub: "5-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$249", compareAt: "$369", sub: "5-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $120" },
-      { name: "ELITE",     price: "$399", compareAt: "$549", sub: "5-Min Film", revisions: "4 Revisions" },
-    ],
+    tiers: DURATION_5_TIERS[0]!.tiers, // default shown = 5 min
+    durationOptions: DURATION_5_TIERS,
     includes: ["Full AI scene generation", "Orchestral original score", "Custom narration & script", "4K master + social cuts", "Family-share vault access"],
     delivery: "Delivery: 7–10 Business Days",
     cta: "Create My Film",
@@ -70,11 +126,8 @@ const PRODUCTS = [
     title: "10-Min Cinematic\nMasterpiece",
     outcome: "The ultimate legacy — a documentary-grade production of your life story.",
     tags: ["Feature Length", "Documentary Grade", "Legacy Archive", "Unlimited Share"],
-    tiers: [
-      { name: "ESSENTIAL", price: "$299", compareAt: "$449", sub: "10-Min Film", revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$499", compareAt: "$729", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $230" },
-      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "10-Min Film", revisions: "4 Revisions" },
-    ],
+    tiers: DURATION_10_TIERS[0]!.tiers, // default shown = 20 min
+    durationOptions: DURATION_10_TIERS,
     includes: ["Documentary-grade AI production", "Full orchestral score", "Multi-chapter narration", "Unlimited family sharing", "Legacy vault + NFT option"],
     delivery: "Delivery: 10–14 Business Days",
     cta: "Start My Legacy",
@@ -106,9 +159,75 @@ function StarRating({ rating }: { rating: string }) {
   );
 }
 
+// ─── Duration pill selector ────────────────────────────────────────────────────
+function DurationSelector({
+  options,
+  selected,
+  onSelect,
+  accent,
+  rgb,
+}: {
+  options: typeof DURATION_5_TIERS;
+  selected: number;
+  onSelect: (i: number) => void;
+  accent: string;
+  rgb: string;
+}) {
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        marginBottom: 14,
+        padding: "8px 10px",
+        background: `rgba(${rgb},0.06)`,
+        border: `1px solid rgba(${rgb},0.18)`,
+        borderRadius: 10,
+      }}
+    >
+      <span style={{ fontSize: 10, fontFamily: "Inter, sans-serif", fontWeight: 700, color: `rgba(${rgb},0.65)`, letterSpacing: "0.12em", textTransform: "uppercase", marginRight: 4, whiteSpace: "nowrap" }}>
+        Duration
+      </span>
+      {options.map((opt, i) => (
+        <button
+          key={i}
+          onClick={e => { e.stopPropagation(); onSelect(i); }}
+          style={{
+            flex: 1,
+            padding: "5px 0",
+            borderRadius: 7,
+            border: selected === i ? `1.5px solid ${accent}` : "1.5px solid transparent",
+            background: selected === i ? `rgba(${rgb},0.18)` : "transparent",
+            color: selected === i ? accent : "rgba(255,255,255,0.45)",
+            fontSize: 11,
+            fontFamily: "Inter, sans-serif",
+            fontWeight: selected === i ? 700 : 500,
+            cursor: "pointer",
+            transition: "all 0.18s",
+            letterSpacing: "0.03em",
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ProductCards() {
   const [, setLocation] = useLocation();
   const [expanded, setExpanded] = useState<number | null>(null);
+  // per-card duration index (only for cards 2 & 3 which have durationOptions)
+  const [durationIdx, setDurationIdx] = useState<Record<number, number>>({ 2: 0, 3: 0 });
+
+  // Get active tiers for a card
+  function getActiveTiers(cardIdx: number) {
+    const p = PRODUCTS[cardIdx];
+    if (!p) return [];
+    if (!p.durationOptions) return p.tiers;
+    const di = durationIdx[cardIdx] ?? 0;
+    return p.durationOptions[di]?.tiers ?? p.tiers;
+  }
 
   return (
     <section style={{ padding: "96px 40px 108px", background: "#0A0B0F" }}>
@@ -173,6 +292,8 @@ export function ProductCards() {
           {PRODUCTS.map((p, i) => {
             const rgb = getAccentRGB(p.accent);
             const isExpanded = expanded === i;
+            const activeTiers = getActiveTiers(i);
+
             return (
               <motion.div
                 key={i}
@@ -223,7 +344,7 @@ export function ProductCards() {
                     #{p.num}
                   </div>
 
-                  {/* Scarcity badge — top right */}
+                  {/* Scarcity badge */}
                   <div style={{
                     position: "absolute", top: 16, right: 16,
                     display: "flex", alignItems: "center", gap: 5,
@@ -272,7 +393,6 @@ export function ProductCards() {
                     }}>
                       {p.title}
                     </h3>
-                    {/* Social proof cluster */}
                     <div style={{ flexShrink: 0, textAlign: "right" }}>
                       <StarRating rating={p.rating} />
                       <div style={{
@@ -294,7 +414,7 @@ export function ProductCards() {
                   </p>
 
                   {/* Tags */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 22 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
                     {p.tags.map((tag, ti) => (
                       <span key={ti} style={{
                         fontSize: 11, fontFamily: "Inter, sans-serif", fontWeight: 600,
@@ -309,85 +429,100 @@ export function ProductCards() {
                     ))}
                   </div>
 
-                  {/* Pricing tiers — with anchoring */}
+                  {/* Duration selector — only for cards with options */}
+                  {p.durationOptions && (
+                    <DurationSelector
+                      options={p.durationOptions}
+                      selected={durationIdx[i] ?? 0}
+                      onSelect={di => setDurationIdx(prev => ({ ...prev, [i]: di }))}
+                      accent={p.accent}
+                      rgb={rgb}
+                    />
+                  )}
+
+                  {/* Pricing tiers */}
                   <div style={{
                     display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
                     gap: 8, marginBottom: 16,
                   }}>
-                    {p.tiers.map((tier, ti) => (
-                      <div key={ti} style={{
-                        background: tier.highlight
-                          ? `linear-gradient(135deg, rgba(${rgb},0.18), rgba(${rgb},0.08))`
-                          : "rgba(255,255,255,0.03)",
-                        border: tier.highlight
-                          ? `1.5px solid rgba(${rgb},0.45)`
-                          : "1px solid rgba(255,255,255,0.07)",
-                        borderRadius: 12,
-                        padding: "12px 8px 10px",
-                        textAlign: "center",
-                        position: "relative",
-                      }}>
-                        {/* POPULAR badge */}
-                        {tier.highlight && (
-                          <div style={{
-                            position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)",
-                            background: p.accent, color: "#0A0B0F",
-                            fontSize: 8, fontFamily: "Inter, sans-serif", fontWeight: 800,
-                            letterSpacing: "0.12em", padding: "2px 8px", borderRadius: 999,
-                            whiteSpace: "nowrap",
-                          }}>POPULAR</div>
-                        )}
-
-                        <div style={{
-                          fontSize: 9, fontFamily: "Inter, sans-serif", fontWeight: 700,
-                          color: tier.highlight ? p.accent : "rgba(255,255,255,0.40)",
-                          letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 4,
-                        }}>
-                          {tier.name}
-                        </div>
-
-                        {/* Compare-at price (strikethrough) */}
-                        <div style={{
-                          fontSize: 9.5, fontFamily: "Inter, sans-serif",
-                          color: "rgba(255,255,255,0.28)",
-                          textDecoration: "line-through",
-                          lineHeight: 1, marginBottom: 2,
-                        }}>
-                          {tier.compareAt}
-                        </div>
-
-                        {/* Main price */}
-                        <div style={{
-                          fontSize: 21, fontFamily: "'Playfair Display', serif", fontWeight: 800,
-                          color: tier.highlight ? p.accent : "#fff",
-                          lineHeight: 1, marginBottom: 3,
-                        }}>
-                          {tier.price}
-                        </div>
-
-                        <div style={{ fontSize: 10, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.38)", lineHeight: 1.4 }}>
-                          {tier.sub}
-                        </div>
-                        <div style={{ fontSize: 9.5, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.30)", marginTop: 3 }}>
-                          {tier.revisions}
-                        </div>
-
-                        {/* Savings pill on highlighted tier */}
-                        {"saving" in tier && tier.saving && (
-                          <div style={{
-                            marginTop: 6,
-                            display: "inline-block",
-                            background: "rgba(34,197,94,0.15)",
-                            border: "1px solid rgba(34,197,94,0.30)",
-                            borderRadius: 999, padding: "2px 7px",
-                            fontSize: 9, fontFamily: "Inter, sans-serif", fontWeight: 700,
-                            color: "#4ADE80", letterSpacing: "0.04em",
+                    <AnimatePresence mode="wait">
+                      {activeTiers.map((tier, ti) => (
+                        <motion.div
+                          key={`${i}-${durationIdx[i] ?? 0}-${ti}`}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.18, delay: ti * 0.04 }}
+                          style={{
+                            background: tier.highlight
+                              ? `linear-gradient(135deg, rgba(${rgb},0.18), rgba(${rgb},0.08))`
+                              : "rgba(255,255,255,0.03)",
+                            border: tier.highlight
+                              ? `1.5px solid rgba(${rgb},0.45)`
+                              : "1px solid rgba(255,255,255,0.07)",
+                            borderRadius: 12,
+                            padding: "12px 8px 10px",
+                            textAlign: "center",
+                            position: "relative",
                           }}>
-                            {tier.saving}
+                          {tier.highlight && (
+                            <div style={{
+                              position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)",
+                              background: p.accent, color: "#0A0B0F",
+                              fontSize: 8, fontFamily: "Inter, sans-serif", fontWeight: 800,
+                              letterSpacing: "0.12em", padding: "2px 8px", borderRadius: 999,
+                              whiteSpace: "nowrap",
+                            }}>POPULAR</div>
+                          )}
+
+                          <div style={{
+                            fontSize: 9, fontFamily: "Inter, sans-serif", fontWeight: 700,
+                            color: tier.highlight ? p.accent : "rgba(255,255,255,0.40)",
+                            letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 4,
+                          }}>
+                            {tier.name}
                           </div>
-                        )}
-                      </div>
-                    ))}
+
+                          <div style={{
+                            fontSize: 9.5, fontFamily: "Inter, sans-serif",
+                            color: "rgba(255,255,255,0.28)",
+                            textDecoration: "line-through",
+                            lineHeight: 1, marginBottom: 2,
+                          }}>
+                            {tier.compareAt}
+                          </div>
+
+                          <div style={{
+                            fontSize: 21, fontFamily: "'Playfair Display', serif", fontWeight: 800,
+                            color: tier.highlight ? p.accent : "#fff",
+                            lineHeight: 1, marginBottom: 3,
+                          }}>
+                            {tier.price}
+                          </div>
+
+                          <div style={{ fontSize: 10, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.38)", lineHeight: 1.4 }}>
+                            {tier.sub}
+                          </div>
+                          <div style={{ fontSize: 9.5, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.30)", marginTop: 3 }}>
+                            {tier.revisions}
+                          </div>
+
+                          {"saving" in tier && tier.saving && (
+                            <div style={{
+                              marginTop: 6,
+                              display: "inline-block",
+                              background: "rgba(34,197,94,0.15)",
+                              border: "1px solid rgba(34,197,94,0.30)",
+                              borderRadius: 999, padding: "2px 7px",
+                              fontSize: 9, fontFamily: "Inter, sans-serif", fontWeight: 700,
+                              color: "#4ADE80", letterSpacing: "0.04em",
+                            }}>
+                              {tier.saving}
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
 
                   {/* What's included — expandable */}
@@ -400,29 +535,19 @@ export function ProductCards() {
                         cursor: "pointer", padding: 0, width: "100%",
                       }}
                     >
-                      <div style={{
-                        flex: 1, height: 1,
-                        background: `linear-gradient(to right, rgba(${rgb},0.20), transparent)`,
-                      }} />
+                      <div style={{ flex: 1, height: 1, background: `linear-gradient(to right, rgba(${rgb},0.20), transparent)` }} />
                       <span style={{
                         fontSize: 11.5, fontFamily: "Inter, sans-serif", fontWeight: 600,
-                        color: `rgba(${rgb},0.80)`, letterSpacing: "0.05em",
-                        whiteSpace: "nowrap",
+                        color: `rgba(${rgb},0.80)`, letterSpacing: "0.05em", whiteSpace: "nowrap",
                       }}>
                         What's included
                       </span>
                       <motion.span
                         animate={{ rotate: isExpanded ? 180 : 0 }}
                         transition={{ duration: 0.22 }}
-                        style={{
-                          display: "inline-block", fontSize: 10,
-                          color: `rgba(${rgb},0.70)`,
-                        }}
+                        style={{ display: "inline-block", fontSize: 10, color: `rgba(${rgb},0.70)` }}
                       >▼</motion.span>
-                      <div style={{
-                        flex: 1, height: 1,
-                        background: `linear-gradient(to left, rgba(${rgb},0.20), transparent)`,
-                      }} />
+                      <div style={{ flex: 1, height: 1, background: `linear-gradient(to left, rgba(${rgb},0.20), transparent)` }} />
                     </button>
 
                     <AnimatePresence>
@@ -434,10 +559,7 @@ export function ProductCards() {
                           transition={{ duration: 0.28, ease: "easeInOut" }}
                           style={{ overflow: "hidden" }}
                         >
-                          <div style={{
-                            paddingTop: 14,
-                            display: "flex", flexDirection: "column", gap: 8,
-                          }}>
+                          <div style={{ paddingTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                             {p.includes.map((item, ii) => (
                               <div key={ii} style={{ display: "flex", alignItems: "center", gap: 9 }}>
                                 <div style={{
@@ -450,10 +572,7 @@ export function ProductCards() {
                                     <path d="M2 6l3 3 5-5" stroke={p.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                                   </svg>
                                 </div>
-                                <span style={{
-                                  fontSize: 12.5, fontFamily: "Inter, sans-serif",
-                                  color: "rgba(255,255,255,0.62)", lineHeight: 1.4,
-                                }}>
+                                <span style={{ fontSize: 12.5, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.62)", lineHeight: 1.4 }}>
                                   {item}
                                 </span>
                               </div>
@@ -464,7 +583,7 @@ export function ProductCards() {
                     </AnimatePresence>
                   </div>
 
-                  {/* CTA — gold gradient for primary action */}
+                  {/* CTA */}
                   <button
                     onClick={e => { e.stopPropagation(); setLocation(p.href); }}
                     style={{
@@ -492,7 +611,6 @@ export function ProductCards() {
                     <span style={{ fontSize: 16 }}>→</span>
                   </button>
 
-                  {/* Trust micro-line */}
                   <div style={{
                     textAlign: "center", marginTop: 10,
                     fontSize: 11, fontFamily: "Inter, sans-serif",
@@ -531,7 +649,7 @@ export function ProductCards() {
               (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.12)";
             }}
           >
-            View All 14 Products
+            View All 15 Products
             <span style={{ fontSize: 16 }}>⬡</span>
           </a>
         </motion.div>
