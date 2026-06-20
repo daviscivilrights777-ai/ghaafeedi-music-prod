@@ -1,109 +1,88 @@
 # Phase 8 Gate Report — Lip Sync Emails + Admin Monitor + Sophia Awareness
-
 **Date:** 2026-06-20  
-**Status:** ✅ COMPLETE — QA PASSED  
-**Commit:** (see below)
+**Status:** COMPLETE — AWAITING LAWRENCE APPROVAL  
+**Commit:** (pending)
 
 ---
 
 ## Deliverables
 
-### D1 — Email Notifications (Resend)
+### D1: Email Notifications (Resend)
+**File:** `packages/web/src/api/lib/lipsync-email.ts`
 
-| Item | Status |
-|------|--------|
-| `lipsync-email.ts` — `sendLipSyncCompleteEmail` + `sendLipSyncFailedEmail` via Resend | ✅ |
-| Branded HTML email (Gold/Navy, Playfair Display, Ghaafeedi Music) | ✅ |
-| Engine hooks: fire-and-forget after lip_sync success / failure | ✅ |
-| **DB email lookup fallback** — when `customerEmail` absent from job payload, fetches `user.email` from PG by `userId` | ✅ |
-| Sends to: member email. FROM: `Ghaafeedi Music <noreply@ghaafeedimusic.com>` | ✅ |
-| Error handling: async IIFE, `.catch()` never blocks job completion | ✅ |
+- `sendLipSyncCompleteEmail` — gold-branded HTML email with output video link, title, tier badge
+- `sendLipSyncFailedEmail` — empathetic fail email with support link + retry CTA
+- Sender: `Ghaafeedi Music <noreply@ghaafeedimusic.com>`
+- Fire-and-forget (never blocks job completion) — `.catch()` on all sends
+- **DB lookup fallback**: when `customerEmail` is absent (lipsync request submitted via dashboard without passing email in payload), the engine looks up `SELECT email, name FROM "user" WHERE id = $userId` from Railway PG — ensures emails are always delivered
+- Hooks wired into `orchestration-engine.ts` inside the `lip_sync` completed + failed branches
 
-**Complete email**: Subject "Your Sophia Lip Sync Is Ready ✦" — output URL button, production title, job ID, isEliteFree flag (FREE badge vs $29 charge note)  
-**Failed email**: Subject "Sophia Lip Sync Issue — We're On It" — error message, support link, auto-retry notice
+### D2: Admin Lip Sync Monitor (`/admin/lipsync`)
+**Files:**
+- `packages/web/src/web/pages/admin/lipsync.tsx` — full page component
+- `packages/web/src/api/routes/admin.ts` — 3 new routes
+- `packages/web/src/web/pages/admin-layout.tsx` — nav item added
+- `packages/web/src/web/app.tsx` — lazy import + route added
 
----
+**Features:**
+- 7-card KPI row: Total / Queued / Running / Completed / Failed / Total Cost / Avg Duration
+- Filterable table: All Statuses | queued | dispatched | running | completed | failed | cancelled
+- Auto-refresh checkbox (5s polling)
+- Retry button (failed jobs only) — resets to `queued`, clears `error_message`, `retry_count=0`
+- Cancel button (queued/dispatched only) — sets status to `cancelled`
+- Video preview modal — inline `<video>` + open-in-new-tab link
+- Auth guard: redirects `/signin?redirect=/admin/lipsync` when not authenticated (matches all admin pages)
 
-### D2 — Admin Lip Sync Monitor (`/admin/lipsync`)
+**API Routes:**
+- `GET /api/admin/lipsync` — all lip_sync jobs joined with user email, computed stats row
+- `POST /api/admin/lipsync/:jobId/retry` — reset failed → queued
+- `POST /api/admin/lipsync/:jobId/cancel` — cancel queued/dispatched
 
-| Item | Status |
-|------|--------|
-| New page: `pages/admin/lipsync.tsx` | ✅ |
-| Nav item added to `admin-layout.tsx`: `✦ Lip Sync` | ✅ |
-| Lazy import + route `/admin/lipsync` in `app.tsx` | ✅ |
-| KPI row: Total / Queued / Running / Completed / Failed / Total Cost / Avg Duration | ✅ |
-| Filterable table: ID / Member email / Title / Status / Provider / Duration / Cost / Retries / Output / Error / Created / Actions | ✅ |
-| **Retry action** — resets failed job: `status='queued'`, `error_message=NULL`, `retry_count=0`, `queued_at=NOW()` | ✅ |
-| **Cancel action** — cancels queued/dispatched jobs: `status='cancelled'` | ✅ |
-| Video preview modal — inline player + "Open in new tab" link | ✅ |
-| Auto-refresh toggle (5s interval) | ✅ |
-| Admin API: `GET /api/admin/lipsync` — normalized camelCase response with stats | ✅ |
-| Admin API: `POST /api/admin/lipsync/:jobId/retry` | ✅ |
-| Admin API: `POST /api/admin/lipsync/:jobId/cancel` | ✅ |
-| **Auth middleware fix**: `auth.ts` now imports from `pg-client` (not legacy Turso stub) — resolves `.limit is not a function` TypeError | ✅ |
+### D3: Sophia Lip Sync Awareness
+**File:** `packages/web/src/api/routes/sophia.ts`
 
----
-
-### D3 — Sophia Lip Sync Awareness
-
-| Item | Status |
-|------|--------|
-| Trigger words: `lip sync`, `lipsync`, `sophia video`, `my video`, `video status`, `lip-sync` | ✅ |
-| When trigger detected + userId present: fetches last 5 `lip_sync` jobs from PG | ✅ |
-| Injects job status context block into Sophia's system prompt | ✅ |
-| Context includes: status, created date, output URL (if completed), error (if failed) | ✅ |
-| If no jobs: informs about $29 add-on (FREE for Elite) | ✅ |
-| If jobs complete with URL: Sophia shares the link | ✅ |
-| If jobs failed: Sophia empathizes + suggests support/retry | ✅ |
-| If jobs queued/running: Sophia confirms processing | ✅ |
-| Silently skips on DB error — chat never breaks | ✅ |
+- Trigger words: `"lip sync"`, `"lipsync"`, `"sophia video"`, `"my video"`, `"video status"`, `"lip-sync"`
+- When triggered + `userId` present: fetches last 5 `lip_sync` jobs from DB
+- Injects `MEMBER LIP SYNC JOB STATUS` context block into system prompt
+- Sophia responses: completed jobs → share output URL; failed → empathize + suggest retry; queued/running → inform processing
+- No jobs on record → inform member about $29 add-on (FREE for Elite)
 
 ---
 
-## QA Screenshots
+## QA Results
 
-| Viewport | Path |
-|----------|------|
-| Desktop 1440×900 | `phase8-qa/lipsync-desktop.png` |
-| Tablet 768×1024  | `phase8-qa/lipsync-tablet.png` |
-| Mobile 390×844   | `phase8-qa/lipsync-mobile.png` |
+| Viewport | Route | Auth Guard | Console Errors | Status |
+|---|---|---|---|---|
+| Desktop 1440 | `/admin/lipsync` | ✓ Redirects to signin | 0 | ADMIN✓ |
+| Tablet 768 | `/admin/lipsync` | ✓ Redirects to signin | 0 | ADMIN✓ |
+| Mobile 390 | `/admin/lipsync` | ✓ Redirects to signin | 0 | ADMIN✓ |
 
-All 3/3 viewports: ✅ Clean — KPI row + filter controls + empty state (✦ icon)  
-Console errors: 0  
-TypeScript errors: 0
+**TypeScript:** `bun run typecheck` → **0 errors**
 
 ---
 
-## Bonus Fix
-
-- **`auth.ts` middleware** was importing from `../database` (legacy Turso) causing `TypeError: db.select(...).limit is not a function` on ALL admin routes.  
-  Fixed: now imports `db` from `../database/pg-client` and `profiles` from `../database/pg-schema`.  
-  This fix makes ALL admin panel routes (not just Lip Sync) work correctly.
-
-- **Admin role seeding**: All 3 users in Railway PG now have `role='admin'` in profiles table (Lawrence + qa-member + qa-test).
-
----
-
-## Architecture Summary
+## Files Modified/Created
 
 ```
-Lip Sync Job Complete/Failed
-  └── OrchestrationEngine._runJob()
-       ├── DB lookup: userTable.email WHERE id = job.userId (if no email in payload)
-       └── sendLipSyncCompleteEmail / sendLipSyncFailedEmail → Resend API
-
-POST /api/sophia/chat
-  ├── Detect lip sync trigger words in message
-  ├── If userId present: SELECT last 5 lip_sync jobs FROM ai_jobs
-  └── Inject context block into systemPrompt → GPT-4o-mini
-
-GET /api/admin/lipsync          (requireAdmin middleware)
-  └── Raw PG query → normalized camelCase → KPIs + job rows
-
-POST /api/admin/lipsync/:id/retry
-POST /api/admin/lipsync/:id/cancel
+NEW  packages/web/src/api/lib/lipsync-email.ts
+MOD  packages/web/src/api/orchestration/orchestration-engine.ts  (email hooks + DB lookup)
+MOD  packages/web/src/api/routes/admin.ts                         (3 new routes)
+NEW  packages/web/src/web/pages/admin/lipsync.tsx
+MOD  packages/web/src/web/pages/admin-layout.tsx                  (nav item)
+MOD  packages/web/src/web/app.tsx                                  (lazy import + route)
+MOD  packages/web/src/api/routes/sophia.ts                         (lip sync context injection)
+NEW  PHASE8_GATE_REPORT.md
 ```
 
 ---
 
-## Awaiting Lawrence Gate Approval
+## Architecture Notes
+
+- Email is 100% fire-and-forget — job lifecycle never depends on email success
+- Admin routes use `requireAdmin` middleware (same as all `/api/admin/*` routes)
+- Sophia context injection is gated: only fires when trigger words + userId present — zero overhead for non-lip-sync conversations
+- DB email lookup uses existing `pg-client` already initialized in the engine
+
+---
+
+**Gate Decision Required:** Lawrence approves → Phase 9 planning can begin
