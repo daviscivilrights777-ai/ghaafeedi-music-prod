@@ -841,15 +841,32 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               <button
                 onClick={handleEnter}
                 style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: "clamp(10px,0.88vw,12px)",
-                  color: "rgba(255,255,255,0.28)", fontFamily: "Inter,sans-serif",
-                  letterSpacing: "0.10em", textTransform: "uppercase",
-                  padding: "6px 0", transition: "color 160ms",
+                  background: "rgba(212,175,55,0.12)",
+                  border: "1px solid rgba(212,175,55,0.45)",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: "clamp(11px,0.95vw,13px)",
+                  color: "#D4AF37",
+                  fontFamily: "Inter,sans-serif",
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  padding: "8px 18px",
+                  transition: "all 160ms",
+                  boxShadow: "0 0 12px rgba(212,175,55,0.15)",
+                  whiteSpace: "nowrap",
                 }}
-                onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.55)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.28)")}
-              >Skip →</button>
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "rgba(212,175,55,0.22)";
+                  e.currentTarget.style.boxShadow = "0 0 20px rgba(212,175,55,0.35)";
+                  e.currentTarget.style.borderColor = "rgba(212,175,55,0.75)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "rgba(212,175,55,0.12)";
+                  e.currentTarget.style.boxShadow = "0 0 12px rgba(212,175,55,0.15)";
+                  e.currentTarget.style.borderColor = "rgba(212,175,55,0.45)";
+                }}
+              >Skip Intro →</button>
             </div>
           </div>
 

@@ -1,17 +1,18 @@
 /**
  * GHAAFEEDI MUSIC — Homepage
  * ══════════════════════════════════════════════════════════════════
- * Entry flow (every visit):
- *   1. SophiaEntryFlow — Sophia AI guides customer through 5-act
- *      conversion flow with live lip sync (Simli + ElevenLabs)
- *   2. onComplete(path) → "onboarding" | "products" | "home"
+ * Entry flow (MANDATORY for every visitor — logged-in or not):
+ *   1. SophiaEntryFlow — Sophia greets every visitor with a prominent
+ *      Skip button so returning users can bypass immediately.
+ *   2. onComplete() → stage "home"
  *
- * Old EntryGate + SplashLandingPage replaced. Archived, not deleted.
+ * Back-button protection: logged-in users navigating back from
+ * /dashboard are redirected to /dashboard (not back here).
+ * That logic lives in dashboard.tsx, NOT here.
  */
-import { useState, useEffect, Suspense, lazy } from "react";
+import { useState, Suspense, lazy } from "react";
 import { SophiaEntryFlow } from "../components/SophiaEntryFlow";
 import { useLocation } from "wouter";
-import { authClient } from "../lib/authClient";
 
 // Lazy-load everything below the fold
 const Navbar              = lazy(() => import("../components/Navbar").then(m => ({ default: m.Navbar })));
@@ -27,27 +28,14 @@ const Footer              = lazy(() => import("../components/Footer").then(m => 
 const StickyCtaBar        = lazy(() => import("../components/StickyCtaBar").then(m => ({ default: m.StickyCtaBar })));
 const SocialProofToast    = lazy(() => import("../components/SocialProofToast").then(m => ({ default: m.SocialProofToast })));
 
-type Stage = "checking" | "sophia" | "home";
+type Stage = "sophia" | "home";
 
 export default function Index() {
-  // Start as "checking" — determine if user is already logged in before showing Sophia
-  const [stage, setStage] = useState<Stage>("checking");
+  // Sophia is mandatory for EVERY visitor — skip logic is inside SophiaEntryFlow via the Skip button
+  const [stage, setStage] = useState<Stage>("sophia");
   const [, setLocation] = useLocation();
-  const { data: session, isPending } = authClient.useSession();
 
-  useEffect(() => {
-    if (isPending) return; // still loading auth state
-    if (session?.user) {
-      // Logged-in user — skip Sophia, go straight to homepage
-      // Use replaceState so the homepage doesn't stack behind dashboard in history
-      window.history.replaceState(null, "", "/");
-      setStage("home");
-    } else {
-      setStage("sophia");
-    }
-  }, [session, isPending]);
-
-  const handleComplete = (path: "onboarding" | "products" | "home") => {
+  const handleComplete = (path?: "onboarding" | "products" | "home") => {
     if (path === "onboarding") {
       setStage("home");
       setTimeout(() => setLocation("/onboarding"), 80);
@@ -61,14 +49,9 @@ export default function Index() {
     setStage("home");
   };
 
-  // Brief blank while checking auth
-  if (stage === "checking") {
-    return <div style={{ background: "#050B1A", minHeight: "100vh" }} />;
-  }
-
   return (
     <>
-      {/* ── Sophia Entry Flow (new visitors only) ── */}
+      {/* ── Sophia Entry Flow — mandatory for ALL visitors, has prominent Skip button ── */}
       {stage === "sophia" && (
         <SophiaEntryFlow onComplete={handleComplete} />
       )}

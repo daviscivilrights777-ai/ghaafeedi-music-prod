@@ -118,6 +118,23 @@ export default function Dashboard() {
     if (t && NAV.find(n => n.id === t)) setTab(t);
   }, []);
 
+  // Back-button guard: push an extra history entry so that pressing Back
+  // while on /dashboard stays on /dashboard (not Sophia / homepage).
+  // This only fires once on mount.
+  useEffect(() => {
+    // Push a duplicate /dashboard entry so browser Back stays here
+    window.history.pushState({ dashboardGuard: true }, "", "/dashboard");
+    const handlePop = (e: PopStateEvent) => {
+      // If back was pressed and the state does NOT have dashboardGuard,
+      // the user is trying to go before /dashboard — push them back.
+      if (!e.state?.dashboardGuard) {
+        window.history.pushState({ dashboardGuard: true }, "", "/dashboard");
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
+
   useEffect(() => {
     if (isPending) return;
     if (!session) { setLocation("/signin?redirect=/dashboard"); return; }
@@ -176,9 +193,10 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     await authClient.signOut();
     clearToken();
-    // Replace history so back button after sign-out doesn't return to dashboard
-    window.history.replaceState(null, "", "/");
-    setLocation("/");
+    // After sign-out go to signin — replaceState so back never returns to dashboard
+    // (and never accidentally loops through Sophia landing page)
+    window.history.replaceState(null, "", "/signin");
+    setLocation("/signin");
   };
 
   const copyMemberId = () => {
