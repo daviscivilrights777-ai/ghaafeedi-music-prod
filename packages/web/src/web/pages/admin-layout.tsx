@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { path: "/admin/orders",     label: "Orders",       icon: "◎" },
   { path: "/admin/productions",label: "Productions",  icon: "⬡" },
   { path: "/admin/ai-jobs",    label: "AI Jobs",      icon: "◇" },
+  { path: "/admin/lipsync",    label: "Lip Sync",     icon: "✦" },
   { path: "/admin/revenue",    label: "Revenue",      icon: "◈" },
   { path: "/admin/support",    label: "Support",      icon: "◉" },
   { path: "/admin/audit-logs", label: "Audit Logs",   icon: "≡" },

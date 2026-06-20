@@ -347,4 +347,119 @@ export const admin = new Hono()
     const pool  = (db as any).$client;
     const res   = await pool.query(`SELECT * FROM automation_runs ORDER BY started_at DESC LIMIT $1`, [limit]);
     return c.json({ runs: res.rows }, 200);
+  })
+
+  // ─── GET /api/admin/lipsync ── Phase 8 ────────────────────────────────────
+  // All lip_sync jobs across all members, with user email joined
+  .get("/lipsync", async (c) => {
+    const status = c.req.query("status") ?? "";
+    const limit  = Math.min(parseInt(c.req.query("limit") ?? "100"), 500);
+    const pool   = (db as any).$client;
+
+    const whereClause = status
+      ? `AND aj.status = $2`
+      : "";
+    const params: unknown[] = status ? [limit, status] : [limit];
+
+    const res = await pool.query(
+      `SELECT aj.id, aj.user_id, aj.order_id, aj.status, aj.provider, aj.queued_at,
+              aj.completed_at, aj.actual_cost_cents, aj.error_message, aj.retry_count,
+              aj.output_payload, aj.duration_seconds,
+              u.email AS member_email, u.name AS member_name
+       FROM ai_jobs aj
+       LEFT JOIN "user" u ON u.id = aj.user_id
+       WHERE aj.job_type = 'lip_sync'
+       ${whereClause}
+       ORDER BY aj.queued_at DESC
+       LIMIT $1`,
+      params
+    );
+
+    const rows = res.rows ?? [];
+
+    // Normalize to camelCase for frontend
+    const jobs = rows.map((r: any) => {
+      const out = r.output_payload as Record<string, unknown> | null;
+      return {
+        id:             r.id,
+        userId:         r.user_id,
+        orderId:        r.order_id,
+        status:         r.status,
+        provider:       r.provider,
+        costCents:      r.actual_cost_cents,
+        durationMs:     r.duration_seconds != null ? Math.round(r.duration_seconds * 1000) : null,
+        errorMessage:   r.error_message,
+        retryCount:     r.retry_count,
+        outputUrl:      (out?.outputUrl ?? out?.output_url ?? out?.r2Url ?? out?.r2_url ?? null) as string | null,
+        createdAt:      r.queued_at,
+        completedAt:    r.completed_at,
+        userEmail:      r.member_email,
+        memberName:     r.member_name,
+        productionTitle: (r.input_payload as any)?.productionTitle ?? (r.input_payload as any)?.title ?? null,
+      };
+    });
+
+    // Stats
+    const total         = jobs.length;
+    const queued        = jobs.filter(j => j.status === "queued").length;
+    const running       = jobs.filter(j => j.status === "running" || j.status === "dispatched").length;
+    const completed     = jobs.filter(j => j.status === "completed" || j.status === "complete").length;
+    const failed        = jobs.filter(j => j.status === "failed").length;
+    const totalCostCents = jobs.reduce((s, j) => s + (j.costCents ?? 0), 0);
+    const durations     = jobs.filter(j => j.durationMs != null).map(j => j.durationMs as number);
+    const avgDurationMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+
+    return c.json({
+      jobs,
+      stats: { total, queued, running, completed, failed, totalCostCents, avgDurationMs },
+    }, 200);
+  })
+
+  // ─── POST /api/admin/lipsync/:jobId/retry ── Phase 8 ─────────────────────
+  .post("/lipsync/:jobId/retry", async (c) => {
+    const { jobId } = c.req.param();
+    const pool = (db as any).$client;
+
+    // Get the failed job
+    const res = await pool.query(
+      `SELECT * FROM ai_jobs WHERE id = $1 AND job_type = 'lip_sync'`,
+      [jobId]
+    );
+    const job = res.rows?.[0];
+    if (!job) return c.json({ error: "Job not found" }, 404);
+    if (job.status !== "failed" && job.status !== "cancelled") {
+      return c.json({ error: "Only failed or cancelled jobs can be retried" }, 400);
+    }
+
+    // Reset job to queued
+    await pool.query(
+      `UPDATE ai_jobs SET status = 'queued', error_message = NULL, retry_count = 0,
+       completed_at = NULL, queued_at = NOW() WHERE id = $1`,
+      [jobId]
+    );
+
+    return c.json({ ok: true, jobId, message: "Job re-queued for processing" }, 200);
+  })
+
+  // ─── POST /api/admin/lipsync/:jobId/cancel ── Phase 8 ───────────────────
+  .post("/lipsync/:jobId/cancel", async (c) => {
+    const { jobId } = c.req.param();
+    const pool = (db as any).$client;
+
+    const res = await pool.query(
+      `SELECT status FROM ai_jobs WHERE id = $1 AND job_type = 'lip_sync'`,
+      [jobId]
+    );
+    const job = res.rows?.[0];
+    if (!job) return c.json({ error: "Job not found" }, 404);
+    if (job.status !== "queued" && job.status !== "dispatched") {
+      return c.json({ error: "Only queued or dispatched jobs can be cancelled" }, 400);
+    }
+
+    await pool.query(
+      `UPDATE ai_jobs SET status = 'cancelled', completed_at = NOW() WHERE id = $1`,
+      [jobId]
+    );
+
+    return c.json({ ok: true, jobId, message: "Job cancelled" }, 200);
   });

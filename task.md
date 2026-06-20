@@ -1,47 +1,59 @@
-# ACPI Implementation — Task Tracker
-Updated: 2026-06-19
+# Phase 8 — Lip Sync Email Delivery + Admin Monitor + Sophia Chat Awareness
 
-## Status
-- [x] Phase 7 — Story Bible + Production Bible (COMPLETE, commit 33a2cca)
-- [ ] Phase 8 — Clip Batch (IN PROGRESS)
-- [ ] Phase 9 — Edit Assembly + QC
-- [ ] Phase 10 — Delivery + Style Memory
+## Status: IN PROGRESS
 
-## Phase 8 TODO
-- [ ] Extend FAL.ai adapter for clip_batch job dispatch (Kling + Hailuo models)
-- [ ] Handle parallel clip_batch jobs (PipelineOrchestrator.allClipsComplete check)
-- [ ] Update orchestration-engine.ts: when ALL clip_batch jobs for a pipelineRunId complete → dispatch edit_assemble
-- [ ] Write OpenAI story_bible handler in engine (short-circuit like sophia_intro)
-- [ ] Write OpenAI production_bible handler in engine (Claude if ANTHROPIC_API_KEY, else GPT-4o)
-- [ ] Write OpenAI shot_list handler in engine (Claude if ANTHROPIC_API_KEY, else GPT-4o)
+## Scope (3 deliverables)
 
-## Phase 9 TODO
-- [ ] packages/web/src/api/orchestration/adapters/ffmpeg-modal.adapter.ts
-- [ ] OpenAI adapter: add qc_check job type handling
-- [ ] Activate quality_review in engine (3rd QC fail → quality_review)
-- [ ] Register ffmpeg-modal adapter in adapters/index.ts
+### D1: Email Delivery Notifications (Resend)
+- Trigger: when lip_sync job transitions to `complete` or `failed`
+- Hook into orchestration engine worker event or poll-based checker
+- Email template: cinematic dark HTML (Ghaafeedi brand), gold CTA
+  - Complete: "Your Sophia Lip Sync is Ready" — preview link + download button
+  - Failed: "Lip Sync Issue — We're On It" — retry link + support link
+- Route: worker.ts listens for job status change → calls Resend
+- Resend API key: re_E1QtSiUu_9u85HapTabWqUE7TPb1JNYqu
+- From: "Ghaafeedi Music <noreply@ghaafeedimusic.com>"
 
-## Phase 10 TODO
-- [ ] R2 upload helper in engine (deliver job type)
-- [ ] pgvector style_embeddings table + migration 008
-- [ ] Signed URLs (48h expiry)
-- [ ] Enhance n8n workflow 3 with delivery URL
+### D2: Admin Panel Lip Sync Monitor Tab
+- New tab in admin panel: "Lip Sync Jobs"
+- Route: /admin/lipsync
+- Table: all lip_sync jobs across all users, columns: jobId / member / status / provider / queued / cost / output link
+- Filters: status (all/pending/processing/complete/failed)
+- Actions: retry (re-queue failed), cancel (pending only)
+- Stats row: total / complete / pending / failed / avg processing time
 
-## Key Decisions
-- No Temporal/Kafka/K8s — PG+Redis job chaining
-- Claude 3.5 Sonnet for production_bible + shot_list (GPT-4o fallback)
-- Social Ready Clips skips pipeline — direct video job
-- maxShots: Starter=1, Premium=3, Elite=6
-- QC max retries = 2, then quality_review (admin)
-- FFmpeg via Modal GPU (ghaafeedi_assemble.py)
-- Delivery via R2, signed URLs 48h
+### D3: Sophia Chat Awareness
+- Sophia companion chat (existing) gains context about member's lip sync jobs
+- When member asks about lip sync status → Sophia returns real data
+- System prompt injection: inject lipsyncJobs[] summary into Sophia's context
+- Trigger phrases: "lip sync", "sophia video", "my video", "lipsync status"
+- Response: job count, latest status, output URL if complete, ETA if pending
 
-## Environment
-- Dev: tmux `dev`, port 4200
-- API: port 3000 (HMR via vite dev server)
-- DB: Railway PG live
-- Git HEAD: 33a2cca
+## Build Order
+1. D2 Admin tab (no external deps, fastest)
+2. D1 Email notifications (Resend integration)
+3. D3 Sophia awareness (requires D1 complete for full context)
 
-## Pipeline Columns (migration 007 — LIVE on Railway PG)
-ai_jobs: parent_job_id, pipeline_run_id, pipeline_stage, stage_outputs (JSONB)
-Indexes: idx_ai_jobs_pipeline_run_id, idx_ai_jobs_pipeline_stage, idx_ai_jobs_parent_job_id
+## Files to touch
+- packages/web/src/api/routes/admin.ts (D2)
+- packages/web/src/web/pages/admin.tsx (D2)
+- packages/web/src/api/orchestration/worker.ts (D1)
+- packages/web/src/api/routes/email.ts (D1 — new or existing)
+- packages/web/src/api/routes/sophia.ts (D3)
+
+## QA Checkpoints
+- 0 TS errors
+- Admin lipsync tab: desktop/tablet/mobile (3 shots)
+- Email HTML preview (mb screenshot of template)
+- Sophia chat responds to "what's my lip sync status" with job data
+- Git commit + push → Render auto-deploy
+- Gate report: PHASE8_GATE_REPORT.md
+
+## Done
+- [ ] D2 Admin tab
+- [ ] D1 Email notifications
+- [ ] D3 Sophia awareness
+- [ ] TS check clean
+- [ ] QA screenshots
+- [ ] Gate report
+- [ ] Git commit + push

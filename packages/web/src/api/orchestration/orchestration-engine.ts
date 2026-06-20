@@ -15,7 +15,7 @@ import { EntitlementValidator, type ProductType } from "./entitlement-validator"
 import { BillingEmitter } from "./billing-emitter";
 import { EventBus, EVENTS } from "./event-bus";
 import { db } from "../database/pg-client";
-import { aiJobs } from "../database/pg-schema";
+import { aiJobs, user as userTable } from "../database/pg-schema";
 import { eq, sql } from "drizzle-orm";
 import type { QueueTier } from "./redis-client";
 import { n8nDispatcher } from "./n8n-dispatcher";
@@ -25,6 +25,7 @@ import type { ProductionBible } from "./schemas/production-bible.schema";
 import type { ShotList } from "./schemas/shot-list.schema";
 import type { ProductionTier } from "./schemas/production-bible.schema";
 import { deliverProduction, saveStyleEmbedding } from "./delivery";
+import { sendLipSyncCompleteEmail, sendLipSyncFailedEmail } from "../lib/lipsync-email";
 
 // --- Types ------------------------------------------------------------------
 
@@ -693,6 +694,38 @@ export class OrchestrationEngine {
         this._fireWebhook(webhookUrl, { jobId: job.jobId, status: "complete", outputPayload }).catch(console.error);
       }
 
+      // ── Phase 8: Lip Sync completion email ───────────────────────────────────
+      if (job.jobType === "lip_sync") {
+        (async () => {
+          try {
+            const inp = job.inputPayload as Record<string, unknown>;
+            const out = (outputPayload ?? {}) as Record<string, unknown>;
+            let memberEmail = (inp?.customerEmail ?? inp?.email ?? "") as string;
+            let memberName  = (inp?.customerName  ?? inp?.name  ?? "Member") as string;
+            // Fallback: look up user email from DB if not in payload
+            if (!memberEmail && job.userId) {
+              const [row] = await db.select({ email: userTable.email, name: userTable.name })
+                .from(userTable).where(eq(userTable.id, job.userId)).limit(1);
+              if (row) { memberEmail = row.email; memberName = row.name ?? "Member"; }
+            }
+            if (memberEmail) {
+              await sendLipSyncCompleteEmail({
+                to:               memberEmail,
+                memberName,
+                jobId:            job.jobId,
+                orderId:          job.orderId,
+                productionTitle:  (inp?.productionTitle ?? inp?.title ?? "") as string | undefined,
+                outputUrl:        (out.outputUrl ?? out.output_url ?? out.r2Url ?? out.r2_url ?? "") as string | undefined,
+                isEliteFree:      !!(inp?.isEliteFree),
+              });
+            }
+          } catch (e) {
+            console.warn("[OrchestrationEngine] lip_sync complete email failed:", (e as Error).message);
+          }
+        })();
+      }
+      // ─────────────────────────────────────────────────────────────────────────
+
       console.log(`[OrchestrationEngine] job=${job.jobId} COMPLETE in ${durationMs}ms via ${actualProvider}`);
     } else {
       await JobStateMachine.transition(job.jobId, "failed", { errorMessage: lastError, retryCount: attempt });
@@ -726,6 +759,36 @@ export class OrchestrationEngine {
       if (webhookUrl) {
         this._fireWebhook(webhookUrl, { jobId: job.jobId, status: "failed", error: lastError }).catch(console.error);
       }
+
+      // ── Phase 8: Lip Sync failure email ──────────────────────────────────────
+      if (job.jobType === "lip_sync") {
+        (async () => {
+          try {
+            const inp = job.inputPayload as Record<string, unknown>;
+            let memberEmail = (inp?.customerEmail ?? inp?.email ?? "") as string;
+            let memberName  = (inp?.customerName  ?? inp?.name  ?? "Member") as string;
+            // Fallback: look up user email from DB if not in payload
+            if (!memberEmail && job.userId) {
+              const [row] = await db.select({ email: userTable.email, name: userTable.name })
+                .from(userTable).where(eq(userTable.id, job.userId)).limit(1);
+              if (row) { memberEmail = row.email; memberName = row.name ?? "Member"; }
+            }
+            if (memberEmail) {
+              await sendLipSyncFailedEmail({
+                to:              memberEmail,
+                memberName,
+                jobId:           job.jobId,
+                orderId:         job.orderId,
+                productionTitle: (inp?.productionTitle ?? inp?.title ?? "") as string | undefined,
+                errorMessage:    lastError,
+              });
+            }
+          } catch (e) {
+            console.warn("[OrchestrationEngine] lip_sync failed email error:", (e as Error).message);
+          }
+        })();
+      }
+      // ─────────────────────────────────────────────────────────────────────────
 
       console.error(`[OrchestrationEngine] job=${job.jobId} FAILED after ${attempt} attempts`);
     }

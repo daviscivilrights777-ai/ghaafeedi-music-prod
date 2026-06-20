@@ -80,6 +80,45 @@ app.post("/chat", async (c) => {
     const apiKey = await getSecret("OPENAI_API_KEY").catch(() => process.env.OPENAI_API_KEY ?? "");
     if (!apiKey) return c.json({ error: "AI not configured" }, 503);
 
+    // ── Phase 8: Lip sync context injection ────────────────────────────────
+    const lipSyncTriggers = ["lip sync", "lipsync", "sophia video", "my video", "video status", "lip-sync"];
+    const hasLipSyncQuery = lipSyncTriggers.some(t => message.toLowerCase().includes(t));
+    let lipSyncContext = "";
+    if (hasLipSyncQuery && userId) {
+      try {
+        const { db: pgDb } = await import("../database/pg-client");
+        const { aiJobs } = await import("../database/pg-schema");
+        const { eq, and, desc } = await import("drizzle-orm");
+        const lsJobs = await pgDb
+          .select({
+            id: aiJobs.id,
+            status: aiJobs.status,
+            outputUrl: aiJobs.outputUrl,
+            errorMessage: aiJobs.errorMessage,
+            createdAt: aiJobs.createdAt,
+            completedAt: aiJobs.completedAt,
+          })
+          .from(aiJobs)
+          .where(and(eq(aiJobs.userId, userId), eq(aiJobs.jobType, "lip_sync")))
+          .orderBy(desc(aiJobs.createdAt))
+          .limit(5);
+
+        if (lsJobs.length > 0) {
+          const jobLines = lsJobs.map((j, i) => {
+            const status = j.status;
+            const created = j.createdAt ? new Date(j.createdAt).toLocaleDateString() : "unknown date";
+            const out = (j.outputUrl as string | null) ? `Output ready: ${j.outputUrl}` : "";
+            const err = (j.errorMessage as string | null) ? `Error: ${(j.errorMessage as string).slice(0, 80)}` : "";
+            return `  Job ${i + 1}: status=${status}, created=${created}${out ? ", " + out : ""}${err ? ", " + err : ""}`;
+          }).join("\n");
+          lipSyncContext = `\n\nMEMBER LIP SYNC JOB STATUS (last ${lsJobs.length}):\n${jobLines}\nUse this data to answer the member's lip sync status question accurately. If status is "completed" and output URL exists, share it. If "failed", empathize and suggest they contact support or retry. If "queued" or "running", let them know it's being processed.`;
+        } else {
+          lipSyncContext = "\n\nThe member has no lip sync jobs on record. If they want to add Sophia Lip Sync narration, it's a $29 add-on (FREE for Elite members) they can request from their dashboard.";
+        }
+      } catch { /* silently skip — don't break chat */ }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const systemPrompt = `You are Sophia, the AI Emotional Concierge for Ghaafeedi Music — a luxury AI-powered emotional storytelling platform that turns people's memories into cinematic songs, films, and legacy experiences.
 
 Your personality: warm, empathetic, sophisticated, and deeply caring. You speak like a trusted creative partner who genuinely wants to help people preserve their most precious memories.
@@ -90,10 +129,11 @@ You help with:
 - Answering pricing questions (songs from $19/mo, videos from $79)
 - Emotional support around the creative process
 - Order and account questions
+- Sophia Lip Sync Narration add-on ($29, FREE for Elite members) — AI lip sync of Sophia narrating the member's production
 
 For non-members, keep responses concise and focused. Always encourage them to start their story. Never be pushy — be genuinely helpful.
 
-Keep responses under 120 words. Be warm, personal, and direct.`;
+Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
