@@ -15,6 +15,23 @@ import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 export const dashboard = new Hono()
   .use("*", authMiddleware)
 
+  // ─── GET /api/dashboard/me ────────────────────────────────────────────────
+  // Returns current user's role — used by signin to redirect admin → /admin
+  .get("/me", requireAuth, async (c) => {
+    const user = c.get("user")!;
+    const [profile] = await db
+      .select({ role: schema.profiles.role, fullName: schema.profiles.fullName })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.userId, user.id))
+      .limit(1);
+    return c.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: profile?.role ?? "customer",
+    });
+  })
+
   // ─── GET /api/dashboard/summary ──────────────────────────────────────────
   // Returns everything the dashboard overview needs in one shot
   .get("/summary", requireAuth, async (c) => {

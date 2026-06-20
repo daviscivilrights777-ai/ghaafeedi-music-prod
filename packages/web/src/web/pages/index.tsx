@@ -8,9 +8,10 @@
  *
  * Old EntryGate + SplashLandingPage replaced. Archived, not deleted.
  */
-import { useState, Suspense, lazy } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { SophiaEntryFlow } from "../components/SophiaEntryFlow";
 import { useLocation } from "wouter";
+import { authClient } from "../lib/authClient";
 
 // Lazy-load everything below the fold
 const Navbar              = lazy(() => import("../components/Navbar").then(m => ({ default: m.Navbar })));
@@ -26,15 +27,29 @@ const Footer              = lazy(() => import("../components/Footer").then(m => 
 const StickyCtaBar        = lazy(() => import("../components/StickyCtaBar").then(m => ({ default: m.StickyCtaBar })));
 const SocialProofToast    = lazy(() => import("../components/SocialProofToast").then(m => ({ default: m.SocialProofToast })));
 
-type Stage = "sophia" | "home";
+type Stage = "checking" | "sophia" | "home";
 
 export default function Index() {
-  const [stage, setStage] = useState<Stage>("sophia");
+  // Start as "checking" — determine if user is already logged in before showing Sophia
+  const [stage, setStage] = useState<Stage>("checking");
   const [, setLocation] = useLocation();
+  const { data: session, isPending } = authClient.useSession();
+
+  useEffect(() => {
+    if (isPending) return; // still loading auth state
+    if (session?.user) {
+      // Logged-in user — skip Sophia, go straight to homepage
+      // Use replaceState so the homepage doesn't stack behind dashboard in history
+      window.history.replaceState(null, "", "/");
+      setStage("home");
+    } else {
+      setStage("sophia");
+    }
+  }, [session, isPending]);
 
   const handleComplete = (path: "onboarding" | "products" | "home") => {
     if (path === "onboarding") {
-      setStage("home"); // render homepage first so BG is ready
+      setStage("home");
       setTimeout(() => setLocation("/onboarding"), 80);
       return;
     }
@@ -46,14 +61,19 @@ export default function Index() {
     setStage("home");
   };
 
+  // Brief blank while checking auth
+  if (stage === "checking") {
+    return <div style={{ background: "#050B1A", minHeight: "100vh" }} />;
+  }
+
   return (
     <>
-      {/* ── Sophia Entry Flow ── */}
+      {/* ── Sophia Entry Flow (new visitors only) ── */}
       {stage === "sophia" && (
         <SophiaEntryFlow onComplete={handleComplete} />
       )}
 
-      {/* ── Homepage (rendered once Sophia completes) ── */}
+      {/* ── Homepage ── */}
       {stage === "home" && (
         <div style={{ background: "#0A0B0F", minHeight: "100vh", overflowX: "hidden" }}>
           <Suspense fallback={<div style={{ background: "#0A0B0F", minHeight: "100vh" }} />}>

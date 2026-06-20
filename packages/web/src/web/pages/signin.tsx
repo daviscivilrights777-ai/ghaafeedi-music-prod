@@ -28,6 +28,18 @@ export default function SignIn() {
     } catch { /* silently fail — can retry later */ }
   };
 
+  // After auth succeeds, check role → admins go to /admin, customers go to redirectTo
+  const resolveDestination = async (): Promise<string> => {
+    try {
+      const res = await fetch("/api/dashboard/me", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json() as { role: string };
+        if (data.role === "admin") return "/admin";
+      }
+    } catch { /* fall through */ }
+    return redirectTo;
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
@@ -45,7 +57,8 @@ export default function SignIn() {
         setError(res.error.message ?? "Invalid email or password.");
       } else {
         await ensureMember();
-        setLocation(redirectTo);
+        const dest = await resolveDestination();
+        setLocation(dest);
       }
     } catch (err: unknown) {
       setError((err as Error)?.message ?? "Something went wrong. Please try again.");

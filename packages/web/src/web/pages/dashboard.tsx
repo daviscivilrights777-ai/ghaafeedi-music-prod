@@ -121,7 +121,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (isPending) return;
     if (!session) { setLocation("/signin?redirect=/dashboard"); return; }
-    loadAll();
+    // Admin users should never land on the customer dashboard
+    fetch("/api/dashboard/me", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { role?: string } | null) => {
+        if (d?.role === "admin") {
+          setLocation("/admin");
+          return;
+        }
+        loadAll();
+      })
+      .catch(() => loadAll());
   }, [session, isPending]);
 
   async function loadAll() {
@@ -164,6 +174,8 @@ export default function Dashboard() {
   const handleSignOut = async () => {
     await authClient.signOut();
     clearToken();
+    // Replace history so back button after sign-out doesn't return to dashboard
+    window.history.replaceState(null, "", "/");
     setLocation("/");
   };
 
