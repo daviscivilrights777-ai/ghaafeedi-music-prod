@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { authClient, clearToken } from "../lib/authClient";
+import { authClient, clearToken, getToken } from "../lib/authClient";
 import { api } from "../lib/api";
 
 // ─── Design tokens ────────────────────────────────────────────
@@ -122,7 +122,9 @@ export default function Dashboard() {
     if (isPending) return;
     if (!session) { setLocation("/signin?redirect=/dashboard"); return; }
     // Admin users should never land on the customer dashboard
-    fetch("/api/dashboard/me", { credentials: "include" })
+    const token = getToken();
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch("/api/dashboard/me", { credentials: "include", headers })
       .then(r => r.ok ? r.json() : null)
       .then((d: { role?: string } | null) => {
         if (d?.role === "admin") {

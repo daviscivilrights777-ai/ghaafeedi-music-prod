@@ -2,7 +2,7 @@ import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { authClient, captureToken } from "../lib/authClient";
+import { authClient, captureToken, getToken } from "../lib/authClient";
 import { api } from "../lib/api";
 
 const GOLD = "#D4AF37";
@@ -29,9 +29,12 @@ export default function SignIn() {
   };
 
   // After auth succeeds, check role → admins go to /admin, customers go to redirectTo
-  const resolveDestination = async (): Promise<string> => {
+  // bearerToken is passed directly from the signin response (most reliable — no race with localStorage)
+  const resolveDestination = async (bearerToken?: string): Promise<string> => {
     try {
-      const res = await fetch("/api/dashboard/me", { credentials: "include" });
+      const token = bearerToken || getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/dashboard/me", { credentials: "include", headers });
       if (res.ok) {
         const data = await res.json() as { role: string };
         if (data.role === "admin") return "/admin";
@@ -49,15 +52,18 @@ export default function SignIn() {
     setLoading(true);
     setError("");
     try {
+      // Note: no callbackURL here — we handle navigation manually after role check
       const res = await authClient.signIn.email(
-        { email: email.trim(), password, callbackURL: redirectTo },
+        { email: email.trim(), password },
         { onSuccess: captureToken }
       );
       if (res.error) {
         setError(res.error.message ?? "Invalid email or password.");
       } else {
         await ensureMember();
-        const dest = await resolveDestination();
+        // Pass token directly from response — avoids race condition with localStorage
+        const token = (res.data as any)?.token as string | undefined;
+        const dest = await resolveDestination(token);
         setLocation(dest);
       }
     } catch (err: unknown) {
