@@ -28,6 +28,25 @@ interface BillingEvent { id: string; eventType: string; amountCents: number; pro
 interface Ticket { id: string; subject: string; status: string; priority: string; createdAt: string; updatedAt?: string; body: string; }
 interface Notification { id: string; type: string; title: string; body: string; createdAt: string; read: boolean; link?: string; }
 interface Referral { code: string; clicks: number; conversions: number; creditsCents: number; }
+// Phase 7 — Lip Sync job shape returned from API
+interface LipSyncJob {
+  id: string;
+  userId: string;
+  orderId?: string | null;
+  productionId?: string | null;
+  jobType: string;
+  status: string; // queued | dispatched | processing | complete | failed | cancelled
+  provider?: string | null;
+  providerJobId?: string | null;
+  outputUrl?: string | null;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  errorMessage?: string | null;
+  queuedAt: string;
+  completedAt?: string | null;
+  estimatedCostCents?: number | null;
+  inputPayload?: Record<string, unknown>;
+}
 
 interface DashSummary {
   member: Member | null;
@@ -36,6 +55,7 @@ interface DashSummary {
   subscriptions: Sub[];
   billing: BillingEvent[];
   assets: Asset[];
+  lipsyncJobs: LipSyncJob[];
   referral: Referral;
   tickets: Ticket[];
 }
@@ -123,6 +143,7 @@ export default function Dashboard() {
           subscriptions: Array.isArray(summaryJson.subscriptions) ? summaryJson.subscriptions : [],
           billing:       Array.isArray(summaryJson.billing)       ? summaryJson.billing       : [],
           assets:        Array.isArray(summaryJson.assets)        ? summaryJson.assets        : [],
+          lipsyncJobs:   Array.isArray(summaryJson.lipsyncJobs)   ? summaryJson.lipsyncJobs   : [],
           referral:      summaryJson.referral ?? { code: "", clicks: 0, conversions: 0, creditsCents: 0 },
           tickets:       Array.isArray(summaryJson.tickets)       ? summaryJson.tickets       : [],
         } as DashSummary);
@@ -209,7 +230,7 @@ export default function Dashboard() {
 
               {tab === "overview"     && <OverviewTab data={data} setTab={setTab} setLocation={setLocation} copyMemberId={copyMemberId} copiedId={copiedId} />}
               {tab === "productions"  && <ProductionsTab productions={data?.productions ?? []} setLocation={setLocation} />}
-              {tab === "deliverables" && <DeliverablesTab assets={data?.assets ?? []} productions={data?.productions ?? []} />}
+              {tab === "deliverables" && <DeliverablesTab assets={data?.assets ?? []} productions={data?.productions ?? []} lipsyncJobs={data?.lipsyncJobs ?? []} member={data?.member} authHeaders={authHeaders} onRefresh={loadAll} />}
               {tab === "memberships"  && <MembershipsTab member={data?.member} subscriptions={data?.subscriptions ?? []} setLocation={setLocation} session={session} />}
               {tab === "billing"      && <BillingTab billing={data?.billing ?? []} orders={data?.orders ?? []} subscriptions={data?.subscriptions ?? []} />}
               {tab === "revisions"    && <RevisionsTab productions={data?.productions ?? []} authHeaders={authHeaders} onRefresh={loadAll} />}
@@ -543,54 +564,408 @@ function FullProductionCard({ prod }: { prod: Production }) {
   );
 }
 
-// ─── Deliverables Tab ─────────────────────────────────────────
-function DeliverablesTab({ assets, productions }: { assets: Asset[]; productions: Production[] }) {
+// ─── Deliverables Tab — Phase 7 ───────────────────────────────
+function DeliverablesTab({
+  assets, productions, lipsyncJobs, member, authHeaders, onRefresh,
+}: {
+  assets: Asset[];
+  productions: Production[];
+  lipsyncJobs: LipSyncJob[];
+  member: Member | null;
+  authHeaders: () => HeadersInit;
+  onRefresh: () => void;
+}) {
   const delivered = productions.filter(p => p.currentStage === "delivered");
+  const [view, setView] = useState<"files" | "lipsync">("files");
+
+  const hasAny = assets.length > 0 || delivered.length > 0;
+  const lipSyncComplete = lipsyncJobs.filter(j => j.status === "complete");
+  const lipSyncPending  = lipsyncJobs.filter(j => j.status !== "complete" && j.status !== "failed" && j.status !== "cancelled");
+  const lipSyncFailed   = lipsyncJobs.filter(j => j.status === "failed" || j.status === "cancelled");
 
   return (
     <div>
-      <PageHeader title="Deliverables" subtitle="Download your songs, films, and created assets." />
+      <PageHeader title="Deliverables" subtitle="Download your songs, films, and Sophia lip-sync videos." />
 
-      {assets.length === 0 && delivered.length === 0 ? (
-        <EmptyState icon="📦" title="No Deliverables Yet" desc="Your completed songs, films, and files will appear here ready to download." />
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Delivered productions */}
-          {delivered.map(p => (
-            <GlassCard key={p.id} style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: `linear-gradient(135deg, ${GOLD}20, ${NAVY})`, border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎁</div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 4 }}>{p.productSlug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Delivered {p.deliveredAt ? formatDate(p.deliveredAt) : "recently"}</div>
-              </div>
-              <GoldBadge color="#22C55E">Delivered ✓</GoldBadge>
-            </GlassCard>
-          ))}
+      {/* Tab switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
+        <button onClick={() => setView("files")} className={`gm-filter-chip ${view === "files" ? "gm-filter-chip-active" : ""}`}>
+          Files & Productions {hasAny ? `(${assets.length + delivered.length})` : ""}
+        </button>
+        <button onClick={() => setView("lipsync")} className={`gm-filter-chip ${view === "lipsync" ? "gm-filter-chip-active" : ""}`}>
+          Sophia Lip Sync {lipsyncJobs.length > 0 ? `(${lipsyncJobs.length})` : ""}
+          {lipSyncPending.length > 0 && (
+            <span style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", background: GOLD2, display: "inline-block", verticalAlign: "middle", boxShadow: `0 0 6px ${GOLD2}` }} />
+          )}
+        </button>
+      </div>
 
-          {/* Asset files */}
-          {assets.map(a => (
-            <GlassCard key={a.id} style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: GLASS2, border: `1px solid ${BORDER2}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
-                {a.assetType === "song" ? "🎵" : a.assetType === "video" ? "🎬" : a.assetType === "voice_model" ? "🎤" : a.assetType === "image" ? "🖼️" : "📄"}
-              </div>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 4 }}>{a.filename ?? `${a.assetType} asset`}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", display: "flex", gap: 12 }}>
-                  <span>{a.assetType}</span>
-                  {a.fileSizeBytes && <span>{(a.fileSizeBytes / 1_000_000).toFixed(1)} MB</span>}
-                  <span>{formatDate(a.createdAt)}</span>
+      {/* ── Files & Productions ── */}
+      {view === "files" && (
+        !hasAny ? (
+          <EmptyState icon="📦" title="No Deliverables Yet" desc="Your completed songs, films, and files will appear here ready to download." />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {delivered.map(p => (
+              <GlassCard key={p.id} style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: `linear-gradient(135deg, ${GOLD}20, ${NAVY})`, border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🎁</div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 4 }}>{p.productSlug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Delivered {p.deliveredAt ? formatDate(p.deliveredAt) : "recently"}</div>
                 </div>
-              </div>
-              {a.cdnUrl ? (
-                <a href={a.cdnUrl} download target="_blank" rel="noreferrer" className="gm-cta-btn" style={{ fontSize: 12, padding: "8px 18px", textDecoration: "none" }}>Download</a>
-              ) : (
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Processing…</span>
-              )}
-            </GlassCard>
-          ))}
-        </div>
+                <GoldBadge color="#22C55E">Delivered ✓</GoldBadge>
+              </GlassCard>
+            ))}
+            {assets.map(a => (
+              <GlassCard key={a.id} style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: GLASS2, border: `1px solid ${BORDER2}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                  {a.assetType === "song" ? "🎵" : a.assetType === "video" ? "🎬" : a.assetType === "voice_model" ? "🎤" : a.assetType === "image" ? "🖼️" : "📄"}
+                </div>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 4 }}>{a.filename ?? `${a.assetType} asset`}</div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", display: "flex", gap: 12 }}>
+                    <span>{a.assetType}</span>
+                    {a.fileSizeBytes && <span>{(a.fileSizeBytes / 1_000_000).toFixed(1)} MB</span>}
+                    <span>{formatDate(a.createdAt)}</span>
+                  </div>
+                </div>
+                {a.cdnUrl ? (
+                  <a href={a.cdnUrl} download target="_blank" rel="noreferrer" className="gm-cta-btn" style={{ fontSize: 12, padding: "8px 18px", textDecoration: "none" }}>Download</a>
+                ) : (
+                  <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Processing…</span>
+                )}
+              </GlassCard>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* ── Sophia Lip Sync ── */}
+      {view === "lipsync" && (
+        <LipSyncPanel
+          jobs={lipsyncJobs}
+          complete={lipSyncComplete}
+          pending={lipSyncPending}
+          failed={lipSyncFailed}
+          productions={productions}
+          member={member}
+          authHeaders={authHeaders}
+          onRefresh={onRefresh}
+        />
       )}
     </div>
+  );
+}
+
+// ─── Lip Sync Panel (Phase 7) ─────────────────────────────────
+const LIPSYNC_STATUS_COLOR: Record<string, string> = {
+  queued:            "#64748B",
+  dispatched:        "#6366F1",
+  processing:        "#F59E0B",
+  complete:          "#22C55E",
+  failed:            "#EF4444",
+  cancelled:         "#64748B",
+  retry:             "#F97316",
+  quality_review:    GOLD,
+  delivery:          "#10B981",
+};
+const LIPSYNC_STATUS_ICON: Record<string, string> = {
+  queued: "⏳", dispatched: "🚀", processing: "⚙️", complete: "✅",
+  failed: "❌", cancelled: "🚫", retry: "🔄", quality_review: "🔍", delivery: "📬",
+};
+
+function LipSyncPanel({
+  jobs, complete, pending, failed, productions, member, authHeaders, onRefresh,
+}: {
+  jobs: LipSyncJob[];
+  complete: LipSyncJob[];
+  pending: LipSyncJob[];
+  failed: LipSyncJob[];
+  productions: Production[];
+  member: Member | null;
+  authHeaders: () => HeadersInit;
+  onRefresh: () => void;
+}) {
+  const isElite = member?.tier === "elite";
+  // Request form state
+  const [showForm, setShowForm] = useState(false);
+  const [reqProdId, setReqProdId] = useState("");
+  const [reqVideoUrl, setReqVideoUrl] = useState("");
+  const [reqAudioUrl, setReqAudioUrl] = useState("");
+  const [reqDuration, setReqDuration] = useState("60");
+  const [reqSubmitting, setReqSubmitting] = useState(false);
+  const [reqError, setReqError] = useState("");
+  const [reqSuccess, setReqSuccess] = useState("");
+  // Poll pending jobs
+  const [polledJobs, setPolledJobs] = useState<LipSyncJob[]>(jobs);
+  const [previewJob, setPreviewJob] = useState<LipSyncJob | null>(null);
+
+  // Sync polledJobs when parent refreshes
+  useEffect(() => { setPolledJobs(jobs); }, [jobs]);
+
+  // Poll pending jobs every 8s
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/dashboard/lipsync", { headers: authHeaders() });
+        if (res.ok) {
+          const json = await res.json() as { jobs: LipSyncJob[] };
+          setPolledJobs(json.jobs);
+          // If any newly completed, trigger full refresh for notification bell
+          const nowComplete = json.jobs.filter(j => j.status === "complete").length;
+          const wasComplete = polledJobs.filter(j => j.status === "complete").length;
+          if (nowComplete > wasComplete) onRefresh();
+        }
+      } catch { /* silent */ }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [pending.length, authHeaders, onRefresh]);
+
+  const submitRequest = async () => {
+    setReqError(""); setReqSuccess("");
+    if (!reqProdId) { setReqError("Select a production."); return; }
+    if (!reqVideoUrl.startsWith("http")) { setReqError("Enter a valid video URL."); return; }
+    if (!reqAudioUrl.startsWith("http")) { setReqError("Enter a valid audio URL."); return; }
+    setReqSubmitting(true);
+    try {
+      const res = await fetch("/api/dashboard/lipsync/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          productionId: reqProdId,
+          videoUrl: reqVideoUrl,
+          audioUrl: reqAudioUrl,
+          durationSeconds: parseInt(reqDuration, 10) || 60,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setReqError(json.error ?? "Request failed."); }
+      else {
+        setReqSuccess(json.message ?? "Lip sync queued!");
+        setShowForm(false);
+        setReqProdId(""); setReqVideoUrl(""); setReqAudioUrl(""); setReqDuration("60");
+        onRefresh();
+      }
+    } catch { setReqError("Network error."); }
+    finally { setReqSubmitting(false); }
+  };
+
+  const allJobs = polledJobs.length > 0 ? polledJobs : jobs;
+  const completeJobs = allJobs.filter(j => j.status === "complete");
+  const pendingJobs  = allJobs.filter(j => j.status !== "complete" && j.status !== "failed" && j.status !== "cancelled");
+  const failedJobs   = allJobs.filter(j => j.status === "failed" || j.status === "cancelled");
+
+  return (
+    <div>
+      {/* Header info + request button */}
+      <GlassCard style={{ marginBottom: 24, background: `linear-gradient(135deg, rgba(212,175,55,0.06), rgba(11,23,54,0.8))`, border: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 28 }}>🎬</span>
+              <div>
+                <div style={{ fontFamily: "Playfair Display, serif", fontSize: 18, color: "#FFFFFF", fontWeight: 700 }}>Sophia AI Lip Sync</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>
+                  Powered by FAL.ai LatentSync · Sophia's voice synced to any video
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {isElite ? (
+                <GoldBadge color="#EC4899">✦ Elite — FREE</GoldBadge>
+              ) : (
+                <GoldBadge color={GOLD}>$29 per video</GoldBadge>
+              )}
+              <GoldBadge color="#6366F1">Sophia Voice · ElevenLabs</GoldBadge>
+              <GoldBadge color="#F59E0B">R2 CDN Delivery</GoldBadge>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowForm(v => !v)}
+            className="gm-cta-btn"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {showForm ? "Cancel" : "+ Request Lip Sync"}
+          </button>
+        </div>
+      </GlassCard>
+
+      {/* Request form */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <GlassCard style={{ marginBottom: 24, border: `1px solid ${BORDER}` }}>
+              <div style={{ fontFamily: "Playfair Display, serif", fontSize: 16, color: GOLD, marginBottom: 18 }}>
+                ✦ Request Sophia Lip Sync {isElite ? "— FREE (Elite)" : "— $29 add-on"}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label className="gm-label">Production</label>
+                  <select value={reqProdId} onChange={e => setReqProdId(e.target.value)} className="gm-input">
+                    <option value="">— select a production —</option>
+                    {productions.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.productSlug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())} · {p.currentStage}
+                      </option>
+                    ))}
+                  </select>
+                  {productions.length === 0 && (
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 5 }}>No productions found. Start a production first.</div>
+                  )}
+                </div>
+                <div>
+                  <label className="gm-label">Video URL (source video for Sophia's face overlay)</label>
+                  <input type="url" value={reqVideoUrl} onChange={e => setReqVideoUrl(e.target.value)}
+                    className="gm-input" placeholder="https://…/video.mp4" />
+                </div>
+                <div>
+                  <label className="gm-label">Audio URL (Sophia voiceover or custom narration)</label>
+                  <input type="url" value={reqAudioUrl} onChange={e => setReqAudioUrl(e.target.value)}
+                    className="gm-input" placeholder="https://…/audio.wav" />
+                </div>
+                <div>
+                  <label className="gm-label">Duration (seconds)</label>
+                  <input type="number" min={5} max={300} value={reqDuration} onChange={e => setReqDuration(e.target.value)}
+                    className="gm-input" style={{ width: 100 }} />
+                </div>
+                {reqError && (
+                  <div style={{ fontSize: 13, color: "#EF4444", padding: "10px 14px", background: "rgba(239,68,68,0.08)", borderRadius: 8, border: "1px solid rgba(239,68,68,0.2)" }}>{reqError}</div>
+                )}
+                {reqSuccess && (
+                  <div style={{ fontSize: 13, color: "#22C55E", padding: "10px 14px", background: "rgba(34,197,94,0.08)", borderRadius: 8, border: "1px solid rgba(34,197,94,0.2)" }}>✓ {reqSuccess}</div>
+                )}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={submitRequest} disabled={reqSubmitting} className="gm-cta-btn" style={{ opacity: reqSubmitting ? 0.6 : 1 }}>
+                    {reqSubmitting ? "Queuing…" : isElite ? "Queue Lip Sync (Free)" : "Queue Lip Sync ($29)"}
+                  </button>
+                  <button onClick={() => setShowForm(false)} className="gm-pill-btn" style={{ fontSize: 13 }}>Cancel</button>
+                </div>
+              </div>
+            </GlassCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Empty state */}
+      {allJobs.length === 0 && (
+        <EmptyState icon="🎬" title="No Lip Sync Jobs Yet"
+          desc={`Request a Sophia AI lip sync to bring your videos to life. ${isElite ? "Free with your Elite membership." : "$29 per video."}`} />
+      )}
+
+      {/* Pending jobs */}
+      {pendingJobs.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <SectionTitle icon="⚙️" title="Processing" count={pendingJobs.length} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+            {pendingJobs.map(j => <LipSyncJobCard key={j.id} job={j} onPreview={setPreviewJob} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Complete jobs */}
+      {completeJobs.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <SectionTitle icon="✅" title="Complete — Ready to Download" count={completeJobs.length} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+            {completeJobs.map(j => <LipSyncJobCard key={j.id} job={j} onPreview={setPreviewJob} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Failed jobs */}
+      {failedJobs.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <SectionTitle icon="❌" title="Failed / Cancelled" count={failedJobs.length} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+            {failedJobs.map(j => <LipSyncJobCard key={j.id} job={j} onPreview={setPreviewJob} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Video preview modal */}
+      <AnimatePresence>
+        {previewJob && previewJob.outputUrl && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+            onClick={() => setPreviewJob(null)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              style={{ background: "rgba(5,11,26,0.98)", border: `1px solid ${BORDER}`, borderRadius: 20, padding: 24, maxWidth: 720, width: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ fontFamily: "Playfair Display, serif", fontSize: 18, color: GOLD }}>Sophia Lip Sync Preview</div>
+                <button onClick={() => setPreviewJob(null)} className="gm-pill-btn" style={{ fontSize: 12 }}>✕ Close</button>
+              </div>
+              <video controls autoPlay style={{ width: "100%", borderRadius: 12, maxHeight: 420 }} src={previewJob.outputUrl} />
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <a href={previewJob.outputUrl} download target="_blank" rel="noreferrer" className="gm-cta-btn" style={{ textDecoration: "none", fontSize: 13 }}>Download Video</a>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", alignSelf: "center" }}>
+                  Job {previewJob.id.slice(0, 8)} · {previewJob.completedAt ? formatDate(previewJob.completedAt) : ""}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Single Lip Sync Job Card ──────────────────────────────────
+function LipSyncJobCard({ job, onPreview }: { job: LipSyncJob; onPreview: (j: LipSyncJob) => void }) {
+  const statusColor = LIPSYNC_STATUS_COLOR[job.status] ?? "#64748B";
+  const statusIcon  = LIPSYNC_STATUS_ICON[job.status] ?? "•";
+  const isComplete  = job.status === "complete";
+  const isPending   = !isComplete && job.status !== "failed" && job.status !== "cancelled";
+
+  return (
+    <GlassCard style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {/* Status icon */}
+      <div style={{ width: 48, height: 48, borderRadius: 12, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+        {statusIcon}
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF" }}>Sophia Lip Sync</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: `${statusColor}18`, border: `1px solid ${statusColor}40`, borderRadius: 6, padding: "2px 8px", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            {job.status}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <span>Job {job.id.slice(0, 8)}</span>
+          {job.provider && <span>via {job.provider}</span>}
+          {job.durationSeconds && <span>{job.durationSeconds}s</span>}
+          <span>Queued {formatDate(job.queuedAt)}</span>
+          {job.completedAt && <span>Done {formatDate(job.completedAt)}</span>}
+        </div>
+        {/* Pulsing bar while processing */}
+        {isPending && (
+          <div style={{ marginTop: 10, height: 3, background: BORDER2, borderRadius: 2, overflow: "hidden", position: "relative" }}>
+            <div style={{ height: "100%", width: "40%", background: `linear-gradient(90deg, ${GOLD}, ${GOLD2})`, borderRadius: 2, animation: "gmPulse 1.6s ease-in-out infinite" }} />
+          </div>
+        )}
+        {job.errorMessage && (
+          <div style={{ marginTop: 8, fontSize: 12, color: "#EF4444", background: "rgba(239,68,68,0.07)", borderRadius: 6, padding: "6px 10px" }}>
+            {job.errorMessage}
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+        {isComplete && job.outputUrl && (
+          <>
+            <button onClick={() => onPreview(job)} className="gm-pill-btn" style={{ fontSize: 12 }}>▶ Preview</button>
+            <a href={job.outputUrl} download target="_blank" rel="noreferrer" className="gm-cta-btn" style={{ fontSize: 12, padding: "8px 16px", textDecoration: "none" }}>Download</a>
+          </>
+        )}
+        {isPending && (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Processing…</div>
+        )}
+      </div>
+    </GlassCard>
   );
 }
 
@@ -1479,6 +1854,11 @@ textarea.gm-input { min-height: 100px; }
 @keyframes sophia-pulse {
   0%, 100% { opacity: 0.4; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes gmPulse {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(200%); }
+  100% { transform: translateX(200%); }
 }
 
 /* Mobile responsive */

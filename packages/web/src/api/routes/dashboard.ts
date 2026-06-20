@@ -2,13 +2,15 @@
 // Ghaafeedi Music — Member Dashboard API Routes
 // Covers: notifications, deliverables, revisions, referrals,
 //         billing history, profile update, Sophia chat history
+// Phase 7: Lip Sync delivery integration
 // ============================================================
 import { Hono } from "hono";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { authMiddleware, requireAuth } from "../middleware/auth";
 import { nanoid } from "nanoid";
+import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 
 export const dashboard = new Hono()
   .use("*", authMiddleware)
@@ -18,15 +20,20 @@ export const dashboard = new Hono()
   .get("/summary", requireAuth, async (c) => {
     const user = c.get("user")!;
     try {
-      const [memberRows, ordersRows, prodsRows, subsRows, jobsRows, ticketsRows, convoRows] =
+      const [memberRows, ordersRows, prodsRows, subsRows, jobsRows, ticketsRows, convoRows, lipsyncRows] =
         await Promise.all([
           db.select().from(schema.members).where(eq(schema.members.userId, user.id)).limit(1),
           db.select().from(schema.orders).where(eq(schema.orders.userId, user.id)).orderBy(desc(schema.orders.createdAt)),
           db.select().from(schema.productions).where(eq(schema.productions.userId, user.id)).orderBy(desc(schema.productions.createdAt)),
           db.select().from(schema.subscriptions).where(and(eq(schema.subscriptions.userId, user.id), eq(schema.subscriptions.status, "active"))),
-          db.select().from(schema.aiJobs).where(eq(schema.aiJobs.userId, user.id)).orderBy(desc(schema.aiJobs.createdAt)).limit(20),
+          db.select().from(schema.aiJobs).where(eq(schema.aiJobs.userId, user.id)).orderBy(desc(schema.aiJobs.queuedAt)).limit(20),
           db.select().from(schema.tickets).where(eq(schema.tickets.userId, user.id)).orderBy(desc(schema.tickets.createdAt)).limit(10),
           db.select().from(schema.conversations).where(eq(schema.conversations.userId, user.id)).orderBy(desc(schema.conversations.updatedAt)).limit(5),
+          // Phase 7: Lip sync jobs for this member
+          db.select().from(schema.aiJobs)
+            .where(and(eq(schema.aiJobs.userId, user.id), eq(schema.aiJobs.jobType, "lip_sync")))
+            .orderBy(desc(schema.aiJobs.queuedAt))
+            .limit(20),
         ]);
 
       const member = memberRows[0] ?? null;
@@ -74,6 +81,7 @@ export const dashboard = new Hono()
         conversations: convoRows,
         billing: billingRows,
         assets: assetRows,
+        lipsyncJobs: lipsyncRows,   // Phase 7
         referral: {
           code: referralCode,
           clicks: referralClicks,
@@ -91,10 +99,19 @@ export const dashboard = new Hono()
   .get("/notifications", requireAuth, async (c) => {
     const user = c.get("user")!;
     // Generate smart notifications from system events
-    const [prods, orders, tickets] = await Promise.all([
+    const [prods, orders, tickets, lipsyncJobs] = await Promise.all([
       db.select().from(schema.productions).where(eq(schema.productions.userId, user.id)).orderBy(desc(schema.productions.createdAt)).limit(10),
       db.select().from(schema.orders).where(eq(schema.orders.userId, user.id)).orderBy(desc(schema.orders.createdAt)).limit(5),
       db.select().from(schema.tickets).where(and(eq(schema.tickets.userId, user.id), eq(schema.tickets.status, "resolved"))).limit(5),
+      // Phase 7: lip sync job completion notifications
+      db.select().from(schema.aiJobs)
+        .where(and(
+          eq(schema.aiJobs.userId, user.id),
+          eq(schema.aiJobs.jobType, "lip_sync"),
+          eq(schema.aiJobs.status, "complete"),
+        ))
+        .orderBy(desc(schema.aiJobs.completedAt))
+        .limit(5),
     ]);
 
     const notifications: Array<{
@@ -147,6 +164,22 @@ export const dashboard = new Hono()
         read: false,
         link: "/products",
       });
+    }
+
+    // Phase 7: Lip sync job completion notifications
+    for (const job of lipsyncJobs) {
+      const out = (job.outputPayload ?? {}) as Record<string, unknown>;
+      const outputUrl = (out.outputUrl ?? out.output_url ?? out.r2Url ?? null) as string | null;
+      notifications.push({
+        id: `notif-lipsync-${job.id}`,
+        type: "lipsync",
+        title: "Sophia Lip Sync Complete 🎬",
+        body: "Your Sophia AI lip-sync video is ready to download in Deliverables.",
+        createdAt: job.completedAt?.toISOString() ?? job.queuedAt?.toISOString() ?? new Date().toISOString(),
+        read: false,
+        link: "/dashboard?tab=deliverables",
+        ...(outputUrl ? { previewUrl: outputUrl } : {}),
+      } as any);
     }
 
     notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -293,4 +326,116 @@ export const dashboard = new Hono()
     });
 
     return c.json({ success: true, ticketId }, 201);
+  })
+
+  // ─── GET /api/dashboard/lipsync ────────────────────────────────────────
+  // Phase 7: Return all lip sync jobs for this member (with output URLs)
+  .get("/lipsync", requireAuth, async (c) => {
+    const user = c.get("user")!;
+    const jobs = await db
+      .select()
+      .from(schema.aiJobs)
+      .where(and(eq(schema.aiJobs.userId, user.id), eq(schema.aiJobs.jobType, "lip_sync")))
+      .orderBy(desc(schema.aiJobs.queuedAt))
+      .limit(50);
+
+    // Enrich: extract outputUrl from outputPayload if available
+    const enriched = jobs.map(j => {
+      const out = (j.outputPayload ?? {}) as Record<string, unknown>;
+      return {
+        ...j,
+        outputUrl: (out.outputUrl ?? out.output_url ?? out.r2Url ?? out.r2_url ?? null) as string | null,
+        thumbnailUrl: (out.thumbnailUrl ?? out.thumbnail_url ?? null) as string | null,
+        durationSeconds: (out.durationSeconds ?? out.duration_seconds ?? j.durationSeconds ?? null) as number | null,
+      };
+    });
+
+    return c.json({ jobs: enriched }, 200);
+  })
+
+  // ─── POST /api/dashboard/lipsync/request ──────────────────────────────
+  // Phase 7: Member requests lip sync add-on for a production
+  // Elite = free, others = $29 billing event
+  .post("/lipsync/request", requireAuth, async (c) => {
+    const user = c.get("user")!;
+    const body = await c.req.json().catch(() => ({}));
+    const { productionId, videoUrl, audioUrl, durationSeconds } =
+      body as { productionId?: string; videoUrl?: string; audioUrl?: string; durationSeconds?: number };
+
+    if (!productionId) {
+      return c.json({ error: "productionId is required" }, 400);
+    }
+    if (!videoUrl || !audioUrl) {
+      return c.json({ error: "videoUrl and audioUrl are required" }, 400);
+    }
+
+    // Verify production belongs to member
+    const [prod] = await db
+      .select()
+      .from(schema.productions)
+      .where(and(eq(schema.productions.id, productionId), eq(schema.productions.userId, user.id)))
+      .limit(1);
+    if (!prod) return c.json({ error: "Production not found" }, 404);
+
+    // Check member tier for Elite free benefit
+    const [member] = await db
+      .select()
+      .from(schema.members)
+      .where(eq(schema.members.userId, user.id))
+      .limit(1);
+    const isElite = member?.tier === "elite";
+
+    // If not Elite, record billing event ($29)
+    if (!isElite) {
+      await db.insert(schema.billingEvents).values({
+        id: nanoid(),
+        userId: user.id,
+        orderId: prod.orderId,
+        eventType: "charge",
+        provider: "internal",
+        amountCents: 2900,
+        metadata: { description: "Sophia AI Lip Sync Add-on", productionId },
+      });
+    }
+
+    // Submit lip sync job via orchestration engine
+    const engine = OrchestrationEngine.getInstance();
+    const jobId = nanoid();
+    await engine.submitJob({
+      userId: user.id,
+      orderId: prod.orderId ?? undefined,
+      jobType: "lip_sync",
+      inputPayload: {
+        jobId,
+        orderId: prod.orderId ?? "",
+        userId: user.id,
+        productionId,
+        videoUrl,
+        audioUrl,
+        durationSeconds: durationSeconds ?? 60,
+        guidanceScale: 2.0,
+        syncConfidence: 0.92,
+        isEliteFree: isElite,
+      },
+    });
+
+    // Audit log
+    await db.insert(schema.auditLogs).values({
+      actorId: user.id,
+      actorRole: "member",
+      action: "lipsync.requested",
+      resourceType: "production",
+      resourceId: productionId,
+      metadata: { isElite, jobId, productSlug: prod.productSlug },
+    });
+
+    return c.json({
+      ok: true,
+      jobId,
+      isEliteFree: isElite,
+      chargedCents: isElite ? 0 : 2900,
+      message: isElite
+        ? "Lip sync queued — free with your Elite membership."
+        : "Lip sync queued — $29 add-on applied to your account.",
+    }, 201);
   });
