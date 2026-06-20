@@ -813,7 +813,7 @@ export class OrchestrationEngine {
       visualization: ["fal-ai", "modal"],
       storyboard:   ["openai"],
       sophia_intro: ["openai", "elevenlabs"],
-      lip_sync:     ["fal-ai"],
+      lip_sync:     ["latentsync", "fal_ai_kling"],
       cinematic_video: ["cinematic-microservice", "fal-ai", "modal", "vast-ai"],
       // ── Pipeline stage fallbacks ──────────────────────────
       story_bible:      ["openai"],

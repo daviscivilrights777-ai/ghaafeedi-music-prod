@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from config import CustomerInput, ProductionResult, GhaafeediSettings
 from orchestrator import GhaafeediCinematicProducer
 from store.job_store import JobStore
+from engines.lip_sync import LipSyncRequest, LipSyncResult, create_lip_sync_engine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -149,6 +150,112 @@ async def _run_production(job_id: str, customer_input: CustomerInput):
             error_message=str(e)
         )
         store.save(job_id, failed)
+
+
+# ─── Lip Sync Routes (Phase 6) ─────────────────────────────────────────────
+
+class LipSyncJobRequest(BaseModel):
+    """Request body for /lipsync endpoint."""
+    job_id:           str
+    order_id:         str
+    user_id:          str
+    video_url:        str
+    audio_url:        str
+    duration_seconds: float = 60.0
+    guidance_scale:   float = 2.0
+    sync_confidence:  float = 0.92
+    is_elite_free:    bool  = False
+
+
+class LipSyncStatusResponse(BaseModel):
+    job_id:     str
+    status:     str
+    output_url: Optional[str] = None
+    error:      Optional[str] = None
+    duration_s: float          = 0.0
+
+
+@app.post("/lipsync", response_model=LipSyncStatusResponse)
+async def lipsync(request: LipSyncJobRequest, background_tasks: BackgroundTasks):
+    """
+    Start a lip sync job.
+    Accepts video_url + audio_url, dispatches to FAL.ai LatentSync.
+    Returns immediately with job_id. Poll /lipsync/status/{job_id}.
+    """
+    # Save initial queued state to Redis
+    store.set_raw(
+        f"gm:lipsync:{request.job_id}",
+        {"status": "queued", "job_id": request.job_id, "output_url": None},
+        ttl=86400
+    )
+
+    background_tasks.add_task(_run_lipsync, request)
+
+    return LipSyncStatusResponse(
+        job_id=request.job_id,
+        status="queued"
+    )
+
+
+@app.get("/lipsync/status/{job_id}", response_model=LipSyncStatusResponse)
+def lipsync_status(job_id: str):
+    """Poll lip sync job status."""
+    raw = store.get_raw(f"gm:lipsync:{job_id}")
+    if not raw:
+        raise HTTPException(status_code=404, detail=f"Lip sync job {job_id} not found")
+
+    return LipSyncStatusResponse(
+        job_id  = job_id,
+        status  = raw.get("status", "unknown"),
+        output_url = raw.get("output_url"),
+        error   = raw.get("error"),
+        duration_s = raw.get("duration_s", 0.0),
+    )
+
+
+async def _run_lipsync(request: LipSyncJobRequest):
+    """Background task — full LatentSync pipeline."""
+    logger.info(f"[LipSync] Background start job={request.job_id}")
+
+    def progress_cb(data: dict):
+        raw = store.get_raw(f"gm:lipsync:{request.job_id}") or {}
+        raw["status"]  = data.get("phase", "processing")
+        raw["percent"] = data.get("percent", 0)
+        store.set_raw(f"gm:lipsync:{request.job_id}", raw, ttl=86400)
+
+    try:
+        engine = create_lip_sync_engine()
+        lip_req = LipSyncRequest(
+            job_id           = request.job_id,
+            order_id         = request.order_id,
+            user_id          = request.user_id,
+            video_url        = request.video_url,
+            audio_url        = request.audio_url,
+            duration_seconds = request.duration_seconds,
+            guidance_scale   = request.guidance_scale,
+            sync_confidence  = request.sync_confidence,
+            is_elite_free    = request.is_elite_free,
+        )
+        result = engine.run(lip_req, progress_cb)
+        store.set_raw(
+            f"gm:lipsync:{request.job_id}",
+            {
+                "status":     "complete" if result.success else "failed",
+                "job_id":     result.job_id,
+                "output_url": result.output_url,
+                "error":      result.error,
+                "duration_s": result.duration_s,
+            },
+            ttl=86400
+        )
+        logger.info(f"[LipSync] Done job={request.job_id} success={result.success}")
+    except Exception as e:
+        logger.exception(f"[LipSync] Fatal error job={request.job_id}: {e}")
+        store.set_raw(
+            f"gm:lipsync:{request.job_id}",
+            {"status": "failed", "job_id": request.job_id, "error": str(e)},
+            ttl=86400
+        )
 
 
 if __name__ == "__main__":

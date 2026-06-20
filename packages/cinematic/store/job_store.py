@@ -172,3 +172,33 @@ class JobStore:
         except Exception as e:
             logger.error(f"Redis delete failed: {e}")
             return False
+
+    # ── Raw key/value methods (for lip_sync and other ad-hoc jobs) ────────────
+
+    def set_raw(self, key: str, data: dict, ttl: int = 86400) -> bool:
+        """Store arbitrary dict under a raw Redis key (no prefix added)."""
+        if not self._client:
+            return False
+        try:
+            serialized = json.dumps(data)
+            if self._client_type == "upstash":
+                self._client.set(key, serialized, ex=ttl)
+            else:
+                self._client.set(key, serialized, ex=ttl)
+            return True
+        except Exception as e:
+            logger.error(f"Redis set_raw failed key={key}: {e}")
+            return False
+
+    def get_raw(self, key: str) -> Optional[dict]:
+        """Retrieve arbitrary dict from a raw Redis key."""
+        if not self._client:
+            return None
+        try:
+            data = self._client.get(key)
+            if not data:
+                return None
+            return json.loads(data)
+        except Exception as e:
+            logger.error(f"Redis get_raw failed key={key}: {e}")
+            return None

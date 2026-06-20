@@ -1,0 +1,169 @@
+{
+    "ok": false,
+    "summary": "4/9 providers healthy",
+    "providers": [
+        {
+            "name": "fal_ai_kling",
+            "displayName": "FAL.ai Kling v3 Pro",
+            "jobTypes": [
+                "video",
+                "visualization",
+                "image",
+                "clip_batch"
+            ],
+            "healthy": false,
+            "latencyMs": 54,
+            "message": "FAL.ai balance exhausted \u2014 top up at fal.ai/dashboard/billing",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.459Z",
+            "balanceCents": 0,
+            "balanceStatus": "exhausted",
+            "balanceDashboardUrl": "https://fal.ai/dashboard/billing"
+        },
+        {
+            "name": "fal_ai_hailuo",
+            "displayName": "FAL.ai Hailuo 02 Standard",
+            "jobTypes": [
+                "video",
+                "visualization",
+                "image",
+                "clip_batch"
+            ],
+            "healthy": false,
+            "latencyMs": 49,
+            "message": "FAL.ai balance exhausted \u2014 top up at fal.ai/dashboard/billing",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.455Z",
+            "balanceCents": 0,
+            "balanceStatus": "exhausted",
+            "balanceDashboardUrl": "https://fal.ai/dashboard/billing"
+        },
+        {
+            "name": "sunor_cc",
+            "displayName": "Suno / Sunor.cc",
+            "jobTypes": [
+                "song"
+            ],
+            "healthy": true,
+            "latencyMs": 205,
+            "message": "HTTP 405 \u2014 Sunor.cc reachable",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.611Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "elevenlabs",
+            "displayName": "ElevenLabs",
+            "jobTypes": [
+                "narration",
+                "voice_clone"
+            ],
+            "healthy": true,
+            "latencyMs": 68,
+            "message": null,
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.474Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "openai",
+            "displayName": "OpenAI GPT-4o",
+            "jobTypes": [
+                "analysis",
+                "lyrics",
+                "storyboard",
+                "image",
+                "narration",
+                "story_bible",
+                "production_bible",
+                "shot_list",
+                "qc_check",
+                "deliver"
+            ],
+            "healthy": true,
+            "latencyMs": 511,
+            "message": null,
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.917Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "modal",
+            "displayName": "Modal GPU Burst",
+            "jobTypes": [
+                "video",
+                "visualization"
+            ],
+            "healthy": false,
+            "latencyMs": 2,
+            "message": "Modal not configured (MODAL_API_KEY not set) \u2014 overflow provider, activates on demand",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.406Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "modal_ffmpeg",
+            "displayName": "Modal FFmpeg Assembly",
+            "jobTypes": [
+                "edit_assemble"
+            ],
+            "healthy": true,
+            "latencyMs": 161,
+            "message": "Modal assembly endpoint reachable",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.567Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "vast_ai",
+            "displayName": "Vast.ai Spot GPU",
+            "jobTypes": [
+                "video",
+                "visualization"
+            ],
+            "healthy": false,
+            "latencyMs": 1,
+            "message": "Vast.ai not configured (VAST_AI_API_KEY not set) \u2014 overflow GPU provider, activates on demand",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.407Z",
+            "balanceCents": null,
+            "balanceStatus": null,
+            "balanceDashboardUrl": null
+        },
+        {
+            "name": "latentsync",
+            "displayName": "FAL.ai LatentSync",
+            "jobTypes": [
+                "lip_sync"
+            ],
+            "healthy": false,
+            "latencyMs": 51,
+            "message": "FAL.ai LatentSync \u2014 balance exhausted. Top up at fal.ai/dashboard/billing",
+            "errorRate": null,
+            "queueDepth": null,
+            "checkedAt": "2026-06-20T15:52:15.458Z",
+            "balanceCents": 0,
+            "balanceStatus": "exhausted",
+            "balanceDashboardUrl": "https://fal.ai/dashboard/billing"
+        }
+    ],
+    "checkedAt": "2026-06-20T15:52:15.917Z"
+}
