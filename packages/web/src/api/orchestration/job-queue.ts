@@ -38,6 +38,7 @@ export type JobType =
   | "lyrics"
   | "sophia_intro"
   | "lip_sync"       // Sophia Lip Sync Narration upgrade — FAL.ai LatentSync (Phase 6)
+  | "cinematic_video" // packages/cinematic Python microservice — full GPT-4o directed cinematic production
   // ── Pipeline stage job types (Phase 7+) ──────────────────
   | "story_bible"    // Phase 7: OpenAI → extract StoryBible from intake
   | "production_bible" // Phase 7: Claude/GPT-4o → generate ProductionBible

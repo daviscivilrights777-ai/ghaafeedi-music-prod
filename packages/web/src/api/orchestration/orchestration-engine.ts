@@ -75,6 +75,7 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   lyrics:       2,
   sophia_intro: 4, // OpenAI script (~2¢) + 2x ElevenLabs renders (~1¢ each)
   lip_sync:     120, // FAL.ai LatentSync per clip (~$1.20 est.)
+  cinematic_video: 2500, // packages/cinematic full production — GPU + GPT-4o (~$25 est.)
   // ── Pipeline stage job costs ─────────────────────────────
   story_bible:      3,   // GPT-4o-mini extraction ~3¢
   production_bible: 10,  // Claude/GPT-4o creative brief ~10¢
@@ -98,6 +99,7 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   lyrics:       50,
   sophia_intro: 500, // personalized AI voiceover — high perceived value
   lip_sync:     2900, // $29 customer charge
+  cinematic_video: 19900, // $199 customer charge (Premium tier baseline)
   // ── Pipeline stage values ─────────────────────────────────
   story_bible:      100,  // part of production value
   production_bible: 200,
@@ -812,6 +814,7 @@ export class OrchestrationEngine {
       storyboard:   ["openai"],
       sophia_intro: ["openai", "elevenlabs"],
       lip_sync:     ["fal-ai"],
+      cinematic_video: ["cinematic-microservice", "fal-ai", "modal", "vast-ai"],
       // ── Pipeline stage fallbacks ──────────────────────────
       story_bible:      ["openai"],
       production_bible: ["openai"],   // Claude primary, GPT-4o fallback
