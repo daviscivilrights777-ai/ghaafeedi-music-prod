@@ -6873,6 +6873,17 @@ function S8OrderReview({ pkg, addons, onRemoveAddon, isMobile }: { pkg: S8Packag
               </span>
             </div>
           )}
+          {/* Savings intelligence line */}
+          <div style={{marginTop:10,padding:"9px 12px",background:"rgba(212,175,55,0.04)",border:"1px solid rgba(212,175,55,0.15)",borderRadius:8,display:"flex",alignItems:"flex-start",gap:8}}>
+            <span style={{fontSize:13,flexShrink:0}}>⚖</span>
+            <span style={{fontFamily:"Inter,sans-serif",fontSize:10,color:"rgba(255,255,255,0.45)",lineHeight:1.5}}>
+              {pkg.name === "Starter"
+                ? "Suno Pro charges $8/mo for generic songs. Ghaafeedi delivers personalized, story-driven music from $19/mo."
+                : pkg.name === "Premium"
+                ? "Freelance music producers charge $150–$800 per song. Your membership covers up to 8 personalized tracks per month."
+                : "Studio production costs $500–$5,000 per song. Your Elite membership delivers 15 cinematic songs/mo fully produced."}
+            </span>
+          </div>
         </div>
 
         {/* Security badges */}

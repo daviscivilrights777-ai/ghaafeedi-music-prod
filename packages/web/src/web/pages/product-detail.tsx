@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { authClient } from "../lib/authClient";
 import { api } from "../lib/api";
+import PricingIntelligenceModal, { PricingIntelligenceTrigger } from "../components/PricingIntelligenceModal";
 
 // ─── Product catalog ──────────────────────────────────────────────────────────
 // Pricing sourced from approved pricing report — June 15, 2026 (Lawrence Davis, final approved)
@@ -474,6 +475,15 @@ export default function ProductDetail() {
   const [ackChecked, setAckChecked] = useState<boolean[]>([]);
   const [ackDone, setAckDone] = useState(false);
   const [ackLoading, setAckLoading] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     if (product) {
@@ -696,6 +706,24 @@ export default function ProductDetail() {
               </div>
             </div>
 
+            {/* Pricing Intelligence — trigger + inline panel (desktop) */}
+            <div style={{ marginTop: 8 }}>
+              <PricingIntelligenceTrigger
+                isOpen={showCompare}
+                onClick={() => setShowCompare(v => !v)}
+                isMobile={isMobile}
+              />
+              {!isMobile && (
+                <PricingIntelligenceModal
+                  slug={product.slug}
+                  selectedTierIndex={selectedTier}
+                  isMobile={false}
+                  isOpen={showCompare}
+                  onClose={() => setShowCompare(false)}
+                />
+              )}
+            </div>
+
             {/* Right column — sticky CTA */}
             <div style={{ position: "sticky", top: 90 }}>
               <div style={{ background: "rgba(11,23,54,0.92)", border: "1px solid rgba(212,175,55,0.25)", borderRadius: 20, padding: "32px 28px", boxShadow: "0 24px 64px rgba(0,0,0,0.5), 0 0 40px rgba(212,175,55,0.06)" }}>
@@ -766,6 +794,17 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* Pricing Intelligence Modal — mobile only */}
+      {isMobile && (
+        <PricingIntelligenceModal
+          slug={product.slug}
+          selectedTierIndex={selectedTier}
+          isMobile={true}
+          isOpen={showCompare}
+          onClose={() => setShowCompare(false)}
+        />
+      )}
 
       {/* Acknowledgement Modal */}
       <AnimatePresence>

@@ -2,6 +2,7 @@ import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useSession, signOut, clearToken } from "../lib/authClient";
+import { HEX_SAVINGS_BADGE } from "../data/pricingComparisons";
 
 // ─── CSS ───────────────────────────────────────────────────────────────────────
 const GLOBAL_CSS = `
@@ -779,6 +780,25 @@ function HexCard({ product, size, left, top }: { product:Product; size:number; l
           color:"#FFC24D",marginTop:"5px",fontWeight:700,
           textShadow:"0 0 10px rgba(212,175,55,1),0 0 20px rgba(212,175,55,0.65),0 2px 8px rgba(0,0,0,1)",
         }}>{product.price}</div>
+        {HEX_SAVINGS_BADGE[product.id] && (
+          <div style={{
+            marginTop:"5px",
+            display:"inline-block",
+            fontFamily:"'Inter',sans-serif",
+            fontSize:size>200?"9px":size>160?"8px":"7.5px",
+            color:"rgba(34,197,94,0.9)",
+            fontWeight:700,
+            background:"rgba(34,197,94,0.1)",
+            border:"1px solid rgba(34,197,94,0.25)",
+            borderRadius:20,
+            padding:size>200?"2px 7px":"1px 5px",
+            textShadow:"0 0 8px rgba(34,197,94,0.5)",
+            letterSpacing:"0.02em",
+            lineHeight:1.3,
+          }}>
+            {HEX_SAVINGS_BADGE[product.id]}
+          </div>
+        )}
       </div>
     </div>
   );
