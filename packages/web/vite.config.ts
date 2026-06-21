@@ -34,7 +34,9 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				output: {
 					manualChunks: (id) => {
-						// All node_modules in ONE vendor chunk — prevents React/libs circular dependency deadlock
+						// @tanstack uses internal relative imports (e.g. './Client') — must NOT be split into vendor chunk
+						// Splitting it causes Rollup on Node 24 to lose resolution of those relative deps
+						if (id.includes("node_modules/@tanstack")) return undefined;
 						if (id.includes("node_modules/")) return "vendor";
 						if (id.includes("/pages/admin/")) return "chunk-admin";
 						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
