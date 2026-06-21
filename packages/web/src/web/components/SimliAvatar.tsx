@@ -19,7 +19,7 @@ import React, {
   useState,
   memo
 } from "react";
-import { SimliAvatarEngine, EngineStatus, SpeakFn } from "@/lib/SimliAvatarEngine";
+import { SimliAvatarEngine, EngineStatus, SpeakFn } from "../../lib/SimliAvatarEngine";
 
 // ─── Props ────────────────────────────────────────────────────
 

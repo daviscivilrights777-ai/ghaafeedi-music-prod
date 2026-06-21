@@ -10,8 +10,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SimliAvatar } from "@/web/components/SimliAvatar";
-import type { SpeakFn } from "@/lib/SimliAvatarEngine";
+import { SimliAvatar } from "./SimliAvatar";
+import type { SpeakFn } from "../../lib/SimliAvatarEngine";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";

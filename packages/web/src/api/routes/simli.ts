@@ -25,7 +25,7 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY!;
 const ELEVENLABS_VOICE_ID =
   process.env.ELEVENLABS_VOICE_ID ?? "CwhRBWXzGAHq8TQ4Fs17";
 const SIMLI_FACE_ID =
-  process.env.SIMLI_FACE_ID ?? "afdb6a3e-3939-40aa-92df-01604c23101c";
+  process.env.SIMLI_FACE_ID ?? "9c402979-2e74-47f5-a4ed-ae235b092dc9";
 
 // PCM spec: 16kHz, mono, PCM16 = 3200 bytes per 100ms
 const SIMLI_CHUNK_BYTES = 3200;
