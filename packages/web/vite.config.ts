@@ -34,9 +34,10 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				output: {
 					manualChunks: (id) => {
-						// @tanstack uses internal relative imports (e.g. './Client') — must NOT be split into vendor chunk
-						// Splitting it causes Rollup on Node 24 to lose resolution of those relative deps
+						// @tanstack and simli-client use CJS internal relative imports (e.g. './Client')
+						// Splitting them into vendor chunk causes Rollup on Node 24 to lose relative dep resolution
 						if (id.includes("node_modules/@tanstack")) return undefined;
+						if (id.includes("node_modules/simli-client")) return undefined;
 						if (id.includes("node_modules/")) return "vendor";
 						if (id.includes("/pages/admin/")) return "chunk-admin";
 						if (id.includes("/pages/onboarding")) return "chunk-onboarding";

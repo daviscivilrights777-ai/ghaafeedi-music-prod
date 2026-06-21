@@ -153,11 +153,12 @@ export class SimliAvatarEngine {
       throw new Error("Video or audio element not available");
     }
 
-    // Dynamic import — prevents blank screen if bundler config changes
+    // Dynamic import with @vite-ignore to prevent Rollup from treating this as
+    // an external bare module specifier — simli-client is bundled, not external
     if (!SimliClient) {
       try {
-        const mod = await import("simli-client");
-        SimliClient = mod.default ?? mod;
+        const mod = await import(/* @vite-ignore */ "simli-client");
+        SimliClient = mod.SimliClient ?? mod.default ?? mod;
       } catch {
         throw new Error("simli-client failed to load");
       }
