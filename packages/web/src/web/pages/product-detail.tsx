@@ -404,23 +404,60 @@ const NAVY = "#0B1736";
 
 // ─── Video Duration Config ────────────────────────────────────────────────────
 // Approved pricing (P3, June 15 2026):
+// ─── Duration config — price + features per duration per tier ─────────────────
 // Group A — cinematic-story-film, dream-ai-visualization, future-self-vision, couples-journey-film, memorial-legacy-film
-//   2min: Essential $79 / Premium $129 / Elite $199
-//   5min: Essential $149 / Premium $249 / Elite $399
-//   10min: Essential $299 / Premium $499 / Elite $799
 const DURATION_GROUP_A = [
-  { label: "2 min",  tiers: [{ price: 79  }, { price: 129 }, { price: 199 }] },
-  { label: "5 min",  tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
-  { label: "10 min", tiers: [{ price: 299 }, { price: 499 }, { price: 799 }] },
+  {
+    label: "2 min",
+    tiers: [
+      { price: 79,  features: ["2-min film", "1 revision", "Digital delivery", "Original score"] },
+      { price: 129, features: ["2-min film", "2 revisions", "Digital + USB", "Color grading"] },
+      { price: 199, features: ["2-min film", "4 revisions", "4K delivery", "Priority production"] },
+    ],
+  },
+  {
+    label: "5 min",
+    tiers: [
+      { price: 149, features: ["5-min film", "1 revision", "Digital delivery", "Original score"] },
+      { price: 249, features: ["5-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 399, features: ["5-min film", "4 revisions", "4K delivery", "Priority production", "Premiere kit"] },
+    ],
+  },
+  {
+    label: "10 min",
+    tiers: [
+      { price: 299, features: ["10-min film", "1 revision", "Digital delivery", "Original score"] },
+      { price: 499, features: ["10-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 799, features: ["10-min film", "4 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+    ],
+  },
 ];
 // Group B — cinematic-life-story (feature-length masterpiece)
-//   20min: Essential $449 / Premium $600 / Elite $799
-//   25min: Essential $449 / Premium $600 / Elite $799
-//   30min: Essential $449 / Premium $600 / Elite $799
 const DURATION_GROUP_B = [
-  { label: "20 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
-  { label: "25 min", tiers: [{ price: 549 }, { price: 749 }, { price: 999 }] },
-  { label: "30 min", tiers: [{ price: 649 }, { price: 899 }, { price: 1199 }] },
+  {
+    label: "20 min",
+    tiers: [
+      { price: 449, features: ["20-min film", "1 revision", "Digital delivery", "Original score"] },
+      { price: 600, features: ["20-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 799, features: ["20-min film", "4 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+    ],
+  },
+  {
+    label: "25 min",
+    tiers: [
+      { price: 549, features: ["25-min film", "2 revisions", "Digital delivery", "Original score"] },
+      { price: 749, features: ["25-min film", "3 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 999, features: ["25-min film", "5 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+    ],
+  },
+  {
+    label: "30 min",
+    tiers: [
+      { price: 649, features: ["30-min film", "2 revisions", "Digital + USB", "Original score"] },
+      { price: 899, features: ["30-min film", "3 revisions", "4K delivery", "Full orchestral score", "Color grading"] },
+      { price: 1199, features: ["30-min film", "5 revisions", "4K + physical box set", "Priority production", "Premiere event kit", "Legacy screening"] },
+    ],
+  },
 ];
 const VIDEO_DURATION_CONFIG: Record<string, typeof DURATION_GROUP_A> = {
   "cinematic-story-film": DURATION_GROUP_A,
@@ -639,7 +676,13 @@ export default function ProductDetail() {
               <div style={{ marginBottom: 40, padding: "28px 32px", background: "rgba(11,23,54,0.6)", border: "1px solid rgba(212,175,55,0.15)", borderRadius: 16 }}>
                 <h3 style={{ fontFamily: "Playfair Display, serif", fontSize: 20, color: GOLD, margin: "0 0 20px" }}>What You'll Receive</h3>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {product.deliverables.map((item, i) => (
+                  {(durationOptions
+                    ? product.deliverables.map(item =>
+                        // Replace any film/video length mention with the selected duration label
+                        item.replace(/\d+[-–]\d+\s*min(?:ute)?(?:\s*film)?|\d+\s*min(?:ute)?(?:\s*film)?/gi, `${activeDurationLabel} film`)
+                      )
+                    : product.deliverables
+                  ).map((item, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                       <span style={{ color: GOLD, fontSize: 12, marginTop: 2, flexShrink: 0 }}>✦</span>
                       <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", lineHeight: 1.5 }}>{item}</span>
@@ -695,7 +738,10 @@ export default function ProductDetail() {
                         </div>
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {t.features.map((f, j) => (
+                        {(durationOptions
+                          ? (durationOptions[selectedDuration]?.tiers[i]?.features ?? t.features)
+                          : t.features
+                        ).map((f, j) => (
                           <span key={j} style={{ fontSize: 11, color: selectedTier === i ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.5)", background: selectedTier === i ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${selectedTier === i ? "rgba(212,175,55,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 20, padding: "3px 10px" }}>{f}</span>
                         ))}
                       </div>

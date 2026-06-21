@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { GhaafeediLogo } from "./GhaafeediLogo";
 import { motion } from "framer-motion";
 import { Link, useLocation } from "wouter";
+import { authClient } from "../lib/authClient";
 
 const NAV_LINKS = [
   { label: "Home",        href: "/" },
@@ -12,15 +13,24 @@ const NAV_LINKS = [
   { label: "Contact",     href: "/contact" },
 ];
 
+const GOLD = "#D4AF37";
+
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { data: session } = authClient.useSession();
+  const isLoggedIn = !!session?.user;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    setLocation("/");
+  };
 
   return (
     <motion.nav
@@ -49,22 +59,14 @@ export function Navbar() {
         {/* ── Logo + Brand ── */}
         <Link
           href="/"
-          style={{
-            textDecoration: "none",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}
+          style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 16 }}
           className="gm-navbar-brand"
         >
           <GhaafeediLogo variant="navbar" height={44} />
         </Link>
 
         {/* ── Nav Links ── */}
-        <div
-          style={{ display: "flex", alignItems: "center", gap: 36 }}
-          className="nav-links-desktop"
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 36 }} className="nav-links-desktop">
           {NAV_LINKS.map(item => {
             const isActive = item.href === "/"
               ? location === "/"
@@ -75,15 +77,15 @@ export function Navbar() {
                 href={item.href}
                 style={{
                   position: "relative",
-                  color: isActive ? "#D4AF37" : "rgba(255,255,255,0.78)",
+                  color: isActive ? GOLD : "rgba(255,255,255,0.78)",
                   fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 500,
                   textDecoration: "none",
                   letterSpacing: "0.03em",
                   transition: "color 0.22s",
                   paddingBottom: 2,
                 }}
-                onMouseEnter={e => (e.currentTarget.style.color = "#D4AF37")}
-                onMouseLeave={e => (e.currentTarget.style.color = isActive ? "#D4AF37" : "rgba(255,255,255,0.78)")}
+                onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
+                onMouseLeave={e => (e.currentTarget.style.color = isActive ? GOLD : "rgba(255,255,255,0.78)")}
               >
                 {item.label}
                 <span style={{
@@ -126,40 +128,95 @@ export function Navbar() {
 
         {/* ── Auth ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Link href="/signin" style={{
-            color: "#D4AF37", fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 600,
-            border: "1.5px solid rgba(212,175,55,0.45)", borderRadius: 999, padding: "8px 22px",
-            textDecoration: "none",
-            letterSpacing: "0.025em",
-            transition: "all 0.22s",
-          }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.borderColor = "#D4AF37";
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 14px rgba(212,175,55,0.3)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.45)";
-              (e.currentTarget as HTMLElement).style.boxShadow = "none";
-            }}
-          >Sign In</Link>
-          <Link href="/signup" style={{
-            background: "linear-gradient(135deg, #FFE8A3 0%, #D4AF37 55%, #9A6F1F 100%)",
-            color: "#0A0B0F", fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 700,
-            borderRadius: 999, padding: "9px 22px",
-            textDecoration: "none",
-            letterSpacing: "0.025em",
-            boxShadow: "0 4px 18px rgba(212,175,55,0.40)",
-            transition: "all 0.22s",
-          }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 28px rgba(212,175,55,0.65)";
-              (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 18px rgba(212,175,55,0.40)";
-              (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-            }}
-          >Get Started</Link>
+          {isLoggedIn ? (
+            <>
+              {/* Products shortcut */}
+              <Link href="/products" style={{
+                color: "rgba(255,255,255,0.70)", fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 500,
+                textDecoration: "none", letterSpacing: "0.025em",
+                padding: "8px 16px", borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.10)",
+                transition: "all 0.22s",
+              }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.color = GOLD;
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.4)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.70)";
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.10)";
+                }}
+              >Products</Link>
+
+              {/* Dashboard */}
+              <Link href="/dashboard" style={{
+                color: GOLD, fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 600,
+                border: `1.5px solid rgba(212,175,55,0.45)`, borderRadius: 999, padding: "8px 22px",
+                textDecoration: "none", letterSpacing: "0.025em", transition: "all 0.22s",
+              }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 0 14px rgba(212,175,55,0.3)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.45)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
+                }}
+              >Dashboard</Link>
+
+              {/* Sign Out */}
+              <button
+                onClick={handleSignOut}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  color: "rgba(255,255,255,0.55)", fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 500,
+                  border: "1px solid rgba(255,255,255,0.10)", borderRadius: 999, padding: "8px 18px",
+                  cursor: "pointer", letterSpacing: "0.025em", transition: "all 0.22s",
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.color = "#FF6B6B";
+                  e.currentTarget.style.borderColor = "rgba(255,107,107,0.4)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.color = "rgba(255,255,255,0.55)";
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.10)";
+                }}
+              >Sign Out</button>
+            </>
+          ) : (
+            <>
+              <Link href="/signin" style={{
+                color: GOLD, fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 600,
+                border: "1.5px solid rgba(212,175,55,0.45)", borderRadius: 999, padding: "8px 22px",
+                textDecoration: "none", letterSpacing: "0.025em", transition: "all 0.22s",
+              }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = GOLD;
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 0 14px rgba(212,175,55,0.3)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.45)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
+                }}
+              >Sign In</Link>
+              <Link href="/signup" style={{
+                background: "linear-gradient(135deg, #FFE8A3 0%, #D4AF37 55%, #9A6F1F 100%)",
+                color: "#0A0B0F", fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 700,
+                borderRadius: 999, padding: "9px 22px",
+                textDecoration: "none", letterSpacing: "0.025em",
+                boxShadow: "0 4px 18px rgba(212,175,55,0.40)", transition: "all 0.22s",
+              }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 28px rgba(212,175,55,0.65)";
+                  (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 18px rgba(212,175,55,0.40)";
+                  (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                }}
+              >Get Started</Link>
+            </>
+          )}
         </div>
       </div>
 
