@@ -14,9 +14,12 @@
 // RUNABLE: Drop this file into packages/web/src/lib/
 // ============================================================
 
-// simli-client loaded dynamically to prevent bundler external crashes
+// Static import — esbuild handles CJS→ESM conversion before Rollup sees it.
+// Dynamic import with @vite-ignore caused Rollup CJS external resolution failures.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let SimliClient: any = null;
+import { SimliClient as _SimliClient } from "simli-client";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let SimliClient: any = _SimliClient;
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -153,15 +156,9 @@ export class SimliAvatarEngine {
       throw new Error("Video or audio element not available");
     }
 
-    // Dynamic import with @vite-ignore to prevent Rollup from treating this as
-    // an external bare module specifier — simli-client is bundled, not external
+    // SimliClient is statically imported at module top — no dynamic import needed.
     if (!SimliClient) {
-      try {
-        const mod = await import(/* @vite-ignore */ "simli-client");
-        SimliClient = mod.SimliClient ?? mod.default ?? mod;
-      } catch {
-        throw new Error("simli-client failed to load");
-      }
+      throw new Error("simli-client failed to load (static import returned falsy)");
     }
 
     // Construct with livekit transport ONLY
