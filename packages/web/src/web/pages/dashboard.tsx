@@ -297,7 +297,7 @@ function TopNav({ firstName, unreadCount, notifOpen, notifications, onToggleNoti
           <span /><span /><span />
         </button>
         <button onClick={() => setLocation("/")}
-          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "Playfair Display, serif", fontWeight: 700, fontSize: 17, background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } as React.CSSProperties}>
+          style={{ background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`, border: "none", cursor: "pointer", fontFamily: "Playfair Display, serif", fontWeight: 700, fontSize: 17, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" } as React.CSSProperties}>
           Ghaafeedi Music
         </button>
       </div>

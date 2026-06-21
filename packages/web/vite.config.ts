@@ -24,14 +24,21 @@ export default defineConfig(({ mode }) => {
 			hmr: { overlay: false },
 			cors: false,
 		},
+		optimizeDeps: {
+			include: ["simli-client"],
+		},
 		build: {
 			target: "esnext",
 			minify: "esbuild",
+			commonjsOptions: {
+				// Ensure CJS packages (simli-client) are transformed to ESM
+				transformMixedEsModules: true,
+			},
 			rollupOptions: {
 				output: {
-					// ONLY split our own page-level code — never node_modules.
-					// Splitting node_modules via manualChunks breaks CJS packages
-					// that use internal relative imports (simli-client, @tanstack/*).
+					// Only split our OWN page code — never node_modules.
+					// Putting node_modules in manualChunks breaks CJS packages
+					// that use internal relative imports (simli-client ./Client, @tanstack ./Client).
 					manualChunks: (id) => {
 						if (id.includes("node_modules/")) return undefined;
 						if (id.includes("/pages/admin/")) return "chunk-admin";
