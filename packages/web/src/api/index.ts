@@ -19,6 +19,7 @@ import { dodo } from "./routes/dodo";
 import { pipeline } from "./routes/pipeline";
 import { dashboard } from "./routes/dashboard";
 import { lipsync } from "./routes/lipsync";
+import { sophiaMobileRoutes } from "./routes/sophia-mobile";
 
 const app = new Hono()
   .basePath('api')
@@ -47,7 +48,8 @@ const app = new Hono()
   .route("/dodo", dodo)
   .route("/pipeline", pipeline)
   .route("/dashboard", dashboard)
-  .route("/lipsync", lipsync);
+  .route("/lipsync", lipsync)
+  .route("/sophia-mobile", sophiaMobileRoutes);
 
 export type AppType = typeof app;
 export default app;

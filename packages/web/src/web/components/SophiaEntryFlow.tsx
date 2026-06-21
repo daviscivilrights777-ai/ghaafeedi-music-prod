@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SimliAvatar } from "./SimliAvatar";
 import type { SpeakFn } from "../../lib/SimliAvatarEngine";
+import { SophiaMobileLipSync } from "./SophiaMobileLipSync";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -73,9 +74,9 @@ function buildSummary(a: Record<number, string>): string {
     both: "The full Ghaafeedi experience — song and film — was made for exactly this.",
     unsure: "I'll walk you through everything once you're inside.",
   };
-  const why  = whyMap[a[1]] ?? "create something meaningful";
-  const who  = whoMap[a[2]] ?? "for someone special";
-  const what = whatMap[a[3]] ?? "Let's find the perfect experience together.";
+  const why  = whyMap[a[1] as string] ?? "create something meaningful";
+  const who  = whoMap[a[2] as string] ?? "for someone special";
+  const what = whatMap[a[3] as string] ?? "Let's find the perfect experience together.";
   return `You're here to ${why} — ${who}. ${what}`;
 }
 
@@ -188,7 +189,7 @@ function useTypewriter(text: string, speed = 24) {
       i++;
       setOut(text.slice(0, i));
       if (i < text.length) {
-        const ch = text[i];
+        const ch = text[i] ?? "";
         const pause = [".", "!", "?"].includes(ch) ? speed * 7 : ch === "," ? speed * 3 : speed;
         timer.current = setTimeout(tick, pause);
       } else { setDone(true); }
@@ -585,35 +586,68 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                     }}
                   />
                 ) : (
-                  // Fallback — large static portrait
-                  <div style={{ width: "100%", height: "100%", position: "relative" }}>
-                    <img
-                      src="/assets/sophia-lipsync-portrait.png"
-                      alt="Sophia"
+                  // Mobile: Wav2Lip lip sync OR static portrait fallback
+                  disableSimli ? (
+                    <SophiaMobileLipSync
+                      onReady={(mobileSpeakFn) => {
+                        // Wire mobile speak function into the same
+                        // speakRef used by the desktop Simli path
+                        speakRef.current = mobileSpeakFn;
+                        setSophiaReady(true);
+                      }}
+                      onSpeakingChange={setSophiaSpeaking}
+                      onError={() => {
+                        // Non-fatal — static portrait stays visible
+                        // Audio continues playing via ElevenLabs
+                        console.warn("[SophiaFlow] Mobile lip sync error — using portrait");
+                      }}
+                      // Pre-fetch the NEXT step's video while current plays
+                      nextStepText={(() => {
+                        const next = step + 1;
+                        if (next === 1) return SOPHIA_LINES.q1;
+                        if (next === 2) return SOPHIA_LINES.q2;
+                        if (next === 3) return SOPHIA_LINES.q3;
+                        if (next === 4) return SOPHIA_LINES.goodbye(buildSummary(answers));
+                        return undefined;
+                      })()}
+                      portraitSrc="/assets/sophia-lipsync-portrait.png"
                       style={{
-                        width: "100%", height: "100%",
-                        objectFit: "cover", objectPosition: "center 15%",
-                        display: "block",
-                        animation: "sef-breathe 3.5s ease-in-out infinite",
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "inherit",
                       }}
                     />
-                    {/* Speaking bars on fallback */}
-                    <div style={{
-                      position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
-                      display: "flex", gap: 4, alignItems: "flex-end", height: 28,
-                      opacity: spoken && !canContinue ? 0.7 : 0,
-                      transition: "opacity 400ms",
-                    }}>
-                      {[0,1,2,3,4,5,6].map(i => (
-                        <div key={i} style={{
-                          width: 4, borderRadius: 3,
-                          background: `linear-gradient(to top, ${GOLD}, ${GOLD2})`,
-                          animation: `sef-bar ${0.45 + i * 0.09}s ease-in-out ${i * 0.07}s infinite`,
-                          height: 6,
-                        }} />
-                      ))}
+                  ) : (
+                    // Simli failed fallback — large static portrait
+                    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                      <img
+                        src="/assets/sophia-lipsync-portrait.png"
+                        alt="Sophia"
+                        style={{
+                          width: "100%", height: "100%",
+                          objectFit: "cover", objectPosition: "center 15%",
+                          display: "block",
+                          animation: "sef-breathe 3.5s ease-in-out infinite",
+                        }}
+                      />
+                      {/* Speaking bars on fallback */}
+                      <div style={{
+                        position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
+                        display: "flex", gap: 4, alignItems: "flex-end", height: 28,
+                        opacity: spoken && !canContinue ? 0.7 : 0,
+                        transition: "opacity 400ms",
+                      }}>
+                        {[0,1,2,3,4,5,6].map(i => (
+                          <div key={i} style={{
+                            width: 4, borderRadius: 3,
+                            background: `linear-gradient(to top, ${GOLD}, ${GOLD2})`,
+                            animation: `sef-bar ${0.45 + i * 0.09}s ease-in-out ${i * 0.07}s infinite`,
+                            height: 6,
+                          }} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )
                 )}
               </div>
 
