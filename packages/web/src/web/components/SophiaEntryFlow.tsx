@@ -10,6 +10,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { SimliAvatar } from "@/web/components/SimliAvatar";
+import type { SpeakFn } from "@/lib/SimliAvatarEngine";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -197,296 +199,6 @@ function useTypewriter(text: string, speed = 24) {
   return { out, done };
 }
 
-// ─── Simli WebRTC Avatar ──────────────────────────────────────────────────────
-// Transport: "p2p" (library default) — P2P WebRTC via RTCPeerConnection.
-//   Simli's own retry logic: tries p2p up to 2x, then auto-switches to livekit.
-//   Our timeout: 12s — one clean P2P attempt. Audio fallback already playing.
-//
-// Audio pipeline: speak(text) → /api/simli/tts-stream (ElevenLabs PCM16 chunks)
-//   → sendAudioData() → WebSocket signaling channel → Simli renders face.
-//
-// "start" event fires when first video frame arrives (requestVideoFrameCallback).
-// We listen to client "start" event AND await client.start() — both paths covered.
-interface SimliAvatarProps {
-  sessionToken: string | null;
-  onSpeakingChange: (v: boolean) => void;
-  onReady: (speak: (text: string) => Promise<void>) => void;
-  onError: () => void;
-}
-
-function SimliAvatar({ sessionToken, onSpeakingChange, onReady, onError }: SimliAvatarProps) {
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const audioRef    = useRef<HTMLAudioElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientRef   = useRef<any>(null);
-  const startedRef  = useRef(false);
-  const readyFiredRef = useRef(false);
-  const speakingRef = useRef(false);
-  const [status,   setStatus]   = useState<"idle"|"connecting"|"ready"|"error">("idle");
-  const [speaking, setSpeaking] = useState(false);
-
-  // ── speak() — streams ElevenLabs PCM directly into Simli ──────────────────
-  // Reads chunked PCM stream from /api/simli/tts-stream and pipes each chunk
-  // to sendAudioData() which forwards over the WebSocket signaling channel.
-  const speakFn = useCallback(async (text: string) => {
-    const client = clientRef.current;
-    if (!client) return;
-    try {
-      console.log("[Simli] speak →", text.slice(0, 60) + "…");
-      const res = await fetch("/api/simli/tts-stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok || !res.body) {
-        console.warn("[Simli] TTS stream failed:", res.status);
-        return;
-      }
-      const reader = res.body.getReader();
-      let totalBytes = 0;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value && value.length > 0) {
-          client.sendAudioData(value);
-          totalBytes += value.length;
-        }
-      }
-      console.log("[Simli] speak done, total PCM bytes:", totalBytes);
-    } catch (err) {
-      console.warn("[Simli] speak error:", err);
-    }
-  }, []);
-
-  // ── Notify parent once — called from "start" event OR start() resolve ─────
-  const notifyReady = useCallback((client: unknown) => {
-    if (readyFiredRef.current) return;
-    readyFiredRef.current = true;
-    console.log("[Simli] ✅ READY — first frame received, priming buffer");
-    setStatus("ready");
-    // Prime Simli audio buffer (official recommendation: send silence first)
-    const silence = new Uint8Array(6000);
-    (client as { sendAudioData: (d: Uint8Array) => void }).sendAudioData(silence);
-    onReady(speakFn);
-  }, [speakFn, onReady]);
-
-  // ── Auto-init as soon as session token is available ────────────────────────
-  useEffect(() => {
-    if (!sessionToken || startedRef.current) return;
-    if (!videoRef.current || !audioRef.current) return;
-    startedRef.current = true;
-    setStatus("connecting");
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { SimliClient } = await import("simli-client");
-
-        // Force "livekit" transport — P2P is broken server-side for this account.
-        // wss://api.simli.ai/compose/webrtc/p2p → "SERVER ERROR IN INITIALIZATION"
-        // wss://api.simli.ai/compose/webrtc/livekit → sends DESTINATION + livekit_url ✅
-        const client = new SimliClient(
-          sessionToken,
-          videoRef.current!,
-          audioRef.current!,
-          null,        // iceServers — null = use STUN defaults
-          undefined,   // logLevel — debug (default)
-          "livekit",   // FORCED: p2p broken server-side, livekit is the only working transport
-        );
-        clientRef.current = client;
-
-        // ── CRITICAL: Resume AudioContext immediately after construction ──────
-        // SimliClient creates AudioContext at construction time. If constructed
-        // before a user gesture, Chrome/Safari put it in "suspended" state.
-        // sendAudioData() silently drops all PCM until context is resumed.
-        // We force-resume here AND on every user gesture to be safe.
-        try {
-          const ctx = (client as unknown as { audioContext: AudioContext }).audioContext;
-          if (ctx && ctx.state === "suspended") {
-            ctx.resume().catch(() => {});
-          }
-          // Also attach a one-time gesture listener to resume on next interaction
-          const resumeCtx = () => {
-            ctx?.resume().catch(() => {});
-            document.removeEventListener("click",     resumeCtx);
-            document.removeEventListener("touchstart", resumeCtx);
-            document.removeEventListener("keydown",   resumeCtx);
-          };
-          document.addEventListener("click",     resumeCtx, { once: true, passive: true });
-          document.addEventListener("touchstart", resumeCtx, { once: true, passive: true });
-          document.addEventListener("keydown",   resumeCtx, { once: true, passive: true });
-          console.log("[Simli] AudioContext state after construct:", ctx?.state);
-        } catch { /* ignore — non-critical */ }
-
-        // ── Simli events ──────────────────────────────────────────────────────
-        client.on("start", () => {
-          // Fires when first video frame arrives (requestVideoFrameCallback inside LivekitTransport)
-          // Also fires for P2P on first track attachment. Belt-and-suspenders with start() resolve.
-          if (!cancelled) {
-            console.log("[Simli] 🎬 'start' event received");
-            notifyReady(client);
-          }
-        });
-        client.on("speaking", () => {
-          if (cancelled) return;
-          console.log("[Simli] 🟢 SPEAKING");
-          speakingRef.current = true;
-          setSpeaking(true);
-          onSpeakingChange(true);
-        });
-        client.on("silent", () => {
-          if (cancelled) return;
-          console.log("[Simli] ⬛ SILENT");
-          speakingRef.current = false;
-          setSpeaking(false);
-          onSpeakingChange(false);
-        });
-        client.on("ack", () => console.log("[Simli] ✓ ACK received"));
-        client.on("stop", () => console.log("[Simli] ■ STOP received"));
-        client.on("connection_info", (info: string) => console.log("[Simli] 🔗 connection_info:", info.slice(0, 80)));
-        client.on("error", (d: string) => {
-          if (cancelled) return;
-          console.error("[Simli] ❌ error event:", d);
-          if (!readyFiredRef.current) { setStatus("error"); onError(); }
-        });
-        client.on("startup_error", (m: string) => {
-          if (cancelled) return;
-          console.error("[Simli] ❌ startup_error:", m);
-          if (!readyFiredRef.current) { setStatus("error"); onError(); }
-        });
-        client.on("unknown", (m: string) => console.log("[Simli] ❓ unknown msg:", m.slice(0, 100)));
-
-        // await client.start() — resolves when first video frame renders.
-        // SimliClient internal timeout = 15s, retries up to 10x (every 2s).
-        // We race with 12s max — enough for one clean P2P attempt (ICE + WS + first frame).
-        // Audio fallback is already playing via ttsAudioRef — user never waits.
-        console.log("[Simli] calling client.start() — transport: livekit…");
-        await Promise.race([
-          client.start(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Simli timeout 20s")), 20000)
-          ),
-        ]);
-
-        if (cancelled) return;
-        // start() resolved — first frame confirmed
-        notifyReady(client);
-
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[Simli] init failed:", err);
-          if (!readyFiredRef.current) { setStatus("error"); onError(); }
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      clientRef.current?.stop().catch(() => {});
-    };
-  // speakFn + notifyReady are stable useCallbacks — safe to include
-  }, [sessionToken, speakFn, notifyReady]);
-
-  const visible = status === "ready";
-
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {/* Speaking pulse rings */}
-      {speaking && [0, 1].map(i => (
-        <div key={i} style={{
-          position: "absolute", left: "50%", top: "50%",
-          width: "100%", height: "100%", borderRadius: "inherit",
-          border: "2px solid rgba(212,175,55,0.45)",
-          animation: `sef-ring-expand ${1.4 + i * 0.5}s ease-out ${i * 0.4}s infinite`,
-          pointerEvents: "none", zIndex: 0,
-        }} />
-      ))}
-
-      {/* Fallback portrait — visible while Simli loads */}
-      <div style={{
-        position: "absolute", inset: 0, zIndex: 2,
-        opacity: visible ? 0 : 1,
-        transition: "opacity 800ms ease",
-        borderRadius: "inherit", overflow: "hidden",
-      }}>
-        <img
-          src="/assets/sophia-lipsync-portrait.png"
-          alt="Sophia"
-          style={{
-            width: "100%", height: "100%",
-            objectFit: "cover", objectPosition: "center 15%",
-            display: "block",
-            animation: "sef-breathe 3.5s ease-in-out infinite",
-          }}
-        />
-        {/* connecting badge */}
-        {status === "connecting" && (
-          <div style={{
-            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-            background: "rgba(5,11,26,0.82)", border: "1px solid rgba(212,175,55,0.3)",
-            borderRadius: 20, padding: "5px 14px",
-            display: "flex", alignItems: "center", gap: 8,
-            backdropFilter: "blur(8px)",
-          }}>
-            <div style={{
-              width: 8, height: 8, borderRadius: "50%",
-              border: "2px solid " + GOLD, borderTopColor: "transparent",
-              animation: "sef-spin 0.8s linear infinite",
-            }} />
-            <span style={{ fontSize: 11, color: GOLD2, fontFamily: "Inter,sans-serif", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-              Sophia connecting…
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Simli live video */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{
-          position: "absolute", inset: 0, zIndex: 3,
-          width: "100%", height: "100%",
-          objectFit: "cover", objectPosition: "center top",
-          borderRadius: "inherit",
-          // MUST be > 0: opacity:0 throttles requestVideoFrameCallback in Chrome/Safari.
-          // rVFC never fires → "start" never emits → visible never becomes true → chicken-and-egg.
-          // 0.001 is invisible to human eye but keeps rVFC alive in the browser.
-          opacity: visible ? 1 : 0.001,
-          transition: "opacity 800ms ease",
-          background: "transparent",
-        }}
-      />
-      {/* Audio must NOT be display:none — browsers block autoplay on hidden audio */}
-      <audio
-        ref={audioRef}
-        autoPlay
-        playsInline
-        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none", zIndex: -1 }}
-      />
-
-      {/* Speaking bars overlay */}
-      <div style={{
-        position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
-        display: "flex", gap: 4, alignItems: "flex-end", height: 28,
-        opacity: speaking ? 1 : 0,
-        transition: "opacity 300ms ease",
-        pointerEvents: "none", zIndex: 10,
-      }}>
-        {[0,1,2,3,4,5,6].map(i => (
-          <div key={i} style={{
-            width: 4, borderRadius: 3,
-            background: `linear-gradient(to top, ${GOLD}, ${GOLD2})`,
-            animation: speaking ? `sef-bar ${0.45 + i * 0.09}s ease-in-out ${i * 0.07}s infinite` : "none",
-            height: 6,
-          }} />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ─── Option grid ──────────────────────────────────────────────────────────────
 function OptionGrid({ opts, selected, onSelect }: { opts: Option[]; selected: string|null; onSelect:(k:string)=>void }) {
@@ -629,15 +341,11 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
 
   // Simli / TTS state
   const [sessionToken,  setSessionToken]  = useState<string|null>(null);
-  const [simliReady,    setSimliReady]    = useState(false);
+  const [sophiaReady,   setSophiaReady]   = useState(false);
   const [simliFailed,   setSimliFailed]   = useState(false);
-  const [simliSpeaking, setSimliSpeaking] = useState(false);
-  const speakRef    = useRef<((text: string) => Promise<void>) | null>(null);
-  const ttsQueueRef = useRef<string|null>(null);
-  // Persistent DOM audio element — avoids new Audio() autoplay blocks
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const fallbackAudioRef = useRef<HTMLAudioElement | null>(null);
-  const fallbackSpeakingRef = useRef(false);
+  const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
+  const speakRef      = useRef<SpeakFn | null>(null);
+  const speakQueueRef = useRef<string|null>(null);
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -669,70 +377,13 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Reset spoken + selection on each step change
   useEffect(() => { setSpoken(false); setSelected(null); }, [step]);
 
-  // ── Create persistent DOM audio element on mount ─────────────────────────
-  // Using a real DOM <audio> element (not new Audio()) avoids Safari/Chrome
-  // autoplay blocks. We append it to the body so it stays in the DOM.
-  useEffect(() => {
-    const el = document.createElement("audio");
-    el.id = "sophia-tts-audio";
-    el.preload = "auto";
-    el.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;";
-    document.body.appendChild(el);
-    ttsAudioRef.current = el;
-    el.addEventListener("play",  () => setSimliSpeaking(true));
-    el.addEventListener("ended", () => setSimliSpeaking(false));
-    el.addEventListener("error", () => setSimliSpeaking(false));
-    return () => { el.remove(); ttsAudioRef.current = null; };
-  }, []);
-
-  // ── playTTS: fetch MP3 from ElevenLabs and play via DOM audio element ─────
-  const playTTS = useCallback(async (text: string) => {
-    const el = ttsAudioRef.current;
-    if (!el) return;
-    try {
-      // Stop any current playback
-      el.pause();
-      el.removeAttribute("src");
-      el.load();
-
-      const res = await fetch("/api/simli/tts-fallback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) { console.warn("[TTS] API failed:", res.status); return; }
-
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      el.src = url;
-      el.onended = () => URL.revokeObjectURL(url);
-
-      // play() — will work because the DOM element was created before any gesture block
-      await el.play().catch(async (err) => {
-        // If autoplay blocked, wait for first click then retry
-        console.warn("[TTS] autoplay blocked, queuing for next gesture:", err.message);
-        pendingTTSRef.current = url;
-      });
-    } catch (err) {
-      console.warn("[TTS] error:", err);
-    }
-  }, []);
-
-  // Queue for autoplay-blocked audio — drained on first user gesture
-  const pendingTTSRef = useRef<string | null>(null);
-
-  // ── Unlock audio + drain pending TTS on first user gesture ───────────────
-  const audioUnlockedRef = useRef(false);
-  const unlockAndPlay = useCallback(() => {
-    if (audioUnlockedRef.current) return;
-    audioUnlockedRef.current = true;
-    const el = ttsAudioRef.current;
-    if (!el) return;
-    const pending = pendingTTSRef.current;
-    if (pending) {
-      pendingTTSRef.current = null;
-      el.src = pending;
-      el.play().catch(() => {});
+  // ── playTTS: routes through Simli speak fn (SimliAvatarEngine handles PCM) ─
+  const playTTS = useCallback((text: string) => {
+    if (speakRef.current) {
+      speakRef.current(text).catch(() => {});
+    } else {
+      // Queue for when Simli becomes ready
+      speakQueueRef.current = text;
     }
   }, []);
 
@@ -760,12 +411,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // ── Fire TTS on every step change ────────────────────────────────────────
   useEffect(() => {
     playTTS(speechLine);
-    // Also pipe to Simli for lip-sync if connected
-    if (speakRef.current) {
-      speakRef.current(speechLine).catch(() => {});
-    } else {
-      ttsQueueRef.current = speechLine;
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -784,7 +429,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   };
 
   const canContinue = spoken && (isIntro || isSummary || !!selected);
-  const useSimli    = !!sessionToken && !simliFailed;
+  const useSimli    = !simliFailed; // SimliAvatar handles token internally now
 
   return (
     <AnimatePresence>
@@ -795,7 +440,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 0.98 }}
           transition={{ duration: 0.5 }}
-          onClick={unlockAndPlay}
           style={{
             position: "fixed", inset: 0, zIndex: 99999,
             background: `radial-gradient(ellipse 130% 100% at 40% 10%, #0E1F4A 0%, #070F28 35%, ${BG} 70%, #020610 100%)`,
@@ -901,7 +545,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 background: "radial-gradient(ellipse, rgba(212,175,55,0.18) 0%, transparent 70%)",
                 filter: "blur(40px)",
                 zIndex: 2, pointerEvents: "none",
-                animation: simliSpeaking
+                animation: sophiaSpeaking
                   ? "sef-glow-pulse 1.2s ease-in-out infinite"
                   : "sef-glow-pulse 4s ease-in-out infinite",
               }} />
@@ -910,7 +554,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               <div style={{
                 position: "absolute", inset: 0, zIndex: 3,
                 borderRight: "1px solid rgba(212,175,55,0.12)",
-                animation: simliSpeaking
+                animation: sophiaSpeaking
                   ? "sef-speaking-glow 1.4s ease-in-out infinite"
                   : "sef-glow-pulse 5s ease-in-out infinite",
                 transition: "animation 500ms",
@@ -918,19 +562,17 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 {useSimli ? (
                   <SimliAvatar
                     sessionToken={sessionToken}
-                    onSpeakingChange={setSimliSpeaking}
-                    onReady={(speak) => {
+                    onSpeakingChange={setSophiaSpeaking}
+                    onReady={(speak: SpeakFn) => {
                       speakRef.current = speak;
-                      setSimliReady(true);
-                      // Drain queued line for lip-sync (audio already playing via ttsAudioRef)
-                      const queued = ttsQueueRef.current;
-                      if (queued) { ttsQueueRef.current = null; speak(queued).catch(() => {}); }
+                      setSophiaReady(true);
+                      // Drain any queued line (step changed before Simli was ready)
+                      const queued = speakQueueRef.current;
+                      if (queued) { speakQueueRef.current = null; speak(queued).catch(() => {}); }
                     }}
                     onError={() => {
                       setSimliFailed(true);
-                      // Drain lip-sync queue to fallback audio if Simli failed
-                      // (playTTS already fired — audio is playing or pending)
-                      console.log("[SEF] Simli failed — falling back to audio-only mode");
+                      console.log("[SEF] Simli failed — static portrait fallback active");
                     }}
                   />
                 ) : (
@@ -980,8 +622,8 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: "50%",
-                  background: simliReady ? "#22C55E" : simliSpeaking ? "#22C55E" : "rgba(212,175,55,0.6)",
-                  boxShadow: simliReady ? "0 0 8px rgba(34,197,94,0.9)" : "none",
+                  background: sophiaReady ? "#22C55E" : sophiaSpeaking ? "#22C55E" : "rgba(212,175,55,0.6)",
+                  boxShadow: sophiaReady ? "0 0 8px rgba(34,197,94,0.9)" : "none",
                   transition: "all 400ms",
                 }} />
                 <span style={{
@@ -995,7 +637,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   fontSize: "clamp(9px,0.75vw,10px)", color: "rgba(255,255,255,0.40)",
                   fontFamily: "Inter,sans-serif", letterSpacing: "0.08em", textTransform: "uppercase",
                 }}>
-                  {simliReady ? "• Live" : simliFailed ? "• AI" : "• Connecting"}
+                  {sophiaReady ? "• Live" : simliFailed ? "• AI" : "• Connecting"}
                 </span>
               </div>
             </div>

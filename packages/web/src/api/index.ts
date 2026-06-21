@@ -14,7 +14,7 @@ import { jobRoutes } from "./routes/jobs";
 import { providers } from "./routes/providers";
 import { automations } from "./routes/automations";
 import { sophia } from "./routes/sophia";
-import { simli } from "./routes/simli";
+import { simliRoutes as simli } from "./routes/simli";
 import { dodo } from "./routes/dodo";
 import { pipeline } from "./routes/pipeline";
 import { dashboard } from "./routes/dashboard";
