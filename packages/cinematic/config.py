@@ -247,6 +247,11 @@ class GhaafeediSettings(BaseModel):
         default_factory=lambda: os.environ.get("STORAGE_SECRET_KEY", "")
     )
 
+    # Suno / Sunor.cc
+    suno_api_key: str = Field(
+        default_factory=lambda: os.environ.get("SUNO_API_KEY", "")
+    )
+
     # Redis (Upstash)
     redis_url: str = Field(
         default_factory=lambda: os.environ.get("UPSTASH_REDIS_URL", "")

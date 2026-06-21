@@ -33,3 +33,33 @@ opencv-python-headless>=4.8.0
 # HTTP
 httpx>=0.25.0
 requests>=2.31.0
+
+# ─── Music Engine Dependencies ──────────────────────────────────────────────
+# Installed on Modal GPU containers at startup — NOT bundled in image.
+# Download model weights to /workspace/ on container init.
+
+# ACE-Step (Apache 2.0, full commercial)
+# Weights: ~8GB, loaded to /workspace/ace-step
+torch>=2.1.0
+torchaudio>=2.1.0
+
+# Stable Audio Open (CreativeML Open Rail-M, commercial OK)
+# Weights: ~3.7GB, loaded to /workspace/stable-audio
+stable-audio-tools>=0.0.15
+
+# MusicGen MEDIUM ONLY — CC-BY-NC 4.0, commercial OK
+# WARNING: facebook/musicgen-large = non-commercial. DO NOT use large.
+# Weights: ~1.5GB (medium), loaded to /workspace/musicgen
+audiocraft>=1.3.0
+
+# XTTS-v2 multilingual TTS (Coqui, CPML license, commercial OK)
+# 17 language support for vocal synthesis
+TTS>=0.22.0
+
+# YuE — Apache 2.0, full commercial
+# Weights: ~14GB (7B model), loaded to /workspace/yue-model
+# A100 40GB required
+transformers>=4.40.0
+diffusers>=0.27.0
+soundfile>=0.12.0
+accelerate>=0.27.0

@@ -258,6 +258,124 @@ async def _run_lipsync(request: LipSyncJobRequest):
         )
 
 
+# ─── Music Routing Routes (Phase Music Router) ────────────────────────────
+
+class MusicRouteRequest(BaseModel):
+    """Request body for POST /api/music/route"""
+    lyrics: str
+    genre: str
+    emotion: str                   # Must match EmotionalTone enum values
+    language: str = "english"
+    content_flags: list = []       # e.g. ["explicit", "grief_raw"]
+    quality_tier: str = "standard" # "standard" | "premium" | "ultra"
+    needs_vocals: bool = True
+    duration_seconds: int = 200
+
+
+class MusicRouteResponse(BaseModel):
+    """Response from POST /api/music/route"""
+    success: bool
+    song_file_url: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    bpm: Optional[float] = None
+    model: Optional[str] = None
+    routing_decision: Optional[dict] = None
+    error: Optional[str] = None
+    generation_time_seconds: Optional[float] = None
+
+
+@app.post("/api/music/route", response_model=MusicRouteResponse)
+def music_route(request: MusicRouteRequest):
+    """
+    Intelligent music generation routing endpoint.
+
+    Routes to best model (Suno / ACE-Step / Stable Audio / MusicGen / YuE)
+    based on emotion, language, content flags, and quality tier.
+
+    Called by the TypeScript MusicRouterAdapter in the main orchestration
+    engine. Returns audio file URL and metadata.
+    """
+    try:
+        from config import EmotionalTone
+        from music_engines.music_router import MusicRouter
+
+        # Validate emotion
+        try:
+            emotion_enum = EmotionalTone(request.emotion.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Invalid emotion '{request.emotion}'. "
+                    f"Must be one of: {[e.value for e in EmotionalTone]}"
+                )
+            )
+
+        router = MusicRouter(settings)
+
+        result = router.generate_with_routing(
+            lyrics=request.lyrics,
+            genre=request.genre,
+            emotion=emotion_enum,
+            language=request.language,
+            content_flags=request.content_flags,
+            quality_tier=request.quality_tier,
+            duration_seconds=request.duration_seconds,
+        )
+
+        return MusicRouteResponse(
+            success=result.get("success", False),
+            song_file_url=result.get("song_file_url"),
+            duration_seconds=result.get("duration_seconds"),
+            bpm=result.get("bpm"),
+            model=result.get("model"),
+            routing_decision=result.get("routing_decision"),
+            error=result.get("error"),
+            generation_time_seconds=result.get("generation_time_seconds"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"[MusicRoute] Unhandled error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/music/models")
+def music_models():
+    """
+    Returns availability status of all music generation models.
+    Used by admin panel provider health dashboard.
+    """
+    from music_engines.music_router import MusicRouter, MusicModel
+
+    router = MusicRouter(settings)
+
+    return {
+        "models": [
+            {
+                "id": model.value,
+                "available": router.available_models.get(model, False),
+                "license": {
+                    "suno": "Commercial API",
+                    "ace-step": "Apache 2.0",
+                    "stable-audio": "CreativeML Open Rail-M",
+                    "musicgen": "CC-BY-NC 4.0 (Medium only)",
+                    "yue": "Apache 2.0",
+                }.get(model.value, "Unknown"),
+                "gpu_requirement": {
+                    "suno": "None (API)",
+                    "ace-step": "A100 40GB or 2×A10G",
+                    "stable-audio": "A10G 24GB",
+                    "musicgen": "A10G 24GB",
+                    "yue": "A100 40GB",
+                }.get(model.value, "Unknown"),
+            }
+            for model in MusicModel
+        ]
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("CINEMATIC_PORT", 8001))
