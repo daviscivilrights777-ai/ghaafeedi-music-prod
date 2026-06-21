@@ -14,12 +14,9 @@
 // RUNABLE: Drop this file into packages/web/src/lib/
 // ============================================================
 
-// Static import — esbuild handles CJS→ESM conversion before Rollup sees it.
-// Dynamic import with @vite-ignore caused Rollup CJS external resolution failures.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import { SimliClient as _SimliClient } from "simli-client";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let SimliClient: any = _SimliClient;
+// Vendor ESM copy — removes simli-client npm CJS package from Rollup graph entirely.
+// See src/lib/simli-vendor/index.ts — permanent fix for ./Client?commonjs-external crash.
+import { SimliClient } from "./simli-vendor";
 
 // ─── Types ────────────────────────────────────────────────────
 

@@ -24,27 +24,12 @@ export default defineConfig(({ mode }) => {
 			hmr: { overlay: false },
 			cors: false,
 		},
-		optimizeDeps: {
-			include: ["simli-client"],
-		},
-		// Tell Vite SSR bundler (used during build) to NOT externalise simli-client.
-		// This forces esbuild to convert its CJS to ESM before Rollup ever touches it,
-		// preventing the "./Client?commonjs-external" resolution crash.
-		ssr: {
-			noExternal: ["simli-client"],
-		},
 		build: {
 			target: "esnext",
 			minify: "esbuild",
-			commonjsOptions: {
-				// Ensure CJS packages (simli-client) are transformed to ESM
-				transformMixedEsModules: true,
-			},
 			rollupOptions: {
 				output: {
 					// Only split our OWN page code — never node_modules.
-					// Putting node_modules in manualChunks breaks CJS packages
-					// that use internal relative imports (simli-client ./Client, @tanstack ./Client).
 					manualChunks: (id) => {
 						if (id.includes("node_modules/")) return undefined;
 						if (id.includes("/pages/admin/")) return "chunk-admin";
