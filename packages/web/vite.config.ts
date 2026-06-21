@@ -12,7 +12,6 @@ export default defineConfig(({ mode }) => {
 	Object.assign(process.env, env);
 
 	return {
-		// Only inject runable analytics in sandbox (never in production builds)
 		plugins: [honoDevPlugin(), react(), ...(mode !== "production" ? [runableAnalyticsPlugin()] : []), tailwind()],
 		resolve: {
 			alias: {
@@ -22,30 +21,15 @@ export default defineConfig(({ mode }) => {
 		server: {
 			port: 4200,
 			allowedHosts: true,
-			hmr: { overlay: false, },
-			cors: false
-		},
-		optimizeDeps: {
-			include: ["simli-client"],
+			hmr: { overlay: false },
+			cors: false,
 		},
 		build: {
 			target: "esnext",
 			minify: "esbuild",
-			rollupOptions: {
-				output: {
-					manualChunks: (id) => {
-						// @tanstack and simli-client use CJS internal relative imports (e.g. './Client')
-						// Splitting them into vendor chunk causes Rollup on Node 24 to lose relative dep resolution
-						if (id.includes("node_modules/@tanstack")) return undefined;
-						if (id.includes("node_modules/simli-client")) return undefined;
-						if (id.includes("node_modules/")) return "vendor";
-						if (id.includes("/pages/admin/")) return "chunk-admin";
-						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
-						if (id.includes("/pages/demo")) return "chunk-demo";
-						if (id.includes("/pages/product")) return "chunk-products";
-					},
-				},
-			},
+			// Let Vite handle chunking automatically — no manualChunks.
+			// manualChunks caused Rollup on Node 24 to lose CJS internal relative
+			// imports (e.g. './Client') inside @tanstack/* and simli-client.
 		},
 	};
 });
