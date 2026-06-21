@@ -14,7 +14,9 @@
 // RUNABLE: Drop this file into packages/web/src/lib/
 // ============================================================
 
-import SimliClient from "simli-client";
+// simli-client loaded dynamically to prevent bundler external crashes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let SimliClient: any = null;
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -149,6 +151,16 @@ export class SimliAvatarEngine {
 
     if (!this.videoEl || !this.audioEl) {
       throw new Error("Video or audio element not available");
+    }
+
+    // Dynamic import — prevents blank screen if bundler config changes
+    if (!SimliClient) {
+      try {
+        const mod = await import("simli-client");
+        SimliClient = mod.default ?? mod;
+      } catch {
+        throw new Error("simli-client failed to load");
+      }
     }
 
     // Construct with livekit transport ONLY
