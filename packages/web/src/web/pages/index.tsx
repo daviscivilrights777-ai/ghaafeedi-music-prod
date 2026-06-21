@@ -6,15 +6,42 @@
  *      Skip button so returning users can bypass immediately.
  *   2. onComplete() → stage "home"
  *
- * Back-button protection: logged-in users navigating back from
- * /dashboard are redirected to /dashboard (not back here).
- * That logic lives in dashboard.tsx, NOT here.
+ * Error Boundary wraps SophiaEntryFlow — any crash auto-skips to home.
+ * Mobile devices skip Simli WebRTC (passed via prop) to prevent black screen.
  */
-import { useState, Suspense, lazy } from "react";
+import { useState, Suspense, lazy, Component } from "react";
+import type { ReactNode, ErrorInfo } from "react";
 import { SophiaEntryFlow } from "../components/SophiaEntryFlow";
 import { useLocation } from "wouter";
 
-// Lazy-load everything below the fold
+// ─── Error Boundary ──────────────────────────────────────────────────────────
+// Any crash inside SophiaEntryFlow → auto-skip to homepage (never black screen)
+interface EBProps { children: ReactNode; onError: () => void; }
+interface EBState { hasError: boolean; }
+class SophiaErrorBoundary extends Component<EBProps, EBState> {
+  override state: EBState = { hasError: false };
+  static getDerivedStateFromError(): EBState { return { hasError: true }; }
+  override componentDidCatch(err: Error, info: ErrorInfo) {
+    console.warn("[Sophia] Entry flow crashed, skipping to home:", err.message, info.componentStack);
+    this.props.onError();
+  }
+  override render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+// ─── Mobile detection (no WebRTC on mobile — too unreliable) ─────────────────
+function isMobileDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  // Check touch points + user agent
+  const ua = navigator.userAgent;
+  const isTouchDevice = navigator.maxTouchPoints > 1;
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  return isTouchDevice || isMobileUA;
+}
+
+// ─── Lazy-load everything below the fold ────────────────────────────────────
 const Navbar              = lazy(() => import("../components/Navbar").then(m => ({ default: m.Navbar })));
 const HeroSection         = lazy(() => import("../components/HeroSection").then(m => ({ default: m.HeroSection })));
 const HowItWorks          = lazy(() => import("../components/HowItWorks").then(m => ({ default: m.HowItWorks })));
@@ -31,9 +58,10 @@ const SocialProofToast    = lazy(() => import("../components/SocialProofToast").
 type Stage = "sophia" | "home";
 
 export default function Index() {
-  // Sophia is mandatory for EVERY visitor — skip logic is inside SophiaEntryFlow via the Skip button
   const [stage, setStage] = useState<Stage>("sophia");
   const [, setLocation] = useLocation();
+
+  const mobile = isMobileDevice();
 
   const handleComplete = (path?: "onboarding" | "products" | "home") => {
     if (path === "onboarding") {
@@ -49,11 +77,16 @@ export default function Index() {
     setStage("home");
   };
 
+  // If anything crashes → just go home
+  const handleSophiaCrash = () => setStage("home");
+
   return (
     <>
-      {/* ── Sophia Entry Flow — mandatory for ALL visitors, has prominent Skip button ── */}
+      {/* ── Sophia Entry Flow — wrapped in error boundary, safe on all devices ── */}
       {stage === "sophia" && (
-        <SophiaEntryFlow onComplete={handleComplete} />
+        <SophiaErrorBoundary onError={handleSophiaCrash}>
+          <SophiaEntryFlow onComplete={handleComplete} disableSimli={mobile} />
+        </SophiaErrorBoundary>
       )}
 
       {/* ── Homepage ── */}

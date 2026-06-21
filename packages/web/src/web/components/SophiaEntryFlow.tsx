@@ -329,9 +329,13 @@ function EnterBtn({ onClick }: { onClick: () => void }) {
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-interface SophiaEntryFlowProps { onComplete: () => void }
+interface SophiaEntryFlowProps {
+  onComplete: () => void;
+  /** Pass true on mobile devices to skip Simli WebRTC (too unreliable on mobile) */
+  disableSimli?: boolean;
+}
 
-export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
+export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntryFlowProps) {
   // Flow state
   const [step,     setStep]     = useState(0);       // 0=welcome, 1-3=questions, 4=summary
   const [answers,  setAnswers]  = useState<Record<number,string>>({});
@@ -387,8 +391,13 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }
   }, []);
 
-  // ── AUTO-START Simli on mount ─────────────────────────────────────────────
+  // ── AUTO-START Simli on mount (skip entirely on mobile) ──────────────────
   useEffect(() => {
+    // Mobile: skip Simli WebRTC — use static portrait fallback immediately
+    if (disableSimli) {
+      setSimliFailed(true);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -406,7 +415,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [disableSimli]);
 
   // ── Fire TTS on every step change ────────────────────────────────────────
   useEffect(() => {
@@ -429,7 +438,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   };
 
   const canContinue = spoken && (isIntro || isSummary || !!selected);
-  const useSimli    = !simliFailed; // SimliAvatar handles token internally now
+  const useSimli    = !simliFailed && !disableSimli; // Skip WebRTC on mobile or on failure
 
   return (
     <AnimatePresence>
