@@ -27,9 +27,20 @@ export default defineConfig(({ mode }) => {
 		build: {
 			target: "esnext",
 			minify: "esbuild",
-			// Let Vite handle chunking automatically — no manualChunks.
-			// manualChunks caused Rollup on Node 24 to lose CJS internal relative
-			// imports (e.g. './Client') inside @tanstack/* and simli-client.
+			rollupOptions: {
+				output: {
+					// ONLY split our own page-level code — never node_modules.
+					// Splitting node_modules via manualChunks breaks CJS packages
+					// that use internal relative imports (simli-client, @tanstack/*).
+					manualChunks: (id) => {
+						if (id.includes("node_modules/")) return undefined;
+						if (id.includes("/pages/admin/")) return "chunk-admin";
+						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
+						if (id.includes("/pages/demo")) return "chunk-demo";
+						if (id.includes("/pages/product")) return "chunk-products";
+					},
+				},
+			},
 		},
 	};
 });
