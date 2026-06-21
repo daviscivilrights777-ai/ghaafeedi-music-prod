@@ -31,30 +31,33 @@ const DURATION_5_TIERS = [
   },
 ];
 
-// "Cinematic Masterpiece" → dropdown: 20 / 25 / 30 min  [Lawrence approved 2026-06-19]
+// "Cinematic Masterpiece" → dropdown: 20 / 25 / 30 min
+// 20min: Essential $449 / Premium $600 / Elite $799
+// 25min: Essential $549 / Premium $749 / Elite $999
+// 30min: Essential $649 / Premium $899 / Elite $1,199
 const DURATION_10_TIERS = [
   {
     label: "20 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
-      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
-      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$449",  compareAt: "$599",  sub: "20-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$600",  compareAt: "$799",  sub: "20-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
+      { name: "ELITE",     price: "$799",  compareAt: "$999",  sub: "20-Min Film", revisions: "4 Revisions" },
     ],
   },
   {
     label: "25 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
-      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
-      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$549",  compareAt: "$749",  sub: "25-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$749",  compareAt: "$999",  sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $250" },
+      { name: "ELITE",     price: "$999",  compareAt: "$1,299", sub: "25-Min Film", revisions: "4 Revisions" },
     ],
   },
   {
     label: "30 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$449", compareAt: "$599", sub: "20-Min Film", revisions: "2 Revisions" },
-      { name: "PREMIUM",   price: "$600", compareAt: "$799", sub: "25-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $199" },
-      { name: "ELITE",     price: "$799", compareAt: "$999", sub: "30-Min Film", revisions: "4 Revisions" },
+      { name: "ESSENTIAL", price: "$649",  compareAt: "$899",  sub: "30-Min Film", revisions: "2 Revisions" },
+      { name: "PREMIUM",   price: "$899",  compareAt: "$1,199", sub: "30-Min Film", revisions: "3 Revisions", highlight: true, saving: "Save $300" },
+      { name: "ELITE",     price: "$1,199", compareAt: "$1,599", sub: "30-Min Film", revisions: "4 Revisions" },
     ],
   },
 ];

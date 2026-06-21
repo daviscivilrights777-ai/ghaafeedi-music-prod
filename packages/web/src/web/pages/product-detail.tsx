@@ -403,19 +403,24 @@ const BG = "#050B1A";
 const NAVY = "#0B1736";
 
 // ─── Video Duration Config ────────────────────────────────────────────────────
-// 5/10/15 group — cinematic-story-film, dream-ai-visualization, future-self-vision, couples-journey-film, memorial-legacy-film
-// Essential=$149 5min 1rev | Premium=$249 10min 2rev | Elite=$399 15min 3rev [Lawrence approved 2026-06-19]
+// Approved pricing (P3, June 15 2026):
+// Group A — cinematic-story-film, dream-ai-visualization, future-self-vision, couples-journey-film, memorial-legacy-film
+//   2min: Essential $79 / Premium $129 / Elite $199
+//   5min: Essential $149 / Premium $249 / Elite $399
+//   10min: Essential $299 / Premium $499 / Elite $799
 const DURATION_GROUP_A = [
+  { label: "2 min",  tiers: [{ price: 79  }, { price: 129 }, { price: 199 }] },
   { label: "5 min",  tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
-  { label: "10 min", tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
-  { label: "15 min", tiers: [{ price: 149 }, { price: 249 }, { price: 399 }] },
+  { label: "10 min", tiers: [{ price: 299 }, { price: 499 }, { price: 799 }] },
 ];
-// 20/25/30 group — cinematic-life-story (20-Min Cinematic Masterpiece)
-// Essential=$449 20min 2rev | Premium=$600 25min 3rev | Elite=$799 30min 4rev [Lawrence approved 2026-06-19]
+// Group B — cinematic-life-story (feature-length masterpiece)
+//   20min: Essential $449 / Premium $600 / Elite $799
+//   25min: Essential $449 / Premium $600 / Elite $799
+//   30min: Essential $449 / Premium $600 / Elite $799
 const DURATION_GROUP_B = [
   { label: "20 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
-  { label: "25 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
-  { label: "30 min", tiers: [{ price: 449 }, { price: 600 }, { price: 799 }] },
+  { label: "25 min", tiers: [{ price: 549 }, { price: 749 }, { price: 999 }] },
+  { label: "30 min", tiers: [{ price: 649 }, { price: 899 }, { price: 1199 }] },
 ];
 const VIDEO_DURATION_CONFIG: Record<string, typeof DURATION_GROUP_A> = {
   "cinematic-story-film": DURATION_GROUP_A,
