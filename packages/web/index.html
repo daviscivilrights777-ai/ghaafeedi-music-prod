@@ -28,6 +28,8 @@
 	</head>
 	<body>
 		<div id="root"></div>
+		<!-- livekit-client loaded as UMD global so Rollup never bundles it (avoids CJS resolution crash) -->
+		<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.4/dist/livekit-client.umd.js"></script>
 		<script type="module" src="/src/web/main.tsx"></script>
 	</body>
 </html>

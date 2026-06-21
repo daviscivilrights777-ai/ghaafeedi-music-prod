@@ -375,8 +375,11 @@ export class LivekitTransport implements ITransport {
 
   async connect(): Promise<void> {
     this.logger.info("Connecting");
-    // Lazy-load livekit-client so it never enters the static module graph
-    const lk = await import("livekit-client");
+    // Use livekit-client UMD global loaded via <script> tag in index.html.
+    // Never import it as an ES module — it's CJS-heavy and breaks Rollup.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lk = (window as any).LivekitClient;
+    if (!lk) throw new Error("LivekitClient UMD not loaded — check index.html script tag");
     this.pc = new lk.Room({ adaptiveStream: false, dynacast: true });
     this.setupConnectionStateHandler(lk);
     await this.websocketPromise;
