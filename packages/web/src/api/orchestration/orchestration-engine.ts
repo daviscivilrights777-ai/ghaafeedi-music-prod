@@ -483,6 +483,170 @@ export class OrchestrationEngine {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // ── cinematic_video short-circuit ────────────────────────────────────────
+    // Calls the Python AIDirector via execFile to produce a full shot plan.
+    // The shot plan is stored as outputPayload and the job completes.
+    if (job.jobType === "cinematic_video" || job.jobType === "director_notes") {
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const path = await import("node:path");
+      const execFileAsync = promisify(execFile);
+
+      const cinemaPath = path.resolve(process.cwd(), "../../packages/cinematic");
+
+      const runnerScript = `
+import sys, os, json
+sys.path.insert(0, '${cinemaPath}')
+os.chdir('${cinemaPath}')
+from dotenv import load_dotenv
+load_dotenv('${cinemaPath}/.env')
+
+from config import GhaafeediSettings, CustomerInput, EmotionalTone, VideoStyle
+from agents.director import AIDirector
+
+body = json.loads(sys.argv[1])
+
+def to_emotion(s):
+    try:
+        return EmotionalTone(s.upper())
+    except Exception:
+        return EmotionalTone.HOPE
+
+def to_style(s):
+    try:
+        return VideoStyle(s.upper())
+    except Exception:
+        return VideoStyle.WARM_GOLDEN
+
+inp = CustomerInput(
+    customer_id=body.get('customer_id', 'orchestration'),
+    customer_story=body['customer_story'],
+    primary_emotion=to_emotion(body.get('primary_emotion', 'hope')),
+    secondary_emotions=[to_emotion(e) for e in body.get('secondary_emotions', [])],
+    emotional_arc=body.get('emotional_arc', []),
+    lyrics=body.get('lyrics', ''),
+    song_file_url=body.get('song_file_url', ''),
+    song_duration_seconds=float(body.get('song_duration_seconds', 180)),
+    song_bpm=body.get('song_bpm'),
+    song_genre=body.get('song_genre', 'pop'),
+    video_script=body.get('video_script', ''),
+    preferred_style=to_style(body.get('preferred_style', 'warm_golden')),
+    emotional_analysis=body.get('emotional_analysis', {}),
+)
+
+settings = GhaafeediSettings()
+director = AIDirector(settings)
+plan = director.create_shot_plan(inp, precomputed_music_analysis=body.get('precomputed_music_analysis'))
+
+out = {
+    'order_id': plan.order_id,
+    'title': plan.title,
+    'total_shots': plan.total_shots,
+    'total_duration_seconds': plan.total_duration_seconds,
+    'visual_style': str(plan.visual_style),
+    'color_palette': plan.color_palette,
+    'song_bpm': plan.song_bpm,
+    'beat_timestamps': plan.beat_timestamps,
+    'section_markers': plan.section_markers,
+    'shots': [
+        {
+            'shot_id': s.shot_id,
+            'scene_number': s.scene_number,
+            'shot_number': s.shot_number,
+            'start_time_seconds': s.start_time_seconds,
+            'duration_seconds': s.duration_seconds,
+            'shot_type': str(s.shot_type),
+            'camera_movement': str(s.camera_movement),
+            'camera_angle': s.camera_angle,
+            'lens_mm': s.lens_mm,
+            'composition': s.composition,
+            'focus_type': s.focus_type,
+            'visual_prompt': s.visual_prompt,
+            'negative_prompt': s.negative_prompt,
+            'lighting_description': s.lighting_description,
+            'color_temperature_kelvin': s.color_temperature_kelvin,
+            'emotional_beat': s.emotional_beat,
+            'narrative_purpose': s.narrative_purpose,
+            'lyrics_section': s.lyrics_section,
+            'transition_to_next': str(s.transition_to_next),
+            'transition_duration_seconds': s.transition_duration_seconds,
+            'music_timestamp_start': s.music_timestamp_start,
+            'music_timestamp_end': s.music_timestamp_end,
+            'beat_aligned': s.beat_aligned,
+        }
+        for s in plan.shots
+    ],
+}
+print(json.dumps(out))
+`;
+
+      try {
+        await JobStateMachine.transition(job.jobId, "processing", { provider: "openai" }).catch(() => {});
+
+        const { stdout, stderr } = await execFileAsync(
+          "python3",
+          ["-c", runnerScript, JSON.stringify(job.inputPayload ?? {})],
+          { timeout: 120_000, maxBuffer: 5 * 1024 * 1024, env: { ...process.env } }
+        );
+
+        if (stderr) console.warn("[OrchestrationEngine] director stderr:", stderr.slice(0, 300));
+
+        const plan = JSON.parse(stdout.trim()) as Record<string, unknown>;
+        const durationMs = Date.now() - startMs;
+
+        await JobStateMachine.transition(job.jobId, "complete", {
+          provider: "openai",
+          outputPayload: plan,
+          actualCostCents: JOB_TYPE_COST_CENTS.cinematic_video,
+        });
+
+        await this._updateJobInPg(job.jobId, {
+          status: "complete",
+          outputPayload: plan,
+          actualCostCents: JOB_TYPE_COST_CENTS.cinematic_video,
+          retryCount: 0,
+          completedAt: new Date(),
+          durationSeconds: Math.round(durationMs / 1000),
+        });
+
+        await this.billing.emit({
+          userId:      job.userId,
+          orderId:     job.orderId,
+          jobId:       job.jobId,
+          eventType:   "job_cost",
+          amountCents: JOB_VALUE_CENTS.cinematic_video,
+          provider:    "openai",
+          meta:        { durationMs, totalShots: plan.total_shots },
+        });
+
+        await this.logger.jobCompleted(job.jobId, "openai", durationMs, JOB_TYPE_COST_CENTS.cinematic_video / 100);
+
+        await EventBus.publish(EVENTS.JOB_COMPLETE as any, {
+          jobId: job.jobId, userId: job.userId,
+          provider: "openai", outputPayload: plan,
+        }, { jobId: job.jobId });
+
+        if (webhookUrl) {
+          this._fireWebhook(webhookUrl, { jobId: job.jobId, status: "complete", outputPayload: plan }).catch(console.error);
+        }
+
+        console.log(`[OrchestrationEngine] ${job.jobType} job=${job.jobId} COMPLETE (${plan.total_shots} shots) in ${durationMs}ms`);
+
+      } catch (err: unknown) {
+        const errMsg = (err as Error).message ?? "Director agent error";
+        console.error(`[OrchestrationEngine] ${job.jobType} job=${job.jobId} FAILED:`, errMsg);
+        await JobStateMachine.transition(job.jobId, "failed", { errorMessage: errMsg });
+        await this._updateJobInPg(job.jobId, {
+          status: "failed", errorMessage: errMsg,
+          retryCount: 1, completedAt: new Date(),
+        });
+        await this.logger.jobFailed(job.jobId, "openai", errMsg, 1);
+      }
+
+      return true;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     // ── clip_batch all-complete check ─────────────────────────────────────────
     // After each clip_batch job completes, check if ALL clips for this pipeline
     // run are done → dispatch edit_assemble
