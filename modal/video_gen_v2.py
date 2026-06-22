@@ -124,7 +124,7 @@ def download_all_models():
         print("⬇️  Downloading Wan2.1-14B T2V (~30GB) ...")
         wan_t2v_dir.mkdir(parents=True, exist_ok=True)
         snapshot_download(
-            repo_id="Wan-AI/Wan2.1-T2V-14B",
+            repo_id="Wan-AI/Wan2.1-T2V-14B-Diffusers",
             local_dir=str(wan_t2v_dir),
             ignore_patterns=["*.msgpack", "*.h5"],
         )
@@ -140,7 +140,7 @@ def download_all_models():
         print("⬇️  Downloading Wan2.1-14B I2V (~30GB) ...")
         wan_i2v_dir.mkdir(parents=True, exist_ok=True)
         snapshot_download(
-            repo_id="Wan-AI/Wan2.1-I2V-14B-480P",
+            repo_id="Wan-AI/Wan2.1-I2V-14B-480P-Diffusers",
             local_dir=str(wan_i2v_dir),
             ignore_patterns=["*.msgpack", "*.h5"],
         )
@@ -151,18 +151,29 @@ def download_all_models():
         print("✅ Wan2.1-14B I2V already cached")
 
     # ── 3. FLUX.1-schnell (key frame generation) ──
+    # NOTE: FLUX.1-schnell is a gated repo — requires HF_TOKEN + accepted license
+    # If HF_TOKEN is not set or license not accepted, we skip and use T2V fallback
     flux_dir = FLUX_DIR / "flux-schnell"
     if not (flux_dir / ".downloaded").exists():
-        print("⬇️  Downloading FLUX.1-schnell (~24GB) ...")
-        flux_dir.mkdir(parents=True, exist_ok=True)
-        snapshot_download(
-            repo_id="black-forest-labs/FLUX.1-schnell",
-            local_dir=str(flux_dir),
-            ignore_patterns=["*.msgpack", "*.h5"],
-        )
-        (flux_dir / ".downloaded").touch()
-        flux_volume.commit()
-        print("✅ FLUX.1-schnell downloaded")
+        hf_token = os.environ.get("HF_TOKEN", "")
+        if not hf_token:
+            print("⚠️  HF_TOKEN not set — skipping FLUX.1-schnell (T2V fallback will be used)")
+        else:
+            try:
+                print("⬇️  Downloading FLUX.1-schnell (~24GB) ...")
+                flux_dir.mkdir(parents=True, exist_ok=True)
+                snapshot_download(
+                    repo_id="black-forest-labs/FLUX.1-schnell",
+                    local_dir=str(flux_dir),
+                    ignore_patterns=["*.msgpack", "*.h5"],
+                    token=hf_token,
+                )
+                (flux_dir / ".downloaded").touch()
+                flux_volume.commit()
+                print("✅ FLUX.1-schnell downloaded")
+            except Exception as e:
+                print(f"⚠️  FLUX.1-schnell download failed: {e}")
+                print("    I2V workflow will fall back to T2V (Wan2.1 only)")
     else:
         print("✅ FLUX.1-schnell already cached")
 
