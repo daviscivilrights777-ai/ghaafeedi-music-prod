@@ -65,60 +65,15 @@ async function callModalWav2Lip(payload: {
   from_cache: boolean;
   latency_ms: number;
 }> {
-  const modalTokenId     = getEnv("MODAL_TOKEN_ID");
-  const modalTokenSecret = getEnv("MODAL_TOKEN_SECRET");
-
-  // Modal web endpoint URL pattern:
-  // https://{workspace}--{app-name}-{function-name}.modal.run
-  // We call the deployed function via Modal's REST API
-  const modalApiUrl = "https://api.modal.com/v1/functions/call";
-
-  // Build basic auth header
-  const credentials = Buffer.from(
-    `${modalTokenId}:${modalTokenSecret}`
-  ).toString("base64");
-
-  // Look up the function ID via Modal API
-  const functionsResp = await fetch(
-    "https://api.modal.com/v1/apps?state=deployed",
-    {
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-
-  if (!functionsResp.ok) {
-    throw new Error(
-      `Modal API error: ${functionsResp.status} ${await functionsResp.text()}`
-    );
-  }
-
-  // Use Modal's web endpoint pattern directly
-  // Format: https://{workspace}--ghaafeedi-sophia-wav2lip-sophia-speak-mobile.modal.run
-  const workspaceResp = await fetch("https://api.modal.com/v1/profile", {
-    headers: { Authorization: `Basic ${credentials}` },
-  });
-
-  let workspace = "daviscivilrights777"; // Fallback from modal profile current
-  if (workspaceResp.ok) {
-    const profile = await workspaceResp.json() as { username?: string };
-    workspace = profile.username ?? workspace;
-  }
-
-  // Web endpoint label is "sophia-speak-mobile" → URL format:
-  // https://{workspace}--{label}.modal.run
-  const webEndpointUrl = `https://${workspace}--sophia-speak-mobile.modal.run`;
+  // Direct web endpoint — workspace is fixed, no API lookup needed
+  // Deployed at: modal deploy modal/wav2lip_inference.py
+  const webEndpointUrl = "https://daviscivilrights777--sophia-speak-mobile.modal.run";
 
   const response = await fetch(webEndpointUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Basic ${credentials}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60000), // 60s — first call needs cold start
+    signal: AbortSignal.timeout(90000), // 90s — A10G cold start can take ~60s
   });
 
   if (!response.ok) {
