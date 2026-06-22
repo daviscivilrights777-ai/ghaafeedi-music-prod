@@ -34,13 +34,31 @@ class AIDirector:
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model = settings.openai_model
 
-    def create_shot_plan(self, customer_input: CustomerInput) -> ShotPlan:
+    def create_shot_plan(
+        self,
+        customer_input: CustomerInput,
+        precomputed_music_analysis: dict | None = None,
+    ) -> ShotPlan:
         """
         Main method: Creates a complete cinematic shot plan.
+
+        Args:
+            customer_input: Customer story, lyrics, emotions, etc.
+            precomputed_music_analysis: Optional deep analysis dict from
+                music_router.py (tempo_bpm, key_signature, tension_curve,
+                drop_timestamps, release_points, spectral_centroid_curve, etc.).
+                When provided, its fields are merged into the librosa analysis
+                to give the director richer musical context.
         """
         logger.info(f"Creating shot plan for order {customer_input.order_id}")
 
         music_analysis = self._analyze_music_structure(customer_input)
+
+        if precomputed_music_analysis:
+            music_analysis = self._merge_precomputed_analysis(
+                music_analysis, precomputed_music_analysis
+            )
+
         visual_plan = self._create_visual_narrative(customer_input, music_analysis)
         shots = self._create_shot_list(customer_input, music_analysis, visual_plan)
         refined_shots = self._cinematographer_pass(shots, customer_input)
@@ -149,6 +167,59 @@ PRIMARY EMOTION: {customer_input.primary_emotion.value}
             "beat_timestamps": [i * (60 / bpm) for i in range(int(dur * bpm / 60))],
         }
 
+    def _merge_precomputed_analysis(
+        self, base: dict, precomputed: dict
+    ) -> dict:
+        """
+        Merge precomputed deep music analysis from music_router.py into the
+        librosa-based base analysis.  Fields in precomputed take precedence
+        for numeric precision (BPM, timestamps) while the base analysis keeps
+        its structural sections when the precomputed data is incomplete.
+        """
+        merged = dict(base)
+
+        # --- Authoritative numeric fields (always override) ---
+        for key in (
+            "tempo_bpm", "estimated_bpm", "key_signature", "time_signature",
+            "beat_timestamps", "downbeat_timestamps",
+        ):
+            if key in precomputed:
+                merged[key] = precomputed[key]
+
+        # --- Deep analysis fields (additive — new keys only) ---
+        for key in (
+            "tension_curve",       # list of [time, tension_0_1] pairs
+            "release_points",      # list of timestamps where tension drops sharply
+            "drop_timestamps",     # list of timestamps for major energy drops
+            "energy_curve",        # override if more granular
+            "spectral_centroid_curve",
+            "loudness_curve",
+            "onset_strength_curve",
+            "harmonic_complexity",
+            "rhythmic_density_curve",
+            "section_labels",      # richer labels than default sections dict
+        ):
+            if key in precomputed:
+                merged[key] = precomputed[key]
+
+        # --- Sections: merge if precomputed provides richer data ---
+        if "sections" in precomputed and len(precomputed["sections"]) >= len(
+            base.get("sections", {})
+        ):
+            merged["sections"] = precomputed["sections"]
+
+        # --- Emotional peaks: union of both sets, deduplicated ---
+        base_peaks = set(base.get("key_emotional_peaks", []))
+        pre_peaks = set(precomputed.get("key_emotional_peaks", []))
+        if pre_peaks:
+            merged["key_emotional_peaks"] = sorted(base_peaks | pre_peaks)
+
+        logger.info(
+            f"[Director] Merged precomputed analysis: "
+            f"{list(precomputed.keys())} → final keys: {list(merged.keys())}"
+        )
+        return merged
+
     def _create_visual_narrative(self, customer_input: CustomerInput,
                                   music_analysis: dict) -> str:
         """Create the visual narrative concept."""
@@ -202,10 +273,25 @@ SONG STRUCTURE:
 {json.dumps(music_analysis.get('sections', {}), indent=2)}
 
 SONG DURATION: {customer_input.song_duration_seconds} seconds
+TEMPO: {music_analysis.get('tempo_bpm') or music_analysis.get('estimated_bpm', 'unknown')} BPM
+KEY: {music_analysis.get('key_signature', 'unknown')}
+
+TENSION & RELEASE:
+Tension Curve (time → 0-1): {json.dumps(music_analysis.get('tension_curve', [])[:12])}
+Release Points (timestamps): {json.dumps(music_analysis.get('release_points', []))}
+Major Drop Timestamps: {json.dumps(music_analysis.get('drop_timestamps', []))}
+
+ENERGY DYNAMICS:
+Energy Curve (time → 0-1): {json.dumps(music_analysis.get('energy_curve', [])[:12])}
+Emotional Peaks: {json.dumps(music_analysis.get('key_emotional_peaks', []))}
+
+Use the tension curve to decide when to HOLD on a shot vs. CUT fast.
+Use release points to place cathartic visual moments (wide open landscapes,
+slow motion, breathing room). Use drop timestamps for visual impact cuts.
 
 Create a vivid visual narrative concept that maps the emotional
 journey of this person's story to cinematic imagery synchronized
-with the song structure.
+with the song structure and its musical dynamics.
 """
                 }
             ],
@@ -293,6 +379,14 @@ SONG SECTIONS WITH TIMESTAMPS:
 EMOTIONAL PEAKS:
 {json.dumps(music_analysis.get('key_emotional_peaks', []))}
 
+TENSION & RELEASE:
+- tension_curve: {json.dumps(music_analysis.get('tension_curve', []))}
+- release_points: {json.dumps(music_analysis.get('release_points', []))}
+- drop_timestamps: {json.dumps(music_analysis.get('drop_timestamps', []))}
+- energy_curve: {json.dumps(music_analysis.get('energy_curve', []))}
+- key: {music_analysis.get('key', 'unknown')}
+- BPM: {music_analysis.get('bpm', music_analysis.get('tempo', 120))}
+
 TOTAL SONG DURATION: {song_duration} seconds
 PRIMARY EMOTION: {customer_input.primary_emotion.value}
 STYLE: {style['color_palette']}
@@ -306,8 +400,11 @@ CRITICAL RULES:
 5. Verse = wider + storytelling
 6. Bridge = completely different visual approach
 7. Sync cuts to beat timestamps when possible
-8. Every visual_prompt must be specific and vivid
-9. Include "shot on ARRI Alexa, cinematic, 2.39:1" in visual prompts
+8. At release_points, use wide/breathing shots (SLOW_PULL_OUT, CRANE_UP)
+9. At drop_timestamps, use SMASH_CUT or MATCH_CUT for maximum impact
+10. High tension (>0.7 on curve) = shorter shots (2-3s), low tension (<0.3) = longer shots (5-7s)
+11. Every visual_prompt must be specific and vivid — include "shot on ARRI Alexa, cinematic, 2.39:1" in every visual_prompt
+12. negative_prompt must always include: low quality, blurry, cartoon, anime, text, watermark, multiple people
 
 Output ONLY valid JSON object with "shots" key.
 """
