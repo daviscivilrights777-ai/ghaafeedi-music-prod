@@ -590,10 +590,11 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                   disableSimli ? (
                     <SophiaMobileLipSync
                       onReady={(mobileSpeakFn) => {
-                        // Wire mobile speak function into the same
-                        // speakRef used by the desktop Simli path
                         speakRef.current = mobileSpeakFn;
                         setSophiaReady(true);
+                        // Drain any speech queued before engine was ready
+                        const queued = speakQueueRef.current;
+                        if (queued) { speakQueueRef.current = null; mobileSpeakFn(queued, 0).catch(() => {}); }
                       }}
                       onSpeakingChange={setSophiaSpeaking}
                       onError={() => {
