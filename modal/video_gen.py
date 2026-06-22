@@ -67,9 +67,9 @@ image = (
         extra_options="--index-url https://download.pytorch.org/whl/cu121",
     )
     .pip_install([
-        "diffusers>=0.30.3",
-        "transformers>=4.44.0",
-        "accelerate>=0.33.0",
+        "diffusers==0.31.0",
+        "transformers==4.44.2",
+        "accelerate==0.34.2",
         "sentencepiece",
         "imageio[ffmpeg]",
         "imageio-ffmpeg",
@@ -80,6 +80,7 @@ image = (
         "fastapi[standard]",
         "pydantic",
         "huggingface_hub",
+        "protobuf",
     ])
 )
 
