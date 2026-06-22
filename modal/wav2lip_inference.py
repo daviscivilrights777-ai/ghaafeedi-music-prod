@@ -162,7 +162,7 @@ def sophia_speak_mobile(
     r2_public_url   = os.environ["R2_PUBLIC_URL"]
     portrait_url    = os.environ.get(
         "SOPHIA_PORTRAIT_URL",
-        "https://ghaafeedimusic.com/assets/sophia-lipsync-portrait.png"
+        "https://pub-bc7b203485814e1186102277ad450211.r2.dev/assets/sophia-lipsync-portrait.png"
     )
 
     # ── Cache key ──────────────────────────────────────────────

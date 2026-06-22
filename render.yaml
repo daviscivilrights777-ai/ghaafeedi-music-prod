@@ -61,4 +61,4 @@ services:
       - key: R2_PUBLIC_URL
         value: https://pub-bc7b203485814e1186102277ad450211.r2.dev
       - key: SOPHIA_PORTRAIT_URL
-        value: https://ghaafeedi-music.onrender.com/assets/sophia-lipsync-portrait.png
+        value: https://pub-bc7b203485814e1186102277ad450211.r2.dev/assets/sophia-lipsync-portrait.png
