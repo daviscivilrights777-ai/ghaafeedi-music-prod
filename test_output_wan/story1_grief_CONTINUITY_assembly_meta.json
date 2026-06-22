@@ -1,0 +1,24 @@
+{
+  "clips": 3,
+  "total_duration_s": 15.75,
+  "actual_duration_s": 15.75,
+  "transitions_applied": [
+    {
+      "from_clip": 0,
+      "to_clip": 1,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 1,
+      "to_clip": 2,
+      "type": "CUT",
+      "duration_s": 0.0,
+      "overlap_s": 0.0
+    }
+  ],
+  "output": "/home/user/ghaafeedi-music/test_output_wan/story1_grief_CONTINUITY.mp4",
+  "file_size_bytes": 27428276,
+  "file_size_mb": 26.16
+}

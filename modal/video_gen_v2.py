@@ -526,8 +526,7 @@ def _run_wan21_i2v(
         torch_dtype=torch.bfloat16,
     )
     pipe.enable_model_cpu_offload()
-    pipe.vae.enable_tiling()
-    pipe.vae.enable_slicing()
+    # Note: AutoencoderKLWan does not support enable_tiling/enable_slicing
 
     image = load_image(str(image_path))
     generator = torch.Generator("cuda").manual_seed(seed)
@@ -575,8 +574,7 @@ def _run_wan21_t2v(
         torch_dtype=torch.bfloat16,
     )
     pipe.enable_model_cpu_offload()
-    pipe.vae.enable_tiling()
-    pipe.vae.enable_slicing()
+    # Note: AutoencoderKLWan does not support enable_tiling/enable_slicing
 
     generator = torch.Generator("cuda").manual_seed(seed)
 
@@ -694,6 +692,26 @@ def generate_video_task_v2(job_id: str, params: dict):
             shot_type       = params.get("shot_type", "medium")
             use_i2v         = params.get("use_i2v", True)
 
+            # ── Phase C: Continuity Bridge ────────────────────────────────
+            # If start_frame_url or start_frame_b64 provided, use as I2V seed
+            # instead of generating a FLUX keyframe. This locks visual continuity
+            # from the tail of the previous clip into the head of this clip.
+            continuity_frame_path = None
+            start_frame_url = params.get("start_frame_url", "")
+            start_frame_b64 = params.get("start_frame_b64", "")
+            if start_frame_url or start_frame_b64:
+                continuity_frame_path = tmp_path / "continuity_start_frame.png"
+                if start_frame_url:
+                    import urllib.request
+                    print(f"  [C-BRIDGE] Downloading start frame: {start_frame_url}")
+                    urllib.request.urlretrieve(start_frame_url, str(continuity_frame_path))
+                elif start_frame_b64:
+                    import base64
+                    print(f"  [C-BRIDGE] Decoding base64 start frame")
+                    raw = start_frame_b64.split(",", 1)[-1]
+                    continuity_frame_path.write_bytes(base64.b64decode(raw))
+                print(f"  [C-BRIDGE] Continuity frame ready: {continuity_frame_path.stat().st_size // 1024}KB")
+
             # Per-shot guidance tuning
             guidance_scale = params.get(
                 "guidance_scale",
@@ -704,8 +722,13 @@ def generate_video_task_v2(job_id: str, params: dict):
             final_clip = tmp_path / "final_clip.mp4"
             keyframe_path = tmp_path / "keyframe.png"
 
-            # ── Stage 1: Key frame (FLUX) ─────────────────────────────────
-            if use_i2v:
+            # ── Stage 1: Key frame (FLUX or Continuity Bridge) ──────────
+            if continuity_frame_path and continuity_frame_path.exists():
+                # Phase C: Use continuity frame directly — skip FLUX entirely
+                keyframe_path = continuity_frame_path
+                use_i2v_actual = True
+                print(f"  [C-BRIDGE] Using continuity start frame instead of FLUX keyframe")
+            elif use_i2v:
                 try:
                     # FLUX prompt = first 2 sentences of video prompt (image-optimized)
                     flux_prompt = " ".join(prompt.split(".")[:2]).strip() + "."
@@ -800,7 +823,7 @@ def generate_video_task_v2(job_id: str, params: dict):
             "output_resolution": post_meta["output_resolution"],
             "post_steps":       post_meta["steps"],
             "elapsed_ms":       elapsed_ms,
-            "pipeline":         "wan21_i2v" if use_i2v_actual else "wan21_t2v",
+            "pipeline":         ("wan21_continuity_bridge" if (continuity_frame_path and continuity_frame_path.exists()) else "wan21_i2v") if use_i2v_actual else "wan21_t2v",
             "params":           params,
             "completed_at":     int(time.time() * 1000),
         }
@@ -864,6 +887,8 @@ class VideoGenAPIv2:
             "use_i2v":              bool,    # default true — FLUX key frame + I2V
             "ghaafeedi_job_id":     str,     # optional
             "shot_id":              str,     # optional
+            "start_frame_url":      str,     # Phase C: URL of continuity start frame (overrides FLUX)
+            "start_frame_b64":      str,     # Phase C: base64 PNG of continuity start frame
           }
         """
         prompt = item.get("prompt", "").strip()
