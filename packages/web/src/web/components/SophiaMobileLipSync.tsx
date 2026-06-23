@@ -86,74 +86,58 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     setShowVideo(false);
     setIsLoading(true);
 
-    // ── Step 1: TTS audio — blob URL + pre-unlocked HTMLAudioElement ──
+    // ── Step 1: TTS via GET src URL + pre-unlocked HTMLAudioElement ──
     //
-    // Android Chrome BLOCKS audio.play() if called after any await (gesture trust window expires).
-    // Fix: parent creates + .play()'s an Audio element SYNCHRONOUSLY in the tap handler.
-    // We reuse that same element here by swapping .src — element stays "gesture-trusted".
-    // Fallback: create a new Audio() if no pre-unlocked element is available (desktop/autoplay).
+    // ROOT CAUSE OF ALL PRIOR FAILURES:
+    // Android Chrome blocks audio.play() after ANY await (fetch, arrayBuffer, etc.)
+    // because the gesture trust window (~1s) expires before async work completes.
+    //
+    // GUARANTEED FIX:
+    // 1. Parent tap handler creates Audio element + calls .play() SYNCHRONOUSLY (silence unlock)
+    // 2. We reuse that trusted element — swap .src to GET TTS URL, call .load() + .play()
+    // 3. No fetch, no blob, no gesture window issue — browser streams audio natively
+    //
+    // GET /api/sophia-mobile/tts?text=... returns audio/mpeg stream directly.
     let ttsPromise: Promise<void>;
     try {
-      setDebugMsg("⏳ Fetching TTS...");
+      const ttsUrl = `/api/sophia-mobile/tts?text=${encodeURIComponent(text)}`;
+      setDebugMsg(`⏳ Loading audio...`);
 
-      const ttsRes = await fetch("/api/sophia-mobile/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-        signal: AbortSignal.timeout(20000),
-      });
-
-      setDebugMsg(`✅ HTTP ${ttsRes.status}`);
-      if (!ttsRes.ok) throw new Error(`TTS HTTP ${ttsRes.status}`);
-
-      const arrayBuf = await ttsRes.arrayBuffer();
-      setDebugMsg(`🎵 ${arrayBuf.byteLength}b`);
-      if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
-
-      const blob = new Blob([arrayBuf], { type: "audio/mpeg" });
-      const blobUrl = URL.createObjectURL(blob);
-
-      // Reuse pre-unlocked audio element if available (Android gesture-trust preserved)
-      // Otherwise create a new one (desktop / autoplay environments)
+      // Reuse pre-unlocked audio element (Android gesture-trust preserved)
+      // Fallback: create new Audio() for desktop/autoplay environments
       const preUnlocked = preUnlockedAudioRef?.current;
       let audio: HTMLAudioElement;
 
       if (preUnlocked) {
-        setDebugMsg("🔓 reusing pre-unlocked Audio element");
+        setDebugMsg("🔓 pre-unlocked → src swap");
         preUnlocked.pause();
-        preUnlocked.src = blobUrl;
         preUnlocked.volume = 1.0;
+        preUnlocked.src = ttsUrl;  // assign BEFORE load/play
         preUnlocked.load();
         audio = preUnlocked;
-        // Clear the ref so next call creates fresh
         if (preUnlockedAudioRef) preUnlockedAudioRef.current = null;
       } else {
-        setDebugMsg("🆕 new Audio (desktop/fallback)");
-        audio = new Audio(blobUrl);
+        setDebugMsg("🆕 new Audio (desktop)");
+        audio = new Audio(ttsUrl);
         audio.volume = 1.0;
       }
 
       audioRef.current = audio;
-
       setIsLoading(false);
       onSpeakingChange(true);
-      setDebugMsg(`▶️ calling play()...`);
+      setDebugMsg("▶️ play()...");
 
       ttsPromise = new Promise<void>((resolve, reject) => {
-        audio.onplaying = () => {
-          setDebugMsg("▶️ PLAYING!");
-        };
+        audio.onplaying = () => { setDebugMsg("▶️ PLAYING!"); };
         audio.onended = () => {
-          URL.revokeObjectURL(blobUrl);
           setDebugMsg("✅ Done");
           if (activeRef.current) onSpeakingChange(false);
           resolve();
         };
         audio.onerror = () => {
-          URL.revokeObjectURL(blobUrl);
           const code = audio.error?.code ?? -1;
-          const msg = audio.error?.message ?? "unknown";
-          setDebugMsg(`❌ code:${code} ${msg}`);
+          const msg2 = audio.error?.message ?? "unknown";
+          setDebugMsg(`❌ code:${code} ${msg2}`);
           if (activeRef.current) onSpeakingChange(false);
           reject(new Error(`HTMLAudio error ${code}`));
         };
@@ -161,7 +145,6 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         audio.play().then(() => {
           setDebugMsg("▶️ play() OK");
         }).catch((e: Error) => {
-          URL.revokeObjectURL(blobUrl);
           setDebugMsg(`❌ play(): ${e.name} ${e.message}`);
           if (activeRef.current) onSpeakingChange(false);
           reject(e);

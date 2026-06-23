@@ -295,6 +295,74 @@ sophiaMobileRoutes.post("/tts", async (c) => {
 });
 
 /**
+ * GET /api/sophia-mobile/tts?text=...
+ *
+ * Same as POST /tts but via GET so an <audio src="..."> tag can stream it directly.
+ * Android Chrome allows audio.play() on a media element with a real src URL
+ * without requiring the call to happen synchronously inside a gesture handler.
+ *
+ * text param must be URL-encoded. Max 1200 chars.
+ */
+sophiaMobileRoutes.get("/tts", async (c) => {
+  const text = c.req.query("text") ?? "";
+  if (!text || text.trim().length === 0) {
+    return c.json({ error: "text query param is required" }, 400);
+  }
+  if (text.length > 1200) {
+    return c.json({ error: "text exceeds 1200 char limit" }, 400);
+  }
+
+  const apiKey  = process.env["ELEVENLABS_API_KEY"];
+  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
+
+  if (!apiKey) {
+    return c.json({ error: "ElevenLabs API key not configured" }, 503);
+  }
+
+  try {
+    const elResponse = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key":   apiKey,
+          "Content-Type": "application/json",
+          "Accept":       "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          model_id: "eleven_turbo_v2_5",
+          voice_settings: {
+            stability:        0.45,
+            similarity_boost: 0.82,
+            style:            0.35,
+            use_speaker_boost: true,
+          },
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+
+    if (!elResponse.ok) {
+      const errText = await elResponse.text();
+      console.error("[SophiaMobile/tts-get] ElevenLabs error:", elResponse.status, errText);
+      return c.json({ error: `ElevenLabs TTS failed: ${elResponse.status}` }, 502);
+    }
+
+    c.header("Content-Type", "audio/mpeg");
+    c.header("Cache-Control", "no-store");
+    c.header("Accept-Ranges", "bytes");
+    c.header("X-Voice-Id", voiceId);
+
+    return c.body(elResponse.body as ReadableStream, 200);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SophiaMobile/tts-get] Error:", msg);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+/**
  * GET /api/sophia-mobile/cache-status?text=...&stepIndex=...
  * Check if a clip is already cached in R2
  */
