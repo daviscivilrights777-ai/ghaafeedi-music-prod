@@ -116,7 +116,7 @@ const URGENCY_TICKER = [
   "🔒 Your story is private & secure",
 ];
 
-function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionLoading?: boolean }) {
+function Step1Welcome({ onNext, sessionLoading, isLoggedIn }: { onNext: () => void; sessionLoading?: boolean; isLoggedIn?: boolean }) {
   const [hoverStart, setHoverStart] = useState(false);
   const [hoverDemo,  setHoverDemo]  = useState(false);
   const [tickerIdx,  setTickerIdx]  = useState(0);
@@ -203,9 +203,9 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
           <GhaafeediLogo variant="page" />
         </div>
 
-        {/* Sign In */}
+        {/* Sign In — hidden when already logged in */}
         <div className="ob-header-signin" style={{ minWidth:130, textAlign:"right" }}>
-          <a href="/signin" style={{
+          {!isLoggedIn && <a href="/signin" style={{
             fontFamily:"Inter, sans-serif", fontSize:13,
             color:"rgba(255,255,255,0.5)", textDecoration:"none",
             letterSpacing:"0.01em", transition:"color 0.2s",
@@ -216,7 +216,7 @@ function Step1Welcome({ onNext, sessionLoading }: { onNext: () => void; sessionL
           >
             <span className="ob-signin-label">Already have an account?{" "}</span>
             <span style={{ color:GOLD, fontWeight:600 }}>Sign In</span>
-          </a>
+          </a>}
         </div>
       </header>
 
@@ -9243,7 +9243,7 @@ export default function Onboarding() {
             transition={{ duration:0.35 }}
             style={{ height:"100%", overflow:"hidden", position:"absolute", inset:0 }}
           >
-            <Step1Welcome onNext={next} sessionLoading={sessionLoading}/>
+            <Step1Welcome onNext={next} sessionLoading={sessionLoading} isLoggedIn={!!session?.user}/>
           </motion.div>
         )}
         {step === 2 && (
