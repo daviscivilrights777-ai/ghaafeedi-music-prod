@@ -18,7 +18,7 @@ const GOLD = "#D4AF37";
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [location, setLocation] = useLocation();
-  const { data: session } = authClient.useSession();
+  const { data: session, isPending: sessionLoading } = authClient.useSession();
   const isLoggedIn = !!session?.user;
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export function Navbar() {
 
         {/* ── Auth ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {isLoggedIn ? (
+          {sessionLoading ? null : isLoggedIn ? (
             <>
               {/* Products shortcut */}
               <Link href="/products" style={{
