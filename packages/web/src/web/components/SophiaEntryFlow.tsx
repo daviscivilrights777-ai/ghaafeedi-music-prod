@@ -1,18 +1,16 @@
 /**
- * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW  v3
+ * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW  v4
  * ══════════════════════════════════════════════════════════════════════════
- * - Sophia dominates left panel — large full-body cinematic portrait
- * - Simli WebRTC lip-sync AUTO-STARTS on mount (no click gate)
- * - ElevenLabs PCM16 TTS feeds every word into Simli in real-time
- * - Welcome script: "Welcome to Ghaafeedi Music…" → closes with "Enjoy your cinematic experience"
- * - 4-question guided flow → personalized summary → Enter CTA
+ * - ONE lip sync path for ALL devices: Wav2Lip via Modal + R2 cache
+ * - No WebRTC, no Simli, no LiveKit, no PCM chunking
+ * - Sophia portrait shows while video renders (2-5s), then plays lip sync
+ * - Static portrait fallback if Modal is cold/fails
+ * - ElevenLabs Lily voice (pFZP5JQG7iQjIQuC4Bku), eleven_turbo_v2_5
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { SimliAvatar } from "./SimliAvatar";
-import type { SpeakFn } from "../../lib/SimliAvatarEngine";
-import { SophiaMobileLipSync } from "./SophiaMobileLipSync";
+import { SophiaLipSync } from "./SophiaLipSync";
 
 // ─── Brand tokens ─────────────────────────────────────────────────────────────
 const GOLD   = "#D4AF37";
@@ -21,9 +19,6 @@ const BG     = "#050B1A";
 const TEXT   = "#FFFFFF";
 
 // ─── Sophia's 5-act script ────────────────────────────────────────────────────
-// step 0 = welcome intro (auto-plays)
-// steps 1-3 = guided questions
-// step 4 = personalized summary + goodbye
 const SOPHIA_LINES = {
   welcome: "Welcome to Ghaafeedi Music. I'm Sophia, your AI Emotional Concierge. I'm here to turn your most precious memories into cinematic songs and films. How can I help you today?",
   q1: "What brings you to Ghaafeedi Music today?",
@@ -46,7 +41,7 @@ const Q2_OPTS: Option[] = [
   { key: "me",      icon: "🙋",   label: "For myself",                  sub: "My own healing or reflection" },
   { key: "partner", icon: "💑",   label: "For a partner or spouse",      sub: "Romance, wedding, relationship milestone" },
   { key: "family",  icon: "👨‍👩‍👧", label: "For family",                  sub: "Parents, children, grandparents" },
-  { key: "gift",    icon: "🎁",   label: "As a gift for someone special",sub: "A meaningful, one-of-a-kind present" },
+  { key: "gift",    icon: "🎁",   label: "As a gift for someone special", sub: "A meaningful, one-of-a-kind present" },
 ];
 const Q3_OPTS: Option[] = [
   { key: "song",   icon: "🎵", label: "A cinematic song in my voice or style", sub: "Original music built from my story" },
@@ -98,10 +93,6 @@ const INJECT_CSS = `
   0%,100% { opacity:.08; transform:scale(1); }
   50%      { opacity:.55; transform:scale(1.8); }
 }
-@keyframes sef-float {
-  0%,100% { transform:translateY(0); }
-  50%      { transform:translateY(-14px); }
-}
 @keyframes sef-cursor {
   0%,100% { opacity:1; }
   50%      { opacity:0; }
@@ -114,25 +105,9 @@ const INJECT_CSS = `
   from { opacity:0; transform:translateY(10px); }
   to   { opacity:1; transform:translateY(0);    }
 }
-@keyframes sef-spin {
-  from { transform:rotate(0deg); }
-  to   { transform:rotate(360deg); }
-}
-@keyframes sef-shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
-}
 @keyframes sef-breathe {
   0%,100% { transform:scale(1.00); }
   50%      { transform:scale(1.015); }
-}
-@keyframes sef-vignette {
-  0%,100% { opacity:0.72; }
-  50%      { opacity:0.58; }
-}
-@keyframes sef-ring-expand {
-  0%   { transform:translate(-50%,-50%) scale(0.9); opacity:0.18; }
-  100% { transform:translate(-50%,-50%) scale(2.2); opacity:0; }
 }
 
 .sef-opt {
@@ -200,7 +175,6 @@ function useTypewriter(text: string, speed = 24) {
   return { out, done };
 }
 
-
 // ─── Option grid ──────────────────────────────────────────────────────────────
 function OptionGrid({ opts, selected, onSelect }: { opts: Option[]; selected: string|null; onSelect:(k:string)=>void }) {
   return (
@@ -257,7 +231,7 @@ function Dots({ cur, total }: { cur: number; total: number }) {
   );
 }
 
-// ─── CTA Button ───────────────────────────────────────────────────────────────
+// ─── CTA Buttons ──────────────────────────────────────────────────────────────
 function ContinueBtn({ onClick, disabled, label }: { onClick:()=>void; disabled:boolean; label:string }) {
   const [hov, setHov] = useState(false);
   return (
@@ -329,28 +303,59 @@ function EnterBtn({ onClick }: { onClick: () => void }) {
   );
 }
 
+// ─── Speech bubble with typewriter ───────────────────────────────────────────
+function SpeechBubble({ text, onDone, speed = 24 }: { text: string; onDone: () => void; speed?: number }) {
+  const { out, done } = useTypewriter(text, speed);
+  useEffect(() => {
+    if (done) { const t = setTimeout(onDone, 300); return () => clearTimeout(t); }
+  }, [done, onDone]);
+  return (
+    <div style={{
+      background: "rgba(11,23,54,0.68)",
+      border: "1px solid rgba(212,175,55,0.16)",
+      borderRadius: "4px 16px 16px 16px",
+      padding: "clamp(14px,2vw,20px) clamp(16px,2.2vw,24px)",
+      backdropFilter: "blur(14px)",
+      WebkitBackdropFilter: "blur(14px)",
+      maxWidth: 520,
+    }}>
+      <p style={{
+        fontFamily: "'Playfair Display',serif",
+        fontSize: "clamp(14px,1.5vw,17px)",
+        fontStyle: "italic",
+        color: TEXT, lineHeight: 1.68, margin: 0,
+      }}>
+        {out}
+        {!done && (
+          <span style={{
+            display: "inline-block", width: 2, height: "1em",
+            background: GOLD2, marginLeft: 3, verticalAlign: "middle",
+            animation: "sef-cursor 0.9s ease-in-out infinite",
+          }} />
+        )}
+      </p>
+    </div>
+  );
+}
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 interface SophiaEntryFlowProps {
   onComplete: () => void;
-  /** Pass true on mobile devices to skip Simli WebRTC (too unreliable on mobile) */
-  disableSimli?: boolean;
 }
 
-export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntryFlowProps) {
+export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Flow state
-  const [step,     setStep]     = useState(0);       // 0=welcome, 1-3=questions, 4=summary
+  const [step,     setStep]     = useState(0);
   const [answers,  setAnswers]  = useState<Record<number,string>>({});
   const [selected, setSelected] = useState<string|null>(null);
-  const [spoken,   setSpoken]   = useState(false);   // typewriter finished for current step
+  const [spoken,   setSpoken]   = useState(false);
   const [exiting,  setExiting]  = useState(false);
 
-  // Simli / TTS state
-  const [sessionToken,  setSessionToken]  = useState<string|null>(null);
-  const [sophiaReady,   setSophiaReady]   = useState(false);
-  const [simliFailed,   setSimliFailed]   = useState(false);
+  // Lip sync state
+  const [sophiaReady,    setSophiaReady]    = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
-  const speakRef      = useRef<SpeakFn | null>(null);
-  const speakQueueRef = useRef<string|null>(null);
+  const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
+  const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -364,11 +369,21 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
     return SOPHIA_LINES.goodbye(buildSummary(answers));
   })();
 
+  // Next step text for pre-fetching
+  const nextStepText = (() => {
+    const next = step + 1;
+    if (next === 1) return SOPHIA_LINES.q1;
+    if (next === 2) return SOPHIA_LINES.q2;
+    if (next === 3) return SOPHIA_LINES.q3;
+    if (next === 4) return SOPHIA_LINES.goodbye(buildSummary(answers));
+    return undefined;
+  })();
+
   // Inject CSS once
   useEffect(() => {
-    if (document.getElementById("sef-css3")) return;
+    if (document.getElementById("sef-css4")) return;
     const el = document.createElement("style");
-    el.id = "sef-css3"; el.textContent = INJECT_CSS;
+    el.id = "sef-css4"; el.textContent = INJECT_CSS;
     document.head.appendChild(el);
   }, []);
 
@@ -382,45 +397,18 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
   // Reset spoken + selection on each step change
   useEffect(() => { setSpoken(false); setSelected(null); }, [step]);
 
-  // ── playTTS: routes through Simli speak fn (SimliAvatarEngine handles PCM) ─
-  const playTTS = useCallback((text: string) => {
+  // ── playTTS: fires Wav2Lip speak ──────────────────────────────────────────
+  const playTTS = useCallback((text: string, stepIdx: number) => {
     if (speakRef.current) {
-      speakRef.current(text).catch(() => {});
+      speakRef.current(text, stepIdx).catch(() => {});
     } else {
-      // Queue for when Simli becomes ready
-      speakQueueRef.current = text;
+      speakQueueRef.current = { text, step: stepIdx };
     }
   }, []);
 
-  // ── AUTO-START Simli on mount (skip entirely on mobile) ──────────────────
+  // Fire TTS on every step change
   useEffect(() => {
-    // Mobile: skip Simli WebRTC — use static portrait fallback immediately
-    if (disableSimli) {
-      setSimliFailed(true);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/simli/token", { method: "POST" });
-        if (!res.ok) throw new Error(`token ${res.status}`);
-        const data = (await res.json()) as { session_token?: string; error?: string };
-        if (cancelled) return;
-        if (data.session_token) setSessionToken(data.session_token);
-        else throw new Error(data.error ?? "no token");
-      } catch (err) {
-        if (!cancelled) {
-          console.warn("[SEF] Simli token failed:", err);
-          setSimliFailed(true);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [disableSimli]);
-
-  // ── Fire TTS on every step change ────────────────────────────────────────
-  useEffect(() => {
-    playTTS(speechLine);
+    playTTS(speechLine, step);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
@@ -439,7 +427,6 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
   };
 
   const canContinue = spoken && (isIntro || isSummary || !!selected);
-  const useSimli    = !simliFailed && !disableSimli; // Skip WebRTC on mobile or on failure
 
   return (
     <AnimatePresence>
@@ -497,15 +484,11 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                 style={{
                   background: "rgba(212,175,55,0.12)",
                   border: "1px solid rgba(212,175,55,0.45)",
-                  borderRadius: 8,
-                  cursor: "pointer",
+                  borderRadius: 8, cursor: "pointer",
                   fontSize: "clamp(11px,0.95vw,13px)",
-                  color: "#D4AF37",
-                  fontFamily: "Inter,sans-serif",
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  padding: "8px 18px",
+                  color: "#D4AF37", fontFamily: "Inter,sans-serif",
+                  fontWeight: 600, letterSpacing: "0.08em",
+                  textTransform: "uppercase", padding: "8px 18px",
                   transition: "all 160ms",
                   boxShadow: "0 0 12px rgba(212,175,55,0.15)",
                   whiteSpace: "nowrap",
@@ -531,7 +514,7 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
             width: "100%", height: "100%",
             paddingTop: "clamp(60px,8vw,80px)",
           }}>
-            {/* ══ LEFT — Sophia full-body dominant panel ══ */}
+            {/* ══ LEFT — Sophia lip sync panel ══ */}
             <div className="sef-left-panel" style={{
               position: "relative",
               width: "clamp(260px,38vw,480px)",
@@ -540,14 +523,7 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
               height: "100%",
               overflow: "hidden",
             }}>
-              {/* Deep background gradient behind Sophia */}
-              <div style={{
-                position: "absolute", inset: 0,
-                background: "linear-gradient(180deg, rgba(14,31,74,0.6) 0%, rgba(5,11,26,0.3) 50%, rgba(2,6,16,0.8) 100%)",
-                zIndex: 1, pointerEvents: "none",
-              }} />
-
-              {/* Gold ambient glow behind her */}
+              {/* Gold ambient glow */}
               <div style={{
                 position: "absolute", bottom: "-10%", left: "50%",
                 transform: "translateX(-50%)",
@@ -560,7 +536,7 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                   : "sef-glow-pulse 4s ease-in-out infinite",
               }} />
 
-              {/* Sophia container — full height */}
+              {/* Sophia lip sync — all devices */}
               <div style={{
                 position: "absolute", inset: 0, zIndex: 3,
                 borderRight: "1px solid rgba(212,175,55,0.12)",
@@ -569,90 +545,29 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                   : "sef-glow-pulse 5s ease-in-out infinite",
                 transition: "animation 500ms",
               }}>
-                {useSimli ? (
-                  <SimliAvatar
-                    sessionToken={sessionToken}
-                    onSpeakingChange={setSophiaSpeaking}
-                    onReady={(speak: SpeakFn) => {
-                      speakRef.current = speak;
-                      setSophiaReady(true);
-                      // Drain any queued line (step changed before Simli was ready)
-                      const queued = speakQueueRef.current;
-                      if (queued) { speakQueueRef.current = null; speak(queued).catch(() => {}); }
-                    }}
-                    onError={() => {
-                      setSimliFailed(true);
-                      console.log("[SEF] Simli failed — static portrait fallback active");
-                    }}
-                  />
-                ) : (
-                  // Mobile: Wav2Lip lip sync OR static portrait fallback
-                  disableSimli ? (
-                    <SophiaMobileLipSync
-                      onReady={(mobileSpeakFn) => {
-                        speakRef.current = mobileSpeakFn;
-                        setSophiaReady(true);
-                        // Drain any speech queued before engine was ready
-                        const queued = speakQueueRef.current;
-                        if (queued) { speakQueueRef.current = null; mobileSpeakFn(queued, 0).catch(() => {}); }
-                      }}
-                      onSpeakingChange={setSophiaSpeaking}
-                      onError={() => {
-                        // Non-fatal — static portrait stays visible
-                        // Audio continues playing via ElevenLabs
-                        console.warn("[SophiaFlow] Mobile lip sync error — using portrait");
-                      }}
-                      // Pre-fetch the NEXT step's video while current plays
-                      nextStepText={(() => {
-                        const next = step + 1;
-                        if (next === 1) return SOPHIA_LINES.q1;
-                        if (next === 2) return SOPHIA_LINES.q2;
-                        if (next === 3) return SOPHIA_LINES.q3;
-                        if (next === 4) return SOPHIA_LINES.goodbye(buildSummary(answers));
-                        return undefined;
-                      })()}
-                      portraitSrc="/assets/sophia-lipsync-portrait.png"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: "inherit",
-                      }}
-                    />
-                  ) : (
-                    // Simli failed fallback — large static portrait
-                    <div style={{ width: "100%", height: "100%", position: "relative" }}>
-                      <img
-                        src="/assets/sophia-lipsync-portrait.png"
-                        alt="Sophia"
-                        style={{
-                          width: "100%", height: "100%",
-                          objectFit: "cover", objectPosition: "center 15%",
-                          display: "block",
-                          animation: "sef-breathe 3.5s ease-in-out infinite",
-                        }}
-                      />
-                      {/* Speaking bars on fallback */}
-                      <div style={{
-                        position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)",
-                        display: "flex", gap: 4, alignItems: "flex-end", height: 28,
-                        opacity: spoken && !canContinue ? 0.7 : 0,
-                        transition: "opacity 400ms",
-                      }}>
-                        {[0,1,2,3,4,5,6].map(i => (
-                          <div key={i} style={{
-                            width: 4, borderRadius: 3,
-                            background: `linear-gradient(to top, ${GOLD}, ${GOLD2})`,
-                            animation: `sef-bar ${0.45 + i * 0.09}s ease-in-out ${i * 0.07}s infinite`,
-                            height: 6,
-                          }} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                )}
+                <SophiaLipSync
+                  onReady={(speakFn) => {
+                    speakRef.current = speakFn;
+                    setSophiaReady(true);
+                    // Drain any queued speech from before engine was ready
+                    const queued = speakQueueRef.current;
+                    if (queued) {
+                      speakQueueRef.current = null;
+                      speakFn(queued.text, queued.step).catch(() => {});
+                    }
+                  }}
+                  onSpeakingChange={setSophiaSpeaking}
+                  onError={() => {
+                    // Non-fatal — static portrait stays visible, flow continues
+                    console.warn("[SophiaFlow] Lip sync error — portrait fallback active");
+                  }}
+                  nextStepText={nextStepText}
+                  portraitSrc="/assets/sophia-lipsync-portrait.png"
+                  style={{ width: "100%", height: "100%" }}
+                />
               </div>
 
-              {/* Sophia name badge — bottom of left panel */}
+              {/* Sophia name badge */}
               <div style={{
                 position: "absolute", bottom: "clamp(16px,3vw,28px)", left: "50%",
                 transform: "translateX(-50%)",
@@ -666,8 +581,8 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
               }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: "50%",
-                  background: sophiaReady ? "#22C55E" : sophiaSpeaking ? "#22C55E" : "rgba(212,175,55,0.6)",
-                  boxShadow: sophiaReady ? "0 0 8px rgba(34,197,94,0.9)" : "none",
+                  background: sophiaSpeaking ? "#22C55E" : sophiaReady ? "#D4AF37" : "rgba(212,175,55,0.4)",
+                  boxShadow: sophiaSpeaking ? "0 0 8px rgba(34,197,94,0.9)" : "none",
                   transition: "all 400ms",
                 }} />
                 <span style={{
@@ -681,7 +596,7 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
                   fontSize: "clamp(9px,0.75vw,10px)", color: "rgba(255,255,255,0.40)",
                   fontFamily: "Inter,sans-serif", letterSpacing: "0.08em", textTransform: "uppercase",
                 }}>
-                  {sophiaReady ? "• Live" : simliFailed ? "• AI" : "• Connecting"}
+                  {sophiaSpeaking ? "• Speaking" : sophiaReady ? "• Ready" : "• Loading"}
                 </span>
               </div>
             </div>
@@ -696,7 +611,6 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
               overflowY: "auto",
               position: "relative", zIndex: 5,
             }}>
-
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`step-${step}`}
@@ -792,40 +706,5 @@ export function SophiaEntryFlow({ onComplete, disableSimli = false }: SophiaEntr
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-// ─── Speech bubble with typewriter ───────────────────────────────────────────
-function SpeechBubble({ text, onDone, speed = 24 }: { text: string; onDone: () => void; speed?: number }) {
-  const { out, done } = useTypewriter(text, speed);
-  useEffect(() => {
-    if (done) { const t = setTimeout(onDone, 300); return () => clearTimeout(t); }
-  }, [done, onDone]);
-  return (
-    <div style={{
-      background: "rgba(11,23,54,0.68)",
-      border: "1px solid rgba(212,175,55,0.16)",
-      borderRadius: "4px 16px 16px 16px",
-      padding: "clamp(14px,2vw,20px) clamp(16px,2.2vw,24px)",
-      backdropFilter: "blur(14px)",
-      WebkitBackdropFilter: "blur(14px)",
-      maxWidth: 520,
-    }}>
-      <p style={{
-        fontFamily: "'Playfair Display',serif",
-        fontSize: "clamp(14px,1.5vw,17px)",
-        fontStyle: "italic",
-        color: TEXT, lineHeight: 1.68, margin: 0,
-      }}>
-        {out}
-        {!done && (
-          <span style={{
-            display: "inline-block", width: 2, height: "1em",
-            background: GOLD2, marginLeft: 3, verticalAlign: "middle",
-            animation: "sef-cursor 0.9s ease-in-out infinite",
-          }} />
-        )}
-      </p>
-    </div>
   );
 }

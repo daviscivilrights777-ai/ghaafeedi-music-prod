@@ -14,7 +14,6 @@ import { jobRoutes } from "./routes/jobs";
 import { providers } from "./routes/providers";
 import { automations } from "./routes/automations";
 import { sophia } from "./routes/sophia";
-import { simliRoutes as simli } from "./routes/simli";
 import { dodo } from "./routes/dodo";
 import { pipeline } from "./routes/pipeline";
 import { dashboard } from "./routes/dashboard";
@@ -44,7 +43,6 @@ const app = new Hono()
   .route("/providers", providers)
   .route("/automations", automations)
   .route("/sophia", sophia)
-  .route("/simli", simli)
   .route("/dodo", dodo)
   .route("/pipeline", pipeline)
   .route("/dashboard", dashboard)

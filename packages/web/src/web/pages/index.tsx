@@ -7,7 +7,7 @@
  *   2. onComplete() → stage "home"
  *
  * Error Boundary wraps SophiaEntryFlow — any crash auto-skips to home.
- * Mobile devices skip Simli WebRTC (passed via prop) to prevent black screen.
+ * Universal Wav2Lip path — no Simli, no WebRTC, works on all devices.
  */
 import { useState, Suspense, lazy, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
@@ -31,16 +31,6 @@ class SophiaErrorBoundary extends Component<EBProps, EBState> {
   }
 }
 
-// ─── Mobile detection (no WebRTC on mobile — too unreliable) ─────────────────
-function isMobileDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  // Check touch points + user agent
-  const ua = navigator.userAgent;
-  const isTouchDevice = navigator.maxTouchPoints > 1;
-  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  return isTouchDevice || isMobileUA;
-}
-
 // ─── Lazy-load everything below the fold ────────────────────────────────────
 const Navbar              = lazy(() => import("../components/Navbar").then(m => ({ default: m.Navbar })));
 const HeroSection         = lazy(() => import("../components/HeroSection").then(m => ({ default: m.HeroSection })));
@@ -60,8 +50,6 @@ type Stage = "sophia" | "home";
 export default function Index() {
   const [stage, setStage] = useState<Stage>("sophia");
   const [, setLocation] = useLocation();
-
-  const mobile = isMobileDevice();
 
   const handleComplete = (path?: "onboarding" | "products" | "home") => {
     if (path === "onboarding") {
@@ -85,7 +73,7 @@ export default function Index() {
       {/* ── Sophia Entry Flow — wrapped in error boundary, safe on all devices ── */}
       {stage === "sophia" && (
         <SophiaErrorBoundary onError={handleSophiaCrash}>
-          <SophiaEntryFlow onComplete={handleComplete} disableSimli={mobile} />
+          <SophiaEntryFlow onComplete={handleComplete} />
         </SophiaErrorBoundary>
       )}
 
