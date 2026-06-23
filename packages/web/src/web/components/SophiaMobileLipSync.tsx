@@ -82,7 +82,9 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     setShowVideo(false);
     setIsLoading(true);
 
-    // ── Step 1: TTS audio — plays immediately ────────────
+    // ── Step 1: TTS audio — blob URL + HTMLAudioElement ──
+    // This is the ONLY method confirmed working on Android Chrome.
+    // Web Audio API (decodeAudioData) is abandoned — gesture window dies during async calls.
     let ttsPromise: Promise<void>;
     try {
       setDebugMsg("⏳ Fetching TTS...");
@@ -101,64 +103,47 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       setDebugMsg(`🎵 ${arrayBuf.byteLength} bytes`);
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
-      // Web Audio API — bypasses Android mute switch & blob URL issues
-      // Read parent's AudioContext ref at call-time (not render-time) — critical for Android gesture chain
-      const parentCtx = externalAudioCtxRef?.current ?? null;
-      let ctx: AudioContext;
-      if (parentCtx && parentCtx.state !== "closed") {
-        ctx = parentCtx;
-        setDebugMsg(`♻️ Reusing parent AudioContext (${ctx.state})`);
-      } else {
-        const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-        ctx = new AudioCtx();
-        setDebugMsg(`🆕 New AudioContext created`);
-      }
+      // ── Blob URL approach — confirmed working on Android Chrome ──
+      const blob = new Blob([arrayBuf], { type: "audio/mpeg" });
+      const blobUrl = URL.createObjectURL(blob);
+      setDebugMsg(`🔗 blob URL created`);
 
-      // Resume if needed (should already be running if parent unlocked it)
-      if (ctx.state === "suspended") await ctx.resume();
-      setDebugMsg(`🔊 AudioContext state: ${ctx.state}`);
-
-      // Copy buffer before decode (decodeAudioData detaches the original)
-      const bufCopy = arrayBuf.slice(0);
-      const audioBuffer = await ctx.decodeAudioData(bufCopy);
-      setDebugMsg(`▶️ Decoded ${audioBuffer.duration.toFixed(2)}s — playing...`);
+      const audio = new Audio(blobUrl);
+      audio.volume = 1.0;
+      audioRef.current = audio;
 
       setIsLoading(false);
       onSpeakingChange(true);
+      setDebugMsg(`▶️ calling play()...`);
 
-      ttsPromise = new Promise<void>((res) => {
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-
-        // Gain node to ensure volume is up
-        const gain = ctx.createGain();
-        gain.gain.value = 1.0;
-        source.connect(gain);
-        gain.connect(ctx.destination);
-
-        source.onended = () => {
+      ttsPromise = new Promise<void>((resolve, reject) => {
+        audio.onplaying = () => {
+          setDebugMsg("▶️ PLAYING! Audio is live");
+        };
+        audio.onended = () => {
+          URL.revokeObjectURL(blobUrl);
           setDebugMsg("✅ Done");
-          // Only close if we own this context (not the parent's reused one)
-          if (!parentCtx || parentCtx !== ctx) {
-            ctx.close().catch(() => {});
-          }
           if (activeRef.current) onSpeakingChange(false);
-          res();
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(blobUrl);
+          const code = audio.error?.code ?? -1;
+          const msg = audio.error?.message ?? "unknown";
+          setDebugMsg(`❌ HTMLAudio error code:${code} — ${msg}`);
+          if (activeRef.current) onSpeakingChange(false);
+          reject(new Error(`HTMLAudio error ${code}`));
         };
 
-        source.start(0);
-
-        // Store stop handle
-        (audioRef as any).current = {
-          pause: () => {
-            try { source.stop(); } catch {}
-            // Only close ctx if we own it
-            if (!parentCtx || parentCtx !== ctx) {
-              try { ctx.close(); } catch {}
-            }
-          },
-          src: "",
-        };
+        // play() — gesture trust window may still be alive here (fetch is ~300-500ms)
+        audio.play().then(() => {
+          setDebugMsg("▶️ play() promise resolved");
+        }).catch((e: Error) => {
+          URL.revokeObjectURL(blobUrl);
+          setDebugMsg(`❌ play() rejected: ${e.name} — ${e.message}`);
+          if (activeRef.current) onSpeakingChange(false);
+          reject(e);
+        });
       });
 
     } catch (err) {
