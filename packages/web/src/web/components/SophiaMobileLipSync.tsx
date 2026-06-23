@@ -81,8 +81,6 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     try {
       setDebugMsg("⏳ Fetching TTS...");
 
-      // Use XMLHttpRequest → ArrayBuffer → AudioContext for Android Chrome compat
-      // Blob URL from fetch() has MIME issues on Android; AudioContext decodes raw bytes
       const ttsRes = await fetch("/api/sophia-mobile/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,44 +88,54 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         signal: AbortSignal.timeout(20000),
       });
 
-      setDebugMsg(`✅ TTS HTTP ${ttsRes.status} ct:${ttsRes.headers.get("content-type")}`);
-
+      setDebugMsg(`✅ HTTP ${ttsRes.status}`);
       if (!ttsRes.ok) throw new Error(`TTS HTTP ${ttsRes.status}`);
 
       const arrayBuf = await ttsRes.arrayBuffer();
-      setDebugMsg(`🎵 ArrayBuffer size: ${arrayBuf.byteLength}`);
-
+      setDebugMsg(`🎵 ${arrayBuf.byteLength} bytes — decoding...`);
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
-      // AudioContext decode — works on ALL browsers including Android Chrome
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioCtx();
-      await ctx.resume();
+      // Explicit audio/mpeg MIME type on the Blob fixes Android Chrome rejection
+      const blob    = new Blob([arrayBuf], { type: "audio/mpeg" });
+      const blobUrl = URL.createObjectURL(blob);
 
-      let audioBuffer: AudioBuffer;
-      try {
-        audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
-      } catch (decodeErr) {
-        throw new Error(`decodeAudioData failed: ${decodeErr}`);
-      }
+      setDebugMsg(`▶️ blobUrl created, playing...`);
 
-      setDebugMsg("▶️ Playing via AudioContext...");
+      const audio = new Audio();
+      audio.preload = "auto";
+      audioRef.current = audio;
+
       setIsLoading(false);
       onSpeakingChange(true);
 
       ttsPromise = new Promise<void>((res) => {
-        const source = ctx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(ctx.destination);
-        source.onended = () => {
+        audio.oncanplaythrough = () => {
+          setDebugMsg(`▶️ canplaythrough — dur:${audio.duration.toFixed(2)}s`);
+          audio.play().then(() => {
+            setDebugMsg(`▶️ Playing dur:${audio.duration.toFixed(2)}s`);
+          }).catch(err => {
+            setDebugMsg(`❌ play() blocked: ${err.name} ${err.message}`);
+            URL.revokeObjectURL(blobUrl);
+            if (activeRef.current) onSpeakingChange(false);
+            res();
+          });
+        };
+        audio.onended = () => {
           setDebugMsg("✅ Done");
-          ctx.close().catch(() => {});
+          URL.revokeObjectURL(blobUrl);
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
-        source.start(0);
-        // Store a way to stop it
-        (audioRef as any).current = { pause: () => { try { source.stop(); } catch {} }, src: "" };
+        audio.onerror = (e) => {
+          const err = audio.error;
+          setDebugMsg(`❌ Audio error code:${err?.code} msg:${err?.message}`);
+          URL.revokeObjectURL(blobUrl);
+          if (activeRef.current) onSpeakingChange(false);
+          res();
+        };
+        // Set src AFTER wiring events
+        audio.src = blobUrl;
+        audio.load();
       });
 
     } catch (err) {
