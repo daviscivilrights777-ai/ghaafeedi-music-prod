@@ -408,37 +408,39 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   }, []);
 
   // ── Unlock audio on first user interaction (mobile requirement) ────────────
+  // iOS/Android require audio.play() to be called synchronously inside a tap handler.
+  // Strategy: play a silent 1-sample MP3 synchronously, then immediately fire TTS.
+  // The silent play establishes trust; subsequent plays work without gesture.
+  const SILENT_MP3 = "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABiaWdTb3VuZCBEZXNpZ24gVW5peWVyc2FsIFNvdW5kIERlc2lnbgBUWFhYAAAAGQAAA1RpbWUAMDAwMDAwMDAwMDAwMDAwAFRYWFgAAAARAAACY3JlYXRvcgBMYXZmNTcuAFRYWFgAAAAWAAADZW5jb2RlcgBMYXZjNTcuMjguAFREUkMAAAAEAAADMjAxNwBUSVQyAAAABgAAA1RpdGxlAFRTU0UAAAAPAAADTGF2ZjU3LjI1LjEwMAD/+0DEAAAV4AL3UEAAIgAAA0gAAAAABBQO//NExAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+
   const handleAudioUnlock = useCallback(() => {
     if (audioUnlocked) return;
-    // Create + immediately suspend a silent AudioContext to unlock audio policy
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.connect(ctx.destination);
-      src.start(0);
-      ctx.resume().catch(() => {});
-    } catch { /* ignore */ }
+
+    // 1. Play silent audio SYNCHRONOUSLY inside tap handler — unlocks iOS/Android
+    const silentAudio = new Audio(SILENT_MP3);
+    silentAudio.volume = 0.001;
+    silentAudio.play().catch(() => {});
+
     setAudioUnlocked(true);
-    // Now actually play the queued speech
-    if (speakQueueRef.current) {
-      const q = speakQueueRef.current;
+
+    // 2. Now fire TTS — audio context is unlocked, play() will work
+    const queued = speakQueueRef.current;
+    if (queued) {
       speakQueueRef.current = null;
-      playTTS(q.text, q.step);
+      playTTS(queued.text, queued.step);
     } else {
       playTTS(speechLine, step);
     }
   }, [audioUnlocked, playTTS, speechLine, step]);
 
-  // Fire TTS on every step change (after unlock; on step 0 wait for tap)
+  // Fire TTS on every step change
   useEffect(() => {
     if (step === 0) {
-      // Queue it — will fire when user taps "Tap to hear Sophia"
+      // Step 0: queue and wait for tap (mobile audio unlock required)
       speakQueueRef.current = { text: speechLine, step: 0 };
       return;
     }
-    // Steps 1+ user has already tapped, audio is unlocked
+    // Steps 1+: audio already unlocked from tap, fire directly
     playTTS(speechLine, step);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
