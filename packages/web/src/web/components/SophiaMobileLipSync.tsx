@@ -92,55 +92,54 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       if (!ttsRes.ok) throw new Error(`TTS HTTP ${ttsRes.status}`);
 
       const arrayBuf = await ttsRes.arrayBuffer();
-      setDebugMsg(`🎵 ${arrayBuf.byteLength} bytes — decoding...`);
+      setDebugMsg(`🎵 ${arrayBuf.byteLength} bytes`);
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
-      // Explicit audio/mpeg MIME type on the Blob fixes Android Chrome rejection
-      const blob    = new Blob([arrayBuf], { type: "audio/mpeg" });
-      const blobUrl = URL.createObjectURL(blob);
+      // Web Audio API — bypasses Android mute switch & blob URL issues
+      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+      const ctx = new AudioCtx();
 
-      setDebugMsg(`▶️ blobUrl created, playing...`);
+      // Must resume AFTER user gesture — tap already happened so this works
+      if (ctx.state === "suspended") await ctx.resume();
+      setDebugMsg(`🔊 AudioContext state: ${ctx.state}`);
 
-      const audio = new Audio();
-      audio.preload = "auto";
-      audioRef.current = audio;
+      // Copy buffer before decode (decodeAudioData detaches the original)
+      const bufCopy = arrayBuf.slice(0);
+      const audioBuffer = await ctx.decodeAudioData(bufCopy);
+      setDebugMsg(`▶️ Decoded ${audioBuffer.duration.toFixed(2)}s — playing...`);
 
       setIsLoading(false);
       onSpeakingChange(true);
 
       ttsPromise = new Promise<void>((res) => {
-        audio.oncanplaythrough = () => {
-          setDebugMsg(`▶️ canplaythrough — dur:${audio.duration.toFixed(2)}s`);
-          audio.play().then(() => {
-            setDebugMsg(`▶️ Playing dur:${audio.duration.toFixed(2)}s`);
-          }).catch(err => {
-            setDebugMsg(`❌ play() blocked: ${err.name} ${err.message}`);
-            URL.revokeObjectURL(blobUrl);
-            if (activeRef.current) onSpeakingChange(false);
-            res();
-          });
-        };
-        audio.onended = () => {
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+
+        // Gain node to ensure volume is up
+        const gain = ctx.createGain();
+        gain.gain.value = 1.0;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+
+        source.onended = () => {
           setDebugMsg("✅ Done");
-          URL.revokeObjectURL(blobUrl);
+          ctx.close().catch(() => {});
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
-        audio.onerror = (e) => {
-          const err = audio.error;
-          setDebugMsg(`❌ Audio error code:${err?.code} msg:${err?.message}`);
-          URL.revokeObjectURL(blobUrl);
-          if (activeRef.current) onSpeakingChange(false);
-          res();
+
+        source.start(0);
+
+        // Store stop handle
+        (audioRef as any).current = {
+          pause: () => { try { source.stop(); ctx.close(); } catch {} },
+          src: "",
         };
-        // Set src AFTER wiring events
-        audio.src = blobUrl;
-        audio.load();
       });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setDebugMsg(`❌ Error: ${msg}`);
+      setDebugMsg(`❌ ${msg}`);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
