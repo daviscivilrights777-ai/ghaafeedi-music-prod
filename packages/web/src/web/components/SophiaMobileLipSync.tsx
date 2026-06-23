@@ -80,6 +80,9 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     let ttsPromise: Promise<void>;
     try {
       setDebugMsg("⏳ Fetching TTS...");
+
+      // Use XMLHttpRequest → ArrayBuffer → AudioContext for Android Chrome compat
+      // Blob URL from fetch() has MIME issues on Android; AudioContext decodes raw bytes
       const ttsRes = await fetch("/api/sophia-mobile/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,47 +90,49 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         signal: AbortSignal.timeout(20000),
       });
 
-      setDebugMsg(`✅ TTS HTTP ${ttsRes.status} ${ttsRes.headers.get("content-type")}`);
+      setDebugMsg(`✅ TTS HTTP ${ttsRes.status} ct:${ttsRes.headers.get("content-type")}`);
 
-      if (!ttsRes.ok || !ttsRes.body) {
-        throw new Error(`TTS HTTP ${ttsRes.status}`);
+      if (!ttsRes.ok) throw new Error(`TTS HTTP ${ttsRes.status}`);
+
+      const arrayBuf = await ttsRes.arrayBuffer();
+      setDebugMsg(`🎵 ArrayBuffer size: ${arrayBuf.byteLength}`);
+
+      if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
+
+      // AudioContext decode — works on ALL browsers including Android Chrome
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      await ctx.resume();
+
+      let audioBuffer: AudioBuffer;
+      try {
+        audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+      } catch (decodeErr) {
+        throw new Error(`decodeAudioData failed: ${decodeErr}`);
       }
 
-      // Blob URL for the audio stream
-      const blob    = await ttsRes.blob();
-      setDebugMsg(`🎵 Blob size: ${blob.size} type: ${blob.type}`);
-      const blobUrl = URL.createObjectURL(blob);
-      const audio   = new Audio(blobUrl);
-      audioRef.current = audio;
-
+      setDebugMsg("▶️ Playing via AudioContext...");
       setIsLoading(false);
       onSpeakingChange(true);
 
       ttsPromise = new Promise<void>((res) => {
-        audio.onended = () => {
-          setDebugMsg("✅ Audio ended OK");
-          URL.revokeObjectURL(blobUrl);
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        source.onended = () => {
+          setDebugMsg("✅ Done");
+          ctx.close().catch(() => {});
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
-        audio.onerror = (e) => {
-          setDebugMsg(`❌ Audio error: ${(e as any)?.message ?? JSON.stringify(e)}`);
-          URL.revokeObjectURL(blobUrl);
-          if (activeRef.current) onSpeakingChange(false);
-          res();
-        };
-        audio.play().then(() => {
-          setDebugMsg("▶️ Playing...");
-        }).catch(err => {
-          setDebugMsg(`❌ play() blocked: ${err.name} — ${err.message}`);
-          onSpeakingChange(false);
-          res();
-        });
+        source.start(0);
+        // Store a way to stop it
+        (audioRef as any).current = { pause: () => { try { source.stop(); } catch {} }, src: "" };
       });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setDebugMsg(`❌ Fetch error: ${msg}`);
+      setDebugMsg(`❌ Error: ${msg}`);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
