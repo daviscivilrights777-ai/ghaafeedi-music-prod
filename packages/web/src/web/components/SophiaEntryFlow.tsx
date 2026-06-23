@@ -359,6 +359,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const audioCtxRef   = useRef<AudioContext | null>(null); // persistent AudioContext
   const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
   const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
+  // Pre-unlocked Audio element — created + .play()'d synchronously in tap handler
+  // speak() reuses this element to bypass Android Chrome autoplay block
+  const preUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -424,6 +427,16 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
       freshCtx.resume().catch(() => {});
       audioCtxRef.current = freshCtx;
     } catch { /* ignore */ }
+
+    // CRITICAL: Pre-unlock an Audio element synchronously inside the tap gesture.
+    // Android Chrome blocks audio.play() if called after any await (gesture window expires).
+    // Fix: create Audio + call .play() NOW (synchronously), store the element.
+    // speak() will reuse this element by swapping .src — element stays "trusted".
+    const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
+    const unlocked = new Audio(SILENCE_MP3);
+    unlocked.volume = 0;
+    unlocked.play().catch(() => {}); // unlock gesture — ignore silence play errors
+    preUnlockedAudioRef.current = unlocked;
 
     // Update visual state AFTER creating AudioContext (state update schedules re-render but
     // we don't depend on it for audio — we use refs and direct speak call below)
@@ -610,6 +623,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   portraitSrc="/assets/sophia-lipsync-portrait.png"
                   style={{ width: "100%", height: "100%" }}
                   audioCtxRef={audioCtxRef}
+                  preUnlockedAudioRef={preUnlockedAudioRef}
                 />
               </div>
 

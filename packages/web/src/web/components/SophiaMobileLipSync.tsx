@@ -30,6 +30,9 @@ interface SophiaMobileLipSyncProps {
   style?: React.CSSProperties;
   /** Ref to parent's pre-unlocked AudioContext — pass a React.RefObject so speak() always reads the latest value */
   audioCtxRef?: React.RefObject<AudioContext | null>;
+  /** Pre-unlocked Audio element — created + .play()'d synchronously in tap handler.
+   *  speak() reuses this element (swaps .src) to bypass Android Chrome autoplay block. */
+  preUnlockedAudioRef?: React.RefObject<HTMLAudioElement | null>;
 }
 
 // ─── Audio-first speak engine ─────────────────────────────────
@@ -54,6 +57,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   className,
   style,
   audioCtxRef: externalAudioCtxRef,
+  preUnlockedAudioRef,
 }: SophiaMobileLipSyncProps) {
 
   const videoRef         = useRef<HTMLVideoElement>(null);
@@ -82,9 +86,12 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     setShowVideo(false);
     setIsLoading(true);
 
-    // ── Step 1: TTS audio — blob URL + HTMLAudioElement ──
-    // This is the ONLY method confirmed working on Android Chrome.
-    // Web Audio API (decodeAudioData) is abandoned — gesture window dies during async calls.
+    // ── Step 1: TTS audio — blob URL + pre-unlocked HTMLAudioElement ──
+    //
+    // Android Chrome BLOCKS audio.play() if called after any await (gesture trust window expires).
+    // Fix: parent creates + .play()'s an Audio element SYNCHRONOUSLY in the tap handler.
+    // We reuse that same element here by swapping .src — element stays "gesture-trusted".
+    // Fallback: create a new Audio() if no pre-unlocked element is available (desktop/autoplay).
     let ttsPromise: Promise<void>;
     try {
       setDebugMsg("⏳ Fetching TTS...");
@@ -100,16 +107,32 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       if (!ttsRes.ok) throw new Error(`TTS HTTP ${ttsRes.status}`);
 
       const arrayBuf = await ttsRes.arrayBuffer();
-      setDebugMsg(`🎵 ${arrayBuf.byteLength} bytes`);
+      setDebugMsg(`🎵 ${arrayBuf.byteLength}b`);
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
-      // ── Blob URL approach — confirmed working on Android Chrome ──
       const blob = new Blob([arrayBuf], { type: "audio/mpeg" });
       const blobUrl = URL.createObjectURL(blob);
-      setDebugMsg(`🔗 blob URL created`);
 
-      const audio = new Audio(blobUrl);
-      audio.volume = 1.0;
+      // Reuse pre-unlocked audio element if available (Android gesture-trust preserved)
+      // Otherwise create a new one (desktop / autoplay environments)
+      const preUnlocked = preUnlockedAudioRef?.current;
+      let audio: HTMLAudioElement;
+
+      if (preUnlocked) {
+        setDebugMsg("🔓 reusing pre-unlocked Audio element");
+        preUnlocked.pause();
+        preUnlocked.src = blobUrl;
+        preUnlocked.volume = 1.0;
+        preUnlocked.load();
+        audio = preUnlocked;
+        // Clear the ref so next call creates fresh
+        if (preUnlockedAudioRef) preUnlockedAudioRef.current = null;
+      } else {
+        setDebugMsg("🆕 new Audio (desktop/fallback)");
+        audio = new Audio(blobUrl);
+        audio.volume = 1.0;
+      }
+
       audioRef.current = audio;
 
       setIsLoading(false);
@@ -118,7 +141,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
       ttsPromise = new Promise<void>((resolve, reject) => {
         audio.onplaying = () => {
-          setDebugMsg("▶️ PLAYING! Audio is live");
+          setDebugMsg("▶️ PLAYING!");
         };
         audio.onended = () => {
           URL.revokeObjectURL(blobUrl);
@@ -130,17 +153,16 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
           URL.revokeObjectURL(blobUrl);
           const code = audio.error?.code ?? -1;
           const msg = audio.error?.message ?? "unknown";
-          setDebugMsg(`❌ HTMLAudio error code:${code} — ${msg}`);
+          setDebugMsg(`❌ code:${code} ${msg}`);
           if (activeRef.current) onSpeakingChange(false);
           reject(new Error(`HTMLAudio error ${code}`));
         };
 
-        // play() — gesture trust window may still be alive here (fetch is ~300-500ms)
         audio.play().then(() => {
-          setDebugMsg("▶️ play() promise resolved");
+          setDebugMsg("▶️ play() OK");
         }).catch((e: Error) => {
           URL.revokeObjectURL(blobUrl);
-          setDebugMsg(`❌ play() rejected: ${e.name} — ${e.message}`);
+          setDebugMsg(`❌ play(): ${e.name} ${e.message}`);
           if (activeRef.current) onSpeakingChange(false);
           reject(e);
         });
