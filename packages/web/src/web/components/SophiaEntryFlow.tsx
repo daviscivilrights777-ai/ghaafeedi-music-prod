@@ -355,6 +355,8 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [sophiaReady,    setSophiaReady]    = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
   const [audioUnlocked,  setAudioUnlocked]  = useState(false);
+  const audioUnlockedRef = useRef(false); // ref copy — readable inside gesture handlers without re-render
+  const audioCtxRef   = useRef<AudioContext | null>(null); // persistent AudioContext
   const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
   const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
 
@@ -408,22 +410,23 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   }, []);
 
   // ── Unlock audio on first user interaction (mobile requirement) ────────────
-  // iOS/Android require audio.play() to be called synchronously inside a tap handler.
-  // Strategy: play a silent 1-sample MP3 synchronously, then immediately fire TTS.
-  // The silent play establishes trust; subsequent plays work without gesture.
-  const SILENT_MP3 = "data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABiaWdTb3VuZCBEZXNpZ24gVW5peWVyc2FsIFNvdW5kIERlc2lnbgBUWFhYAAAAGQAAA1RpbWUAMDAwMDAwMDAwMDAwMDAwAFRYWFgAAAARAAACY3JlYXRvcgBMYXZmNTcuAFRYWFgAAAAWAAADZW5jb2RlcgBMYXZjNTcuMjguAFREUkMAAAAEAAADMjAxNwBUSVQyAAAABgAAA1RpdGxlAFRTU0UAAAAPAAADTGF2ZjU3LjI1LjEwMAD/+0DEAAAV4AL3UEAAIgAAA0gAAAAABBQO//NExAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
-
   const handleAudioUnlock = useCallback(() => {
-    if (audioUnlocked) return;
+    if (audioUnlockedRef.current) return;
+    audioUnlockedRef.current = true;
 
-    // 1. Play silent audio SYNCHRONOUSLY inside tap handler — unlocks iOS/Android
-    const silentAudio = new Audio(SILENT_MP3);
-    silentAudio.volume = 0.001;
-    silentAudio.play().catch(() => {});
+    // Create + resume AudioContext SYNCHRONOUSLY inside tap gesture
+    // Keep it alive in ref so speak() reuses the same unlocked context
+    try {
+      const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+      const ctx = new AC();
+      ctx.resume().catch(() => {});
+      audioCtxRef.current = ctx;
+    } catch { /* ignore */ }
 
+    // Update visual state (overlay disappears)
     setAudioUnlocked(true);
 
-    // 2. Now fire TTS — audio context is unlocked, play() will work
+    // Fire queued speech
     const queued = speakQueueRef.current;
     if (queued) {
       speakQueueRef.current = null;
@@ -431,7 +434,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     } else {
       playTTS(speechLine, step);
     }
-  }, [audioUnlocked, playTTS, speechLine, step]);
+  }, [playTTS, speechLine, step]);
 
   // Fire TTS on every step change
   useEffect(() => {
@@ -598,6 +601,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   nextStepText={nextStepText}
                   portraitSrc="/assets/sophia-lipsync-portrait.png"
                   style={{ width: "100%", height: "100%" }}
+                  audioCtx={audioCtxRef.current}
                 />
               </div>
 

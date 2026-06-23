@@ -28,6 +28,8 @@ interface SophiaMobileLipSyncProps {
   portraitSrc?: string;
   className?: string;
   style?: React.CSSProperties;
+  /** Pre-unlocked AudioContext from parent gesture handler — reuse to avoid suspended state on Android */
+  audioCtx?: AudioContext | null;
 }
 
 // ─── Audio-first speak engine ─────────────────────────────────
@@ -51,11 +53,16 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   portraitSrc = "/assets/sophia-lipsync-portrait.png",
   className,
   style,
+  audioCtx: externalAudioCtx,
 }: SophiaMobileLipSyncProps) {
 
-  const videoRef      = useRef<HTMLVideoElement>(null);
-  const audioRef      = useRef<HTMLAudioElement | null>(null);
-  const activeRef     = useRef(true);
+  const videoRef         = useRef<HTMLVideoElement>(null);
+  const audioRef         = useRef<HTMLAudioElement | null>(null);
+  const activeRef        = useRef(true);
+  const externalCtxRef   = useRef<AudioContext | null | undefined>(externalAudioCtx);
+
+  // Keep externalCtxRef in sync with latest prop (so speak() always sees the current context)
+  useEffect(() => { externalCtxRef.current = externalAudioCtx; }, [externalAudioCtx]);
 
   const [showVideo, setShowVideo]     = useState(false);
   const [isLoading, setIsLoading]     = useState(false);
@@ -96,10 +103,19 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
       // Web Audio API — bypasses Android mute switch & blob URL issues
-      const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-      const ctx = new AudioCtx();
+      // Reuse parent's pre-unlocked AudioContext if available (critical for Android gesture chain)
+      const parentCtx = externalCtxRef.current;
+      let ctx: AudioContext;
+      if (parentCtx && parentCtx.state !== "closed") {
+        ctx = parentCtx;
+        setDebugMsg(`♻️ Reusing parent AudioContext (${ctx.state})`);
+      } else {
+        const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+        ctx = new AudioCtx();
+        setDebugMsg(`🆕 New AudioContext created`);
+      }
 
-      // Must resume AFTER user gesture — tap already happened so this works
+      // Resume if needed (should already be running if parent unlocked it)
       if (ctx.state === "suspended") await ctx.resume();
       setDebugMsg(`🔊 AudioContext state: ${ctx.state}`);
 
@@ -123,7 +139,10 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
         source.onended = () => {
           setDebugMsg("✅ Done");
-          ctx.close().catch(() => {});
+          // Only close if we own this context (not the parent's reused one)
+          if (!parentCtx || parentCtx !== ctx) {
+            ctx.close().catch(() => {});
+          }
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
@@ -132,7 +151,13 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
         // Store stop handle
         (audioRef as any).current = {
-          pause: () => { try { source.stop(); ctx.close(); } catch {} },
+          pause: () => {
+            try { source.stop(); } catch {}
+            // Only close ctx if we own it
+            if (!parentCtx || parentCtx !== ctx) {
+              try { ctx.close(); } catch {}
+            }
+          },
           src: "",
         };
       });
