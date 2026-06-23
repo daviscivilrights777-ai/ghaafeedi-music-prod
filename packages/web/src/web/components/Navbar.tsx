@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { GhaafeediLogo } from "./GhaafeediLogo";
-import { motion, AnimatePresence } from "framer-motion";
-import { Link, useLocation } from "wouter";
+import { motion } from "framer-motion";
+import { Link } from "wouter";
 import { authClient } from "../lib/authClient";
 
 const GOLD   = "#D4AF37";
@@ -315,12 +315,9 @@ function MemberDropdown({
 
 // ── Main Navbar ───────────────────────────────────────────────────────────────
 export function Navbar() {
-  const [scrolled,    setScrolled]    = useState(false);
-  const [open,        setOpen]        = useState(false);
-  const [location,    setLocation]    = useLocation();
+  const [scrolled, setScrolled] = useState(false);
   const { data: session, isPending: sessionLoading } = authClient.useSession();
   const isLoggedIn = !!session?.user;
-  const dropRef = useRef<HTMLDivElement>(null);
 
   // scroll shadow
   useEffect(() => {
@@ -328,28 +325,6 @@ export function Navbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  // click-outside to close
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  // close on route change
-  useEffect(() => { setOpen(false); }, [location]);
-
-  const handleSignOut = async () => {
-    setOpen(false);
-    await authClient.signOut();
-    setLocation("/");
-  };
-
-  const name     = session?.user?.name  ?? "Member";
-  const initials = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
 
   return (
     <motion.nav
@@ -388,72 +363,29 @@ export function Navbar() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {sessionLoading ? null : isLoggedIn ? (
 
-            /* ── Member Avatar + Dropdown trigger ── */
-            <div ref={dropRef} style={{ position: "relative" }}>
-              <button
-                onClick={() => setOpen(v => !v)}
-                aria-label="Account menu"
-                style={{
-                  display: "flex", alignItems: "center", gap: 9,
-                  background: open
-                    ? "rgba(212,175,55,0.12)"
-                    : "rgba(255,255,255,0.04)",
-                  border: `1.5px solid ${open ? "rgba(212,175,55,0.45)" : "rgba(255,255,255,0.10)"}`,
-                  borderRadius: 999, padding: "5px 14px 5px 6px",
-                  cursor: "pointer", transition: "all 0.2s",
-                  boxShadow: open ? "0 0 18px rgba(212,175,55,0.18)" : "none",
-                }}
-                onMouseEnter={e => {
-                  if (!open) {
-                    e.currentTarget.style.background = "rgba(212,175,55,0.08)";
-                    e.currentTarget.style.borderColor = "rgba(212,175,55,0.35)";
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (!open) {
-                    e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                    e.currentTarget.style.borderColor = "rgba(255,255,255,0.10)";
-                  }
-                }}
-              >
-                {/* Avatar circle */}
-                <div style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: `linear-gradient(135deg, ${GOLD} 0%, #9A6F1F 100%)`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 700, color: "#0A0B0F",
-                  fontFamily: "Inter, sans-serif",
-                  boxShadow: "0 0 10px rgba(212,175,55,0.30)",
-                  flexShrink: 0,
-                }}>
-                  {initials}
-                </div>
-                {/* Name */}
-                <span style={{
-                  fontFamily: "Inter, sans-serif", fontSize: 13, fontWeight: 600,
-                  color: "rgba(255,255,255,0.88)", letterSpacing: "0.01em",
-                  maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>
-                  {name.split(" ")[0]}
-                </span>
-                {/* Chevron */}
-                <span style={{ color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center" }}>
-                  <ChevronIcon open={open} />
-                </span>
-              </button>
-
-              {/* Dropdown */}
-              <AnimatePresence>
-                {open && (
-                  <MemberDropdown
-                    session={session}
-                    onClose={() => setOpen(false)}
-                    onSignOut={handleSignOut}
-                    setLocation={setLocation}
-                  />
-                )}
-              </AnimatePresence>
-            </div>
+            /* ── Logged-in: go to onboarding (the hub) ── */
+            <Link href="/onboarding" style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "rgba(212,175,55,0.08)",
+              border: "1.5px solid rgba(212,175,55,0.28)",
+              borderRadius: 999, padding: "7px 18px",
+              textDecoration: "none", transition: "all 0.22s",
+              color: GOLD, fontFamily: "Inter, sans-serif",
+              fontSize: 13, fontWeight: 600, letterSpacing: "0.02em",
+            }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(212,175,55,0.15)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.55)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 0 18px rgba(212,175,55,0.22)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = "rgba(212,175,55,0.08)";
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.28)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "none";
+              }}
+            >
+              My Journey
+            </Link>
 
           ) : (
 

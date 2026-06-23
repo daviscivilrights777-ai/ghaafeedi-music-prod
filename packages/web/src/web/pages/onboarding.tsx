@@ -116,10 +116,245 @@ const URGENCY_TICKER = [
   "🔒 Your story is private & secure",
 ];
 
-function Step1Welcome({ onNext, sessionLoading, isLoggedIn }: { onNext: () => void; sessionLoading?: boolean; isLoggedIn?: boolean }) {
+// ─── S1 Member Dropdown (inline, only in S1 header) ────────────────────────
+const S1_DASH_ITEMS = [
+  { id: "overview",     label: "Overview",       desc: "Your snapshot & stats"         },
+  { id: "productions",  label: "Productions",    desc: "Track active AI jobs"          },
+  { id: "deliverables", label: "Deliverables",   desc: "Download your finished files"  },
+  { id: "memberships",  label: "Memberships",    desc: "Plans, tiers & renewal dates"  },
+  { id: "billing",      label: "Billing",        desc: "Invoices, payments & credits"  },
+  { id: "revisions",    label: "Revisions",      desc: "Request edits on your orders"  },
+  { id: "support",      label: "Support",        desc: "Open a ticket or chat with us" },
+  { id: "referrals",    label: "Referrals",      desc: "Earn credits by sharing"       },
+  { id: "settings",     label: "Settings",       desc: "Profile, password & prefs"     },
+];
+
+function S1ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+}
+
+function S1MemberDropdown({
+  session, setLocation,
+}: { session: any; setLocation: (p: string) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const dropRef = React.useRef<HTMLDivElement>(null);
+
+  const name     = session?.user?.name  ?? "Member";
+  const email    = session?.user?.email ?? "";
+  const initials = name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+
+  // click-outside close
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const go = (path: string) => { setOpen(false); setLocation(path); };
+
+  const handleSignOut = async () => {
+    setOpen(false);
+    const { authClient: ac } = await import("../lib/authClient");
+    await ac.signOut();
+    setLocation("/signin");
+  };
+
+  return (
+    <div ref={dropRef} style={{ position: "relative" }}>
+      {/* Trigger button */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        aria-label="Account menu"
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: open ? "rgba(212,175,55,0.14)" : "rgba(255,255,255,0.05)",
+          border: `1.5px solid ${open ? "rgba(212,175,55,0.50)" : "rgba(255,255,255,0.12)"}`,
+          borderRadius: 999, padding: "5px 13px 5px 6px",
+          cursor: "pointer", transition: "all 0.18s",
+          boxShadow: open ? "0 0 18px rgba(212,175,55,0.22)" : "none",
+        }}
+        onMouseEnter={e => {
+          if (!open) {
+            e.currentTarget.style.background = "rgba(212,175,55,0.09)";
+            e.currentTarget.style.borderColor = "rgba(212,175,55,0.38)";
+          }
+        }}
+        onMouseLeave={e => {
+          if (!open) {
+            e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+            e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)";
+          }
+        }}
+      >
+        {/* Avatar */}
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%",
+          background: `linear-gradient(135deg, ${GOLD} 0%, #9A6F1F 100%)`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 11.5, fontWeight: 700, color: "#0A0B0F",
+          fontFamily: "Inter, sans-serif", flexShrink: 0,
+          boxShadow: "0 0 10px rgba(212,175,55,0.32)",
+        }}>
+          {initials}
+        </div>
+        <span style={{
+          fontFamily: "Inter, sans-serif", fontSize: 13, fontWeight: 600,
+          color: "rgba(255,255,255,0.88)", maxWidth: 100,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {name.split(" ")[0]}
+        </span>
+        <span style={{ color: "rgba(255,255,255,0.40)", display: "flex", alignItems: "center" }}>
+          <S1ChevronIcon open={open} />
+        </span>
+      </button>
+
+      {/* Dropdown panel */}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            style={{
+              position: "absolute", top: "calc(100% + 10px)", right: 0,
+              width: 320,
+              background: "rgba(8,8,18,0.98)",
+              backdropFilter: "blur(32px)", WebkitBackdropFilter: "blur(32px)",
+              border: "1px solid rgba(212,175,55,0.18)", borderRadius: 16,
+              boxShadow: "0 24px 64px rgba(0,0,0,0.72), 0 0 0 1px rgba(212,175,55,0.06)",
+              overflow: "hidden", zIndex: 9999,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              padding: "16px 18px 12px",
+              borderBottom: "1px solid rgba(255,255,255,0.06)",
+              background: "linear-gradient(135deg, rgba(212,175,55,0.07) 0%, rgba(11,23,54,0.4) 100%)",
+              display: "flex", alignItems: "center", gap: 11,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${GOLD} 0%, #9A6F1F 100%)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 14, fontWeight: 700, color: "#0A0B0F",
+                fontFamily: "Inter, sans-serif", flexShrink: 0,
+                boxShadow: "0 0 16px rgba(212,175,55,0.35)",
+              }}>{initials}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "Playfair Display, serif", fontSize: 14, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                <div style={{ fontFamily: "Inter, sans-serif", fontSize: 11, color: "rgba(255,255,255,0.40)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email}</div>
+              </div>
+              <span style={{
+                marginLeft: "auto", flexShrink: 0,
+                fontFamily: "Inter, sans-serif", fontSize: 9, fontWeight: 700,
+                color: GOLD, letterSpacing: "0.12em", textTransform: "uppercase" as const,
+                background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.25)",
+                borderRadius: 4, padding: "2px 7px",
+              }}>MEMBER</span>
+            </div>
+
+            {/* Browse Products CTA */}
+            <div style={{ padding: "8px 10px 4px" }}>
+              <button onClick={() => go("/products")} style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                background: "linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 100%)",
+                border: "1px solid rgba(212,175,55,0.22)", borderRadius: 10,
+                padding: "9px 13px", cursor: "pointer", transition: "all 0.18s",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = "linear-gradient(135deg, rgba(212,175,55,0.20) 0%, rgba(212,175,55,0.09) 100%)";
+                e.currentTarget.style.borderColor = "rgba(212,175,55,0.48)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = "linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 100%)";
+                e.currentTarget.style.borderColor = "rgba(212,175,55,0.22)";
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 7,
+                  background: "linear-gradient(135deg, #D4AF37 0%, #9A6F1F 100%)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0A0B0F" strokeWidth="1.8">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                    <line x1="3" y1="6" x2="21" y2="6"/>
+                    <path d="M16 10a4 4 0 0 1-8 0"/>
+                  </svg>
+                </div>
+                <div style={{ textAlign: "left" }}>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, fontWeight: 600, color: GOLD }}>Browse Products</div>
+                  <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10.5, color: "rgba(255,255,255,0.38)", marginTop: 1 }}>15 cinematic experiences</div>
+                </div>
+                <svg style={{ marginLeft: "auto", flexShrink: 0 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+
+            {/* Section label */}
+            <div style={{ padding: "6px 18px 3px", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontFamily: "Inter, sans-serif", fontSize: 9.5, fontWeight: 600, color: "rgba(255,255,255,0.22)", letterSpacing: "0.14em", textTransform: "uppercase" as const }}>My Account</span>
+              <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.06)" }}/>
+            </div>
+
+            {/* Dashboard items */}
+            <div style={{ padding: "0 6px 4px" }}>
+              {S1_DASH_ITEMS.map(item => (
+                <button key={item.id} onClick={() => go(`/dashboard?tab=${item.id}`)}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    background: "transparent", border: "none", borderRadius: 8,
+                    padding: "8px 12px", cursor: "pointer", transition: "background 0.14s", textAlign: "left",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>{item.label}</div>
+                    <div style={{ fontFamily: "Inter, sans-serif", fontSize: 10.5, color: "rgba(255,255,255,0.30)", marginTop: 1 }}>{item.desc}</div>
+                  </div>
+                  <svg style={{ marginLeft: "auto", flexShrink: 0, opacity: 0.22 }} width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              ))}
+            </div>
+
+            {/* Sign Out */}
+            <div style={{ padding: "4px 6px 8px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <button onClick={handleSignOut}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  background: "transparent", border: "none", borderRadius: 8,
+                  padding: "9px 12px", cursor: "pointer", transition: "background 0.14s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,80,80,0.08)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,100,100,0.8)" strokeWidth="1.8">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, fontWeight: 500, color: "rgba(255,100,100,0.85)" }}>Sign Out</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext: () => void; sessionLoading?: boolean; isLoggedIn?: boolean; session?: any }) {
   const [hoverStart, setHoverStart] = useState(false);
   const [hoverDemo,  setHoverDemo]  = useState(false);
   const [tickerIdx,  setTickerIdx]  = useState(0);
+  const [, setLocation] = useLocation();
 
   React.useEffect(() => {
     const t = setInterval(() => setTickerIdx(i => (i + 1) % URGENCY_TICKER.length), 3000);
@@ -203,20 +438,24 @@ function Step1Welcome({ onNext, sessionLoading, isLoggedIn }: { onNext: () => vo
           <GhaafeediLogo variant="page" />
         </div>
 
-        {/* Sign In — hidden when already logged in */}
-        <div className="ob-header-signin" style={{ minWidth:130, textAlign:"right" }}>
-          {!isLoggedIn && <a href="/signin" style={{
-            fontFamily:"Inter, sans-serif", fontSize:13,
-            color:"rgba(255,255,255,0.5)", textDecoration:"none",
-            letterSpacing:"0.01em", transition:"color 0.2s",
-            whiteSpace:"nowrap",
-          }}
-            onMouseEnter={e=>(e.currentTarget.style.color=WHITE)}
-            onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.5)")}
-          >
-            <span className="ob-signin-label">Already have an account?{" "}</span>
-            <span style={{ color:GOLD, fontWeight:600 }}>Sign In</span>
-          </a>}
+        {/* Right: Sign In (logged-out) OR MemberDropdown (logged-in) */}
+        <div className="ob-header-signin" style={{ minWidth:130, display:"flex", justifyContent:"flex-end", alignItems:"center" }}>
+          {isLoggedIn && session ? (
+            <S1MemberDropdown session={session} setLocation={setLocation} />
+          ) : !isLoggedIn && (
+            <a href="/signin" style={{
+              fontFamily:"Inter, sans-serif", fontSize:13,
+              color:"rgba(255,255,255,0.5)", textDecoration:"none",
+              letterSpacing:"0.01em", transition:"color 0.2s",
+              whiteSpace:"nowrap",
+            }}
+              onMouseEnter={e=>(e.currentTarget.style.color=WHITE)}
+              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.5)")}
+            >
+              <span className="ob-signin-label">Already have an account?{" "}</span>
+              <span style={{ color:GOLD, fontWeight:600 }}>Sign In</span>
+            </a>
+          )}
         </div>
       </header>
 
@@ -5478,7 +5717,7 @@ function Step7ProductionPortal({ whoFor, experienceType, onBack, onNext }: Step7
   const handleDashboard = React.useCallback(() => {
     if (navigating) return;
     setNavigating(true);
-    setTimeout(() => setLocation("/"), 420);
+    setTimeout(() => setLocation("/dashboard"), 420);
   }, [navigating, setLocation]);
 
   const deliveryLabel = experienceType?.toLowerCase().includes("elite")
@@ -9657,7 +9896,7 @@ export default function Onboarding() {
             transition={{ duration:0.35 }}
             style={{ height:"100%", overflow:"hidden", position:"absolute", inset:0 }}
           >
-            <Step1Welcome onNext={next} sessionLoading={sessionLoading} isLoggedIn={!!session?.user}/>
+            <Step1Welcome onNext={next} sessionLoading={sessionLoading} isLoggedIn={!!session?.user} session={session}/>
           </motion.div>
         )}
         {step === 2 && (
@@ -9788,7 +10027,7 @@ export default function Onboarding() {
               onDashboard={() => {
                 s9Track("dashboard_nav");
                 localStorage.removeItem(GM_OB_STEP_KEY);
-                setLocation("/");
+                setLocation("/dashboard");
               }}
             />
             {orderModalOpen && <S9OrderDetailsModal onClose={() => setOrderModalOpen(false)} />}
