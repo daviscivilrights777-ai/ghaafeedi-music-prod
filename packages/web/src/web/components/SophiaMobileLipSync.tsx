@@ -28,8 +28,8 @@ interface SophiaMobileLipSyncProps {
   portraitSrc?: string;
   className?: string;
   style?: React.CSSProperties;
-  /** Pre-unlocked AudioContext from parent gesture handler — reuse to avoid suspended state on Android */
-  audioCtx?: AudioContext | null;
+  /** Ref to parent's pre-unlocked AudioContext — pass a React.RefObject so speak() always reads the latest value */
+  audioCtxRef?: React.RefObject<AudioContext | null>;
 }
 
 // ─── Audio-first speak engine ─────────────────────────────────
@@ -53,16 +53,15 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   portraitSrc = "/assets/sophia-lipsync-portrait.png",
   className,
   style,
-  audioCtx: externalAudioCtx,
+  audioCtxRef: externalAudioCtxRef,
 }: SophiaMobileLipSyncProps) {
 
   const videoRef         = useRef<HTMLVideoElement>(null);
   const audioRef         = useRef<HTMLAudioElement | null>(null);
   const activeRef        = useRef(true);
-  const externalCtxRef   = useRef<AudioContext | null | undefined>(externalAudioCtx);
 
-  // Keep externalCtxRef in sync with latest prop (so speak() always sees the current context)
-  useEffect(() => { externalCtxRef.current = externalAudioCtx; }, [externalAudioCtx]);
+  // No local copy needed — we read externalAudioCtxRef.current directly at call time
+  // This means we always get the freshest AudioContext even if it was created after mount
 
   const [showVideo, setShowVideo]     = useState(false);
   const [isLoading, setIsLoading]     = useState(false);
@@ -103,8 +102,8 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       if (arrayBuf.byteLength === 0) throw new Error("Empty audio response");
 
       // Web Audio API — bypasses Android mute switch & blob URL issues
-      // Reuse parent's pre-unlocked AudioContext if available (critical for Android gesture chain)
-      const parentCtx = externalCtxRef.current;
+      // Read parent's AudioContext ref at call-time (not render-time) — critical for Android gesture chain
+      const parentCtx = externalAudioCtxRef?.current ?? null;
       let ctx: AudioContext;
       if (parentCtx && parentCtx.state !== "closed") {
         ctx = parentCtx;

@@ -414,27 +414,35 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     if (audioUnlockedRef.current) return;
     audioUnlockedRef.current = true;
 
-    // Create + resume AudioContext SYNCHRONOUSLY inside tap gesture
-    // Keep it alive in ref so speak() reuses the same unlocked context
+    // CRITICAL: Create + resume AudioContext SYNCHRONOUSLY inside the tap gesture,
+    // BEFORE any async calls or React state updates.
+    // This keeps the browser's activation window open for the audio call.
+    let freshCtx: AudioContext | null = null;
     try {
       const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-      const ctx = new AC();
-      ctx.resume().catch(() => {});
-      audioCtxRef.current = ctx;
+      freshCtx = new AC();
+      freshCtx.resume().catch(() => {});
+      audioCtxRef.current = freshCtx;
     } catch { /* ignore */ }
 
-    // Update visual state (overlay disappears)
+    // Update visual state AFTER creating AudioContext (state update schedules re-render but
+    // we don't depend on it for audio — we use refs and direct speak call below)
     setAudioUnlocked(true);
 
-    // Fire queued speech
-    const queued = speakQueueRef.current;
-    if (queued) {
-      speakQueueRef.current = null;
-      playTTS(queued.text, queued.step);
+    // Call speak() directly using the speak function ref — no intermediate queue or playTTS wrapper.
+    // speakRef.current already has the audioCtx via the prop (externalCtxRef syncs on each render).
+    // We also immediately update externalCtxRef so speak() sees the fresh context right now.
+    const textToSpeak = speakQueueRef.current?.text ?? speechLine;
+    const stepToSpeak = speakQueueRef.current?.step ?? step;
+    speakQueueRef.current = null;
+
+    if (speakRef.current) {
+      speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
     } else {
-      playTTS(speechLine, step);
+      // SophiaLipSync not mounted yet — re-queue so onReady drains it
+      speakQueueRef.current = { text: textToSpeak, step: stepToSpeak };
     }
-  }, [playTTS, speechLine, step]);
+  }, [speechLine, step]);
 
   // Fire TTS on every step change
   useEffect(() => {
@@ -601,7 +609,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   nextStepText={nextStepText}
                   portraitSrc="/assets/sophia-lipsync-portrait.png"
                   style={{ width: "100%", height: "100%" }}
-                  audioCtx={audioCtxRef.current}
+                  audioCtxRef={audioCtxRef}
                 />
               </div>
 
