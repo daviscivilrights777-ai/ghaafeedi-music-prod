@@ -134,8 +134,8 @@ export default function SignUp() {
           </div>
           <h1 style={{ fontFamily: "Playfair Display, serif", fontSize: 28, fontWeight: 700, color: GOLD, margin: "0 0 8px" }}>Begin Your Legacy</h1>
           <p style={{ fontSize: 14, color: "rgba(255,255,255,0.55)", fontFamily: "Inter, sans-serif", margin: 0 }}>
-            Create your account and receive your unique<br/>
-            <span style={{ color: GOLD, fontWeight: 600 }}>GM Member ID</span>
+            Turn your memories into cinematic songs and films —<br/>
+            <span style={{ color: GOLD, fontWeight: 600 }}>powered by AI</span>
           </p>
         </div>
 

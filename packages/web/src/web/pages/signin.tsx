@@ -150,7 +150,7 @@ export default function SignIn() {
           <p style={{
             fontSize: 14, color: "rgba(255,255,255,0.55)",
             fontFamily: "Inter, sans-serif", margin: 0,
-          }}>Sign in to your Ghaafeedi Music account</p>
+          }}>Your memories await — sign in to continue your journey</p>
         </div>
 
         {/* Error */}

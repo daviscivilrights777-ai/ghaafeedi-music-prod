@@ -8685,6 +8685,122 @@ function S9OrderDetailsModal({ onClose }: { onClose: () => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ── TASK 5: S9 CELEBRATION OVERLAY ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+const GM_S9_CELEBRATED_KEY = "gm_s9_celebrated";
+
+function S9CelebrationOverlay({ onDone }: { onDone: () => void }) {
+  const [visible, setVisible] = React.useState(true);
+  const [particles] = React.useState(() =>
+    Array.from({ length: 28 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      delay: Math.random() * 1.2,
+      size: 3 + Math.random() * 5,
+      dur: 1.8 + Math.random() * 1.4,
+    }))
+  );
+
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      setVisible(false);
+      setTimeout(onDone, 600);
+    }, 2800);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="s9-celebration"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 99999,
+            background: "radial-gradient(ellipse at center, rgba(5,4,16,0.96) 0%, rgba(3,3,10,0.98) 100%)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            overflow: "hidden",
+          }}
+        >
+          {/* Gold particles */}
+          {particles.map(p => (
+            <motion.div
+              key={p.id}
+              initial={{ opacity: 0, y: 0, x: `${p.x}vw` }}
+              animate={{ opacity: [0, 1, 0], y: -220, x: `${p.x + (Math.random() - 0.5) * 10}vw` }}
+              transition={{ duration: p.dur, delay: p.delay, ease: "easeOut" }}
+              style={{
+                position: "absolute", bottom: "10%",
+                width: p.size, height: p.size,
+                borderRadius: "50%",
+                background: p.id % 3 === 0 ? "#D4AF37" : p.id % 3 === 1 ? "#F4D06F" : "#FFF8DC",
+                boxShadow: `0 0 ${p.size * 2}px ${p.id % 3 === 0 ? "#D4AF37" : "#F4D06F"}`,
+                pointerEvents: "none",
+              }}
+            />
+          ))}
+
+          {/* Gold ring */}
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.65, ease: [0.34, 1.56, 0.64, 1] }}
+            style={{
+              width: 120, height: 120, borderRadius: "50%",
+              border: "2px solid rgba(212,175,55,0.6)",
+              boxShadow: "0 0 40px rgba(212,175,55,0.35), inset 0 0 20px rgba(212,175,55,0.1)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginBottom: 32,
+            }}
+          >
+            <motion.span
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+              style={{ fontSize: 48, lineHeight: 1 }}
+            >✦</motion.span>
+          </motion.div>
+
+          {/* Headline */}
+          <motion.h1
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45, duration: 0.6 }}
+            style={{
+              fontFamily: "Playfair Display, serif",
+              fontSize: "clamp(26px, 5vw, 42px)",
+              fontWeight: 700, color: "#D4AF37",
+              textAlign: "center", margin: "0 0 16px",
+              lineHeight: 1.2, padding: "0 24px",
+            }}
+          >
+            Your Cinematic Journey Begins
+          </motion.h1>
+
+          {/* Subline */}
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            style={{
+              fontFamily: "Inter, sans-serif",
+              fontSize: 15, color: "rgba(255,255,255,0.55)",
+              textAlign: "center", margin: 0, padding: "0 32px",
+            }}
+          >
+            Your story is now in production
+          </motion.p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const GM_OB_STEP_KEY = "gm_ob_step";
 const MEMBER_BAR_H = 44; // px — height of member bar
@@ -8705,6 +8821,21 @@ export default function Onboarding() {
 
   const [authGateOpen, setAuthGateOpen] = useState(false);
   const [memberData, setMemberData] = useState<{ memberId: string; status: string; tier: string; name: string } | null>(null);
+
+  // ── Task 4: Autosave indicator ────────────────────────────────────────────
+  const [saveToast, setSaveToast] = useState(false);
+  // ── Task 1: Smart resume banner ───────────────────────────────────────────
+  const [resumeBanner, setResumeBanner] = useState<{ savedStep: number } | null>(null);
+  const [resumeDismissed, setResumeDismissed] = useState(false);
+  // ── Task 5: S9 celebration ────────────────────────────────────────────────
+  const [showCelebration, setShowCelebration] = useState(false);
+  // ── Viewport for sidebar/breadcrumb ──────────────────────────────────────
+  const [winW, setWinW] = useState(typeof window !== "undefined" ? window.innerWidth : 1440);
+  useEffect(() => {
+    const fn = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
   const [obData, setObData] = useState<OnboardingData>({
     whoFor: null, experienceType: null, storyText: "",
     recordedAudio: null, uploadedPhotos: [], uploadedVideos: [],
@@ -8716,12 +8847,29 @@ export default function Onboarding() {
     if (step >= 1 && step <= 9) localStorage.setItem(GM_OB_STEP_KEY, String(step));
   }, [step]);
 
+  // ── Task 4: Ctrl+S manual save ────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        localStorage.setItem(GM_OB_STEP_KEY, String(step));
+        setSaveToast(true);
+        setTimeout(() => setSaveToast(false), 2000);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [step]);
+
   // On auth resolve: ensure member record + load member data
   useEffect(() => {
     if (sessionLoading || !isAuthed) return;
     // Resume saved step if we landed on step 1 (e.g. after Google OAuth redirect)
     const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || "1") || 1;
-    if (saved > 1 && step === 1) setStep(Math.min(saved, 9));
+    if (saved > 1 && step === 1) {
+      // Task 1: show resume banner instead of auto-jumping
+      setResumeBanner({ savedStep: saved });
+    }
     // Ensure member record exists
     fetch("/api/members/create", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
     // Load member data for bar
@@ -8743,6 +8891,14 @@ export default function Onboarding() {
   const next = () => {
     if (step === 1 && sessionLoading) return;
     if (step === 1 && !isAuthed) { setAuthGateOpen(true); return; }
+    // Task 5: trigger S9 celebration on first arrival at step 9
+    if (step === 8) {
+      const alreadyCelebrated = sessionStorage.getItem(GM_S9_CELEBRATED_KEY);
+      if (!alreadyCelebrated) {
+        sessionStorage.setItem(GM_S9_CELEBRATED_KEY, "1");
+        setShowCelebration(true);
+      }
+    }
     setStep(s => Math.min(s + 1, 9));
   };
   const back = () => setStep(s => Math.max(s - 1, 1));
@@ -8761,6 +8917,107 @@ export default function Onboarding() {
 
   return (
     <div style={{ background:"#06040f", position:"fixed", inset:0, overflow:"hidden" }}>
+
+      {/* ── TASK 5: S9 Celebration overlay ── */}
+      {showCelebration && (
+        <S9CelebrationOverlay onDone={() => setShowCelebration(false)} />
+      )}
+
+      {/* ── TASK 4: Ctrl+S autosave toast ── */}
+      <AnimatePresence>
+        {saveToast && (
+          <motion.div
+            key="save-toast"
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.25 }}
+            style={{
+              position: "fixed", top: showBar ? MEMBER_BAR_H + 12 : 12, right: 16,
+              zIndex: 99998,
+              background: "rgba(212,175,55,0.12)",
+              border: "1px solid rgba(212,175,55,0.40)",
+              borderRadius: 8, padding: "7px 14px",
+              fontFamily: "Inter, sans-serif", fontSize: 12, fontWeight: 600,
+              color: GOLD, letterSpacing: "0.04em",
+              backdropFilter: "blur(12px)",
+              display: "flex", alignItems: "center", gap: 6,
+              pointerEvents: "none",
+            }}
+          >
+            <span style={{ fontSize: 14 }}>✓</span> Saved
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── TASK 1: Smart resume banner (step 1 only, authed, dismissed on choose) ── */}
+      <AnimatePresence>
+        {!resumeDismissed && resumeBanner && step === 1 && (
+          <motion.div
+            key="resume-banner"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+            style={{
+              position: "fixed",
+              top: showBar ? MEMBER_BAR_H + 8 : 8,
+              left: "50%", transform: "translateX(-50%)",
+              zIndex: 9990,
+              background: "rgba(10,9,22,0.96)",
+              border: "1px solid rgba(212,175,55,0.35)",
+              borderRadius: 12, padding: "12px 18px",
+              fontFamily: "Inter, sans-serif",
+              backdropFilter: "blur(16px)",
+              display: "flex", alignItems: "center", gap: 12,
+              maxWidth: "calc(100vw - 32px)",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            }}
+          >
+            <span style={{ fontSize: 18 }}>✦</span>
+            <span style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap" }}>
+              Welcome back — resume from{" "}
+              <strong style={{ color: GOLD }}>
+                Step {resumeBanner.savedStep}: {STEPS[resumeBanner.savedStep - 1]}?
+              </strong>
+            </span>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={() => {
+                  setStep(Math.min(resumeBanner.savedStep, 9));
+                  setResumeDismissed(true);
+                }}
+                style={{
+                  background: GOLD, color: "#000", border: "none",
+                  borderRadius: 6, padding: "5px 12px",
+                  fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: 700,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >Continue</button>
+              <button
+                onClick={() => {
+                  localStorage.setItem(GM_OB_STEP_KEY, "1");
+                  setResumeDismissed(true);
+                }}
+                style={{
+                  background: "transparent", color: "rgba(255,255,255,0.45)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 6, padding: "5px 10px",
+                  fontFamily: "Inter, sans-serif", fontSize: 11,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >Restart</button>
+            </div>
+            <button
+              onClick={() => setResumeDismissed(true)}
+              style={{
+                background: "none", border: "none", color: "rgba(255,255,255,0.3)",
+                fontSize: 16, cursor: "pointer", padding: "0 2px", lineHeight: 1,
+              }}
+            >×</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── PERSISTENT MEMBER BAR — responsive 3-device ── */}
       {showBar && (
@@ -8861,7 +9118,124 @@ export default function Onboarding() {
         top: barH,
         left:0, right:0, bottom:0,
         overflow:"hidden",
+        display:"flex", flexDirection:"row",
       }}>
+
+        {/* ── TASK 2: Sidebar step rail — desktop only (≥1024px) ── */}
+        {winW >= 1024 && (
+          <div style={{
+            width: 200, flexShrink: 0,
+            background: "rgba(6,4,15,0.95)",
+            borderRight: "1px solid rgba(212,175,55,0.10)",
+            display: "flex", flexDirection: "column",
+            padding: "28px 0 24px",
+            overflowY: "auto", overflowX: "hidden",
+            zIndex: 10,
+          }}>
+            {/* Logo mark */}
+            <div style={{
+              fontFamily: "Playfair Display, serif",
+              fontSize: 11, fontWeight: 700, color: GOLD,
+              letterSpacing: "0.12em", textTransform: "uppercase",
+              padding: "0 20px 20px",
+              borderBottom: "1px solid rgba(212,175,55,0.08)",
+              marginBottom: 16,
+            }}>Onboarding</div>
+
+            {STEPS.map((label, i) => {
+              const s = i + 1;
+              const isActive = s === step;
+              const isDone = s < step;
+              return (
+                <div
+                  key={s}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 20px",
+                    cursor: isDone ? "pointer" : "default",
+                    background: isActive ? "rgba(212,175,55,0.07)" : "transparent",
+                    borderLeft: isActive ? `2px solid ${GOLD}` : "2px solid transparent",
+                    transition: "all 0.2s",
+                  }}
+                  onClick={() => { if (isDone) setStep(s); }}
+                >
+                  {/* Step icon */}
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, fontWeight: 700,
+                    background: isDone
+                      ? "rgba(212,175,55,0.20)"
+                      : isActive
+                        ? "rgba(212,175,55,0.15)"
+                        : "rgba(255,255,255,0.04)",
+                    border: isDone
+                      ? "1px solid rgba(212,175,55,0.50)"
+                      : isActive
+                        ? `1px solid ${GOLD}`
+                        : "1px solid rgba(255,255,255,0.10)",
+                    color: isDone ? GOLD : isActive ? GOLD : "rgba(255,255,255,0.25)",
+                    boxShadow: isActive ? `0 0 8px rgba(212,175,55,0.35)` : "none",
+                    position: "relative",
+                  }}>
+                    {isDone ? "✓" : s}
+                    {isActive && (
+                      <div style={{
+                        position: "absolute", inset: -3,
+                        borderRadius: "50%",
+                        border: "1px solid rgba(212,175,55,0.25)",
+                        animation: "gmPulse 2s ease-in-out infinite",
+                      }}/>
+                    )}
+                  </div>
+                  {/* Label */}
+                  <span style={{
+                    fontFamily: "Inter, sans-serif", fontSize: 11, fontWeight: isActive ? 600 : 400,
+                    color: isDone ? "rgba(212,175,55,0.80)" : isActive ? "#FFFFFF" : "rgba(255,255,255,0.28)",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    lineHeight: 1.3,
+                  }}>{label}</span>
+                </div>
+              );
+            })}
+
+            <style>{`@keyframes gmPulse { 0%,100%{opacity:0.6;transform:scale(1)} 50%{opacity:0.2;transform:scale(1.15)} }`}</style>
+          </div>
+        )}
+
+        {/* Right column: breadcrumb + step content */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", position:"relative" }}>
+
+          {/* ── TASK 3: Breadcrumb — hidden mobile (<768px) ── */}
+          {winW >= 768 && (
+            <div style={{
+              flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 20px",
+              borderBottom: "1px solid rgba(212,175,55,0.07)",
+              background: "rgba(6,4,15,0.80)",
+              backdropFilter: "blur(8px)",
+              zIndex: 5,
+            }}>
+              {["Ghaafeedi Music", "Onboarding", STEPS[step - 1]].map((crumb, idx, arr) => (
+                <React.Fragment key={idx}>
+                  <span style={{
+                    fontFamily: "Inter, sans-serif",
+                    fontSize: 10, fontWeight: idx === arr.length - 1 ? 600 : 400,
+                    color: idx === arr.length - 1 ? GOLD : "rgba(255,255,255,0.30)",
+                    letterSpacing: "0.02em",
+                    whiteSpace: "nowrap",
+                  }}>{crumb}</span>
+                  {idx < arr.length - 1 && (
+                    <span style={{ color: "rgba(212,175,55,0.35)", fontSize: 9 }}>›</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+
+          {/* Step AnimatePresence */}
+          <div style={{ flex:1, position:"relative", overflow:"hidden" }}>
       <AnimatePresence mode="wait">
         {step === 1 && (
           <motion.div key="s1"
@@ -9008,6 +9382,8 @@ export default function Onboarding() {
         )}
         {/* No steps beyond 9 — journey ends at Confirmation */}
       </AnimatePresence>
+      </div>{/* end step AnimatePresence wrapper */}
+        </div>{/* end right column */}
       </div>{/* end step content wrapper */}
     </div>
   );
