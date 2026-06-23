@@ -60,6 +60,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   const [showVideo, setShowVideo]     = useState(false);
   const [isLoading, setIsLoading]     = useState(false);
   const [videoUrl, setVideoUrl]       = useState<string | null>(null);
+  const [debugMsg, setDebugMsg]       = useState<string>("");
 
   // ─── Core speak function ──────────────────────────────────
 
@@ -78,6 +79,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     // ── Step 1: TTS audio — plays immediately ────────────
     let ttsPromise: Promise<void>;
     try {
+      setDebugMsg("⏳ Fetching TTS...");
       const ttsRes = await fetch("/api/sophia-mobile/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,15 +87,17 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         signal: AbortSignal.timeout(20000),
       });
 
+      setDebugMsg(`✅ TTS HTTP ${ttsRes.status} ${ttsRes.headers.get("content-type")}`);
+
       if (!ttsRes.ok || !ttsRes.body) {
         throw new Error(`TTS HTTP ${ttsRes.status}`);
       }
 
       // Blob URL for the audio stream
       const blob    = await ttsRes.blob();
+      setDebugMsg(`🎵 Blob size: ${blob.size} type: ${blob.type}`);
       const blobUrl = URL.createObjectURL(blob);
       const audio   = new Audio(blobUrl);
-      audio.crossOrigin = "anonymous";
       audioRef.current = audio;
 
       setIsLoading(false);
@@ -101,24 +105,29 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
       ttsPromise = new Promise<void>((res) => {
         audio.onended = () => {
+          setDebugMsg("✅ Audio ended OK");
           URL.revokeObjectURL(blobUrl);
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
-        audio.onerror = () => {
+        audio.onerror = (e) => {
+          setDebugMsg(`❌ Audio error: ${(e as any)?.message ?? JSON.stringify(e)}`);
           URL.revokeObjectURL(blobUrl);
           if (activeRef.current) onSpeakingChange(false);
           res();
         };
-        audio.play().catch(err => {
-          console.warn("[SophiaTTS] Audio play error:", err.message);
+        audio.play().then(() => {
+          setDebugMsg("▶️ Playing...");
+        }).catch(err => {
+          setDebugMsg(`❌ play() blocked: ${err.name} — ${err.message}`);
           onSpeakingChange(false);
           res();
         });
       });
 
     } catch (err) {
-      console.error("[SophiaTTS] TTS fetch failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setDebugMsg(`❌ Fetch error: ${msg}`);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
@@ -277,6 +286,19 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
           <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "system-ui" }}>
             Sophia is speaking…
           </span>
+        </div>
+      )}
+
+      {/* ── DEBUG TOAST — remove after fix ── */}
+      {debugMsg !== "" && (
+        <div style={{
+          position: "absolute", top: 8, left: 8, right: 8, zIndex: 99,
+          background: "rgba(0,0,0,0.88)", border: "1px solid #D4AF37",
+          borderRadius: 8, padding: "8px 12px",
+          color: "#fff", fontSize: 12, fontFamily: "monospace",
+          wordBreak: "break-all",
+        }}>
+          {debugMsg}
         </div>
       )}
 
