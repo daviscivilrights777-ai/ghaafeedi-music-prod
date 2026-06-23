@@ -1,0 +1,37 @@
+{
+  "story": "S01",
+  "strategy": "match-cut continuity — each shot ends on the same visual anchor the next begins on",
+  "color_language": "warm amber memory grade throughout — golden hour kitchen, 3200K practicals, soft haze",
+  "subject": "elderly Black woman, 70s, apron, warm brown kitchen, wooden prep surface dusted with flour",
+
+  "shots": [
+    {
+      "id": "S01_001_v2",
+      "label": "Shot 1 — Wide to medium push ending on prep surface",
+      "duration": 5,
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. An elderly Black woman in her 70s stands at a worn wooden kitchen prep table, softly lit from a window above-left casting golden afternoon haze. She begins measuring flour into a bowl. Camera starts wide at chest height — full kitchen visible: white tile backsplash, copper pot hanging, warm overhead bulb. Camera slowly pushes forward and downward over 5 seconds, ending in a medium close-up centered on the wooden prep table surface: a mound of flour dusted across the wood, the woman's apron-covered torso visible at top of frame, her hands beginning to press into the flour. Final frame: flour on warm honey-toned wood fills 70% of frame, slightly soft focus on the near edge, sharp on the center mound. Shallow depth of field. Smooth dolly push, no shake. Mood: tender, nostalgic, gentle. No text, no title cards.",
+      "bridge_end": "medium close-up of flour mound on wooden prep table, woman's hands beginning to touch the surface, warm amber grade, shallow DOF"
+    },
+    {
+      "id": "S01_002_v2",
+      "label": "Shot 2 — Opens on same flour surface, reveals hands kneading, ends hands at rest",
+      "duration": 5,
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. OPENING FRAME: medium close-up of a flour-dusted wooden prep table — same warm honey-toned surface, flour mound centered, soft amber light from upper left. Instantly continuous with previous shot. Within 1 second, an elderly Black woman's hands — dark brown skin, prominent knuckles, decades of use — press gently into the flour from the top of frame, fingers spreading. Camera holds perfectly still. Over the next 3 seconds, her hands work the dough — fold, press, rotate — rhythmic and unhurried, flour puffing softly with each press. In the final second, her hands slow and come to rest on the surface, palms down, still, on either side of the dough ball. FINAL FRAME: still close-up — both hands resting flat on the floured wooden surface, dough between them, warm amber light, no motion. Mood: meditative, loving memory, quiet intimacy. No text.",
+      "bridge_start": "medium close-up flour on wooden table — continuous from Shot 1 end frame",
+      "bridge_end": "both elderly hands at rest on floured wooden surface, palms down, dough between them, camera still, warm amber"
+    },
+    {
+      "id": "S01_003_v2",
+      "label": "Shot 3 — Opens on resting hands, pulls back slowly to reveal woman's face",
+      "duration": 5,
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. OPENING FRAME: close-up of an elderly Black woman's hands resting flat on a flour-dusted wooden prep table — same surface, same warm amber light, both palms down, still. Exactly continuous with previous shot. Camera begins a slow, smooth pull-back and tilt upward over 5 seconds — no cut, one fluid motion. As the camera retreats, the woman's apron comes into frame, then her torso, then at the 3-second mark her face enters the upper portion of the frame. She is looking slightly downward at her hands with a soft, private expression — eyes glistening, the ghost of a smile. By the final frame the camera has settled into a medium shot: the woman centered, hands visible at bottom of frame on the prep table, face softly lit from the window, warm amber haze behind her. She slowly lifts her gaze toward camera — not breaking the fourth wall, but looking up and slightly beyond, as if remembering something just out of frame. Mood: grief transmuted to love, quiet dignity, cinematic restraint. No text, no voiceover.",
+      "bridge_start": "close-up of resting hands on floured wooden table — continuous from Shot 2 end frame"
+    }
+  ],
+
+  "assembly_notes": {
+    "xfade_duration": 1.0,
+    "xfade_type": "dissolve",
+    "why_it_works_now": "S1 ends and S2 begins on the same surface/scale (flour on wood, medium close). S2 ends and S3 begins on the same hands-at-rest composition. The dissolve blends two near-identical frames — reads as one continuous world, not a cut."
+  }
+}

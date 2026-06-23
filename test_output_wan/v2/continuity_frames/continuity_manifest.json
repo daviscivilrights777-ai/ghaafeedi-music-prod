@@ -1,0 +1,23 @@
+{
+  "story_clips": [
+    "test_output_wan/v2/S01_001_v2.mp4",
+    "test_output_wan/v2/S01_002_v2.mp4",
+    "test_output_wan/v2/S01_003_v2.mp4"
+  ],
+  "assembled_output": "test_output_wan/v2/story1_v2_continuity.mp4",
+  "continuity_frames": [
+    {
+      "from_clip": 0,
+      "to_clip": 1,
+      "frame_path": "test_output_wan/v2/continuity_frames/continuity_0_to_1.png",
+      "use_as_start_frame": true
+    },
+    {
+      "from_clip": 1,
+      "to_clip": 2,
+      "frame_path": "test_output_wan/v2/continuity_frames/continuity_1_to_2.png",
+      "use_as_start_frame": true
+    }
+  ],
+  "instructions": "Feed frame_path as start_frame guidance for the clip at to_clip index. Pass via start_frame_url (R2) or start_frame_b64 to Modal video_gen_v2."
+}

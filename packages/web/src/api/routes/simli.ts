@@ -23,7 +23,7 @@ const simliRoutes = new Hono();
 const SIMLI_API_KEY = process.env.SIMLI_API_KEY!;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY!;
 const ELEVENLABS_VOICE_ID =
-  process.env.ELEVENLABS_VOICE_ID ?? "CwhRBWXzGAHq8TQ4Fs17";
+  process.env.ELEVENLABS_VOICE_ID ?? "pFZP5JQG7iQjIQuC4Bku";
 const SIMLI_FACE_ID =
   process.env.SIMLI_FACE_ID ?? "9c402979-2e74-47f5-a4ed-ae235b092dc9";
 
@@ -170,7 +170,7 @@ simliRoutes.post("/tts-stream", async (c) => {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_turbo_v2",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.75,
@@ -236,7 +236,7 @@ simliRoutes.post("/tts-chunked", async (c) => {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_turbo_v2",
+          model_id: "eleven_turbo_v2_5",
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.75,

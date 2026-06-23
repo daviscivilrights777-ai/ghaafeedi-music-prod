@@ -1,0 +1,24 @@
+{
+  "clips": 3,
+  "total_duration_s": 13.75,
+  "actual_duration_s": 13.75,
+  "transitions_applied": [
+    {
+      "from_clip": 0,
+      "to_clip": 1,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 1,
+      "to_clip": 2,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    }
+  ],
+  "output": "test_output_wan/v2/story1_v2_continuity.mp4",
+  "file_size_bytes": 23228675,
+  "file_size_mb": 22.15
+}

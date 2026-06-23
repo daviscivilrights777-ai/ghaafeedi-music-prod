@@ -1,0 +1,108 @@
+{
+  "story": "S01",
+  "title": "Her Morning Song",
+  "strategy": "match-cut continuity — each shot ends on the same visual anchor the next begins on",
+  "color_language": {
+    "memory": "warm amber — 3200K candlelight, golden haze, slight film grain, honey-wood tones",
+    "present": "cold desaturated — muted blue-gray, fluorescent undertone, flattened contrast"
+  },
+  "subject_memory": "elderly Black woman, 70s, white/gray natural hair, apron, warm brown kitchen, wooden prep surface dusted with flour",
+  "subject_present": "Black woman, 30s-40s, professional, grief-weary but composed",
+
+  "shots": [
+    {
+      "id": "S01_001",
+      "label": "Shot 1 — Wide kitchen push, ends on flour on prep table",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. An elderly Black woman in her 70s stands at a worn wooden kitchen prep table, softly lit from a window above-left casting golden afternoon haze. She begins measuring flour into a bowl. Camera starts wide at chest height — full kitchen visible: white tile backsplash, copper pot hanging, warm overhead bulb. Camera slowly pushes forward and downward over 5 seconds, ending in a medium close-up centered on the wooden prep table surface: a mound of flour dusted across the warm honey-toned wood, the woman's apron-covered torso visible at top of frame, her hands beginning to press into the flour. Final frame: flour on warm honey-toned wood fills 70% of frame, slightly soft focus on the near edge, sharp on the center mound. Shallow depth of field. Smooth dolly push, no shake. Mood: tender, nostalgic, gentle. No text, no title cards.",
+      "bridge_end": "medium close-up of flour mound on warm honey-toned wooden prep table, woman's hands touching surface, warm amber grade, shallow DOF"
+    },
+    {
+      "id": "S01_002",
+      "label": "Shot 2 — Opens flour/hands, kneads, ends with hands at rest on surface",
+      "duration": 5,
+      "transition_out": "CUT",
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. OPENING FRAME: medium close-up of a flour-dusted wooden prep table — same warm honey-toned surface, flour mound centered, soft amber light from upper left. Exactly continuous with previous shot. Within 1 second, an elderly Black woman's hands — dark brown skin, prominent knuckles, decades of use — press gently into the flour from the top of frame, fingers spreading. Camera holds perfectly still. Over the next 3 seconds, her hands work the dough — fold, press, rotate — rhythmic and unhurried, flour puffing softly with each press. In the final second, her hands slow and come to rest on the surface, palms down, still, on either side of the dough ball. FINAL FRAME: still close-up — both hands resting flat on the floured wooden surface, dough between them, warm amber light, no motion. Mood: meditative, loving memory, quiet intimacy. No text.",
+      "bridge_start": "flour on wooden table — continuous from Shot 1 end",
+      "bridge_end": "both elderly hands at rest on floured wooden surface, palms down, dough between them, camera still, warm amber"
+    },
+    {
+      "id": "S01_003",
+      "label": "Shot 3 — Opens on resting hands, slow pull reveals woman's face",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, warm amber memory grade, 3200K candlelight tones, fine film grain. OPENING FRAME: close-up of an elderly Black woman's hands resting flat on a flour-dusted wooden prep table — same surface, same warm amber light, both palms down, still. Exactly continuous with previous shot. Camera begins a slow, smooth pull-back and tilt upward over 5 seconds — one fluid motion, no cut. The woman's apron comes into frame, then her torso, then at 3 seconds her face enters the upper portion of the frame. She is looking slightly downward at her hands with a soft, private expression — eyes glistening, the ghost of a smile. Final frame: medium shot of the woman centered, hands visible at bottom of frame on the prep table, face softly lit from window, warm amber haze behind her. She slowly lifts her gaze upward — looking just beyond camera, as if remembering something. Mood: grief transmuted to love, quiet dignity, cinematic restraint. No text.",
+      "bridge_start": "close-up resting hands on floured wooden table — continuous from Shot 2 end",
+      "bridge_end": "medium shot of elderly Black woman, face visible, looking slightly upward beyond camera, warm amber kitchen, hands still on table"
+    },
+    {
+      "id": "S01_004",
+      "label": "Shot 4 — Hard CUT to cold present: hospital waiting room, daughter",
+      "duration": 5,
+      "transition_out": "FADE",
+      "prompt": "Cinematic 16:9, cold desaturated grade — muted blue-gray, fluorescent undertones, flattened contrast. A Black woman in her 30s-40s sits alone in a sterile hospital waiting room. Rows of identical chairs. Cold overhead fluorescent light casts flat, unforgiving shadows. She holds a magazine closed on her lap, not reading. Camera is static at medium distance, eye-level. She is completely still for 3 seconds — composed but hollow-eyed, exhaustion in her posture. Then: a slow rack focus from the magazine in her hands (foreground, slightly soft) to her face (background, sharp). Her face tightens almost imperceptibly — she has become aware of something. FINAL FRAME: sharp close-up of her face, eyes forward, slightly elevated, jaw set. Cold blue-gray grade, hard fluorescent rim light. Mood: controlled grief, dread, the moment before knowing. No text.",
+      "bridge_start": "hard cut from warm amber memory to cold present — the grade contrast IS the emotional cut",
+      "bridge_end": "close-up of daughter's face, sharp, cold blue-gray grade, eyes slightly elevated, jaw set — looking toward the corridor"
+    },
+    {
+      "id": "S01_005",
+      "label": "Shot 5 — Empty chair at dinner table, crane up",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, cold desaturated grade — muted blue-gray with one warm practical light over dining table creating an isolated amber pool. A dining table set for a family meal — plates, glasses, folded napkins. One chair is pulled slightly out from the table, separated from the others. That chair is backlit, slightly isolated in shadow. Camera starts at table height (eye-level with the place settings), looking down the length of the table. Over 5 seconds, the camera cranes slowly upward to reveal the full table — the empty chair becomes increasingly prominent as the frame widens. FINAL FRAME: elevated wide shot of the full dining table, the empty chair in the foreground-left, warm amber pool of light over the table, cold gray walls beyond. The geometry of one missing presence. Mood: grief is spatial, silent absence, quiet devastation. No text.",
+      "bridge_end": "elevated wide shot of dining table, empty chair prominent foreground, cold gray room, warm amber light pool over table"
+    },
+    {
+      "id": "S01_006",
+      "label": "Shot 6 — Finding the grocery list in coat pocket",
+      "duration": 5,
+      "transition_out": "CUT",
+      "prompt": "Cinematic 16:9, cold desaturated grade. Handheld camera — slight natural sway, intimate, documentary weight. Close-up of a coat hanging on a hook near a door. A woman's hand enters frame from the right, reaches into the coat's side pocket, and pulls out a folded piece of paper. The hand unfolds it slowly — we see the paper is old, soft at the creases. As it opens, we can make out handwriting — a grocery list, the ink faded, the handwriting of an older person. The hand holds the paper still for the final 2 seconds — not reading, just holding. FINAL FRAME: close-up of the open grocery list, handwriting visible but not fully legible, the woman's dark fingers holding it steady at the edges, cold gray ambient light, one warm shaft from a window above. Mood: the object that breaks her, accidental discovery, handwriting as proof of life. Handheld, no stabilization. No text.",
+      "bridge_end": "close-up of open handwritten grocery list held in woman's hands, cold grade, single warm window shaft, camera slightly unsteady"
+    },
+    {
+      "id": "S01_007",
+      "label": "Shot 7 — Kitchen floor, woman sitting against cabinet",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, cold desaturated grade. The camera is at floor level — lens at approximately 6 inches above the ground, wide angle. A kitchen floor: worn linoleum, cabinet bases, the base of the refrigerator visible at the edge. A Black woman in her 30s-40s is sitting on the kitchen floor, back against the lower cabinet, knees slightly bent. She is not crying dramatically — she is simply sitting on the floor, looking at the grocery list in her hands. Her face is angled slightly downward. The kitchen is dark except for a shaft of afternoon light from a window above frame. Camera stays perfectly still at floor level throughout. FINAL FRAME: the woman sitting on the floor, looking at the paper, shaft of light across her hands and the lower half of her face, the cabinet behind her dark and still. Mood: some grief requires sitting on the floor, quiet collapse without performance. No text.",
+      "bridge_end": "woman sitting on kitchen floor, back against cabinet, shaft of light across hands, grocery list visible, camera at floor level"
+    },
+    {
+      "id": "S01_008",
+      "label": "Shot 8 — Bedroom window at dawn, silhouette, walks toward light",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, transitional grade — begins cold desaturated blue-gray, very slowly warming as pale pre-dawn light grows at the window. A bedroom. A woman's silhouette rises from bed and stands at the window. We see only her dark form against the pale gray-blue light of early morning. She stands completely still for 2 seconds — just present, just breathing. Then she takes one slow step toward the window. The camera, positioned on the far wall at eye level, does a slow, barely perceptible pan right to follow. As she reaches the window and places her hand on the glass, the light brightens fractionally. FINAL FRAME: her silhouette at the window, hand on glass, face in profile just barely lit, pale cold light through the glass, the world outside dark blue and quiet. Mood: she keeps going, the decision to continue, grief without resolution, motion as survival. No text.",
+      "bridge_end": "woman's silhouette at bedroom window, hand on glass, profile barely lit, pale cold dawn light — holding the frame"
+    },
+    {
+      "id": "S01_009",
+      "label": "Shot 9 — Exterior: woman walking toward morning light, warm gold returning",
+      "duration": 5,
+      "transition_out": "DISSOLVE",
+      "prompt": "Cinematic 16:9, grade transitions from cold blue-gray to the first appearance of earned present-day gold — not the warm amber of memory, but a cooler, harder gold light of early morning. A residential neighborhood street at dawn. A Black woman in her 30s-40s walks away from the camera at medium distance. She is not rushing. The camera dollies alongside her at a slight angle — she is centered, the street extending ahead of her. She carries something (a bag, barely visible). Early morning light catches the street ahead of her — gold on the pavement, long shadows. She does not look back. After 4 seconds the camera slows and lets her walk forward while it holds still. FINAL FRAME: the woman walking into the morning light ahead, growing slightly smaller, gold light on the street before her, the camera holding steady behind, not following. She is leaving the grief behind — not past it, but moving. Mood: not resolution, continuation, the difference between lighter and differently. No text.",
+      "bridge_start": "from window silhouette to exterior morning — she stepped through the glass"
+    }
+  ],
+
+  "assembly_notes": {
+    "xfade_duration_dissolve": 1.0,
+    "xfade_duration_cut": 0.0,
+    "xfade_duration_fade": 1.5,
+    "xfade_type": "dissolve_on_matching_frames",
+    "total_shots": 9,
+    "estimated_assembled_duration_s": "~37s (5s × 9 shots - 8 × 1s dissolve overlap = 37s)",
+    "continuity_chain": [
+      "S1 end (flour on table) → S2 open (same flour, hands enter) [DISSOLVE]",
+      "S2 end (hands at rest on flour) → S3 open (same hands still, pull back begins) [CUT]",
+      "S3 end (woman's face, amber) → S4 open (daughter's face, cold) [DISSOLVE — grade shock IS the bridge]",
+      "S4 end (daughter cold face) → S5 open (empty chair, same cold grade) [FADE]",
+      "S5 end (dining table overhead) → S6 open (grocery list found) [DISSOLVE]",
+      "S6 end (handwritten list in hands) → S7 open (woman on floor, list in hands) [CUT]",
+      "S7 end (floor level, shaft of light) → S8 open (bedroom, rising into light) [DISSOLVE]",
+      "S8 end (silhouette at window) → S9 open (exterior, walking into morning) [DISSOLVE]"
+    ]
+  }
+}

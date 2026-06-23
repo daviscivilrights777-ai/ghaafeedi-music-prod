@@ -1,0 +1,26 @@
+[
+  {
+    "shot_id": "S01_001",
+    "job_id": "v2_S01_001_1782132111",
+    "result": {
+      "job_id": "v2_S01_001_1782132111",
+      "status": "failed",
+      "error": "'AutoencoderKLWan' object has no attribute 'enable_tiling'",
+      "traceback": "Traceback (most recent call last):\n  File \"/root/video_gen_v2.py\", line 740, in generate_video_task_v2\n    meta = _run_wan21_t2v(\n           ^^^^^^^^^^^^^^^\n  File \"/root/video_gen_v2.py\", line 578, in _run_wan21_t2v\n    pipe.vae.enable_tiling()\n    ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/diffusers/models/modeling_utils.py\", line 291, in __getattr__\n    return super().__getattr__(name)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.11/site-packages/torch/nn/modules/module.py\", line 1709, in __getattr__\n    raise AttributeError(f\"'{type(self).__name__}' object has no attribute '{name}'\")\nAttributeError: 'AutoencoderKLWan' object has no attribute 'enable_tiling'\n",
+      "elapsed_ms": 171963,
+      "params": {
+        "prompt": "Cinematic wide shot of an empty kitchen at 4:00 AM. Predawn blue-gray darkness. A single warm amber practical lamp over a wooden prep table. Cold gray walls with visible kitchen details \u2014 shelves, pots, a window with dawn barely starting. Flour dusted across the prep surface. No person present. Shallow depth of field, foreground objects soft. Desaturated cold grade with one isolated warm amber source. Camera slowly pushes in toward the flour on the table. Naturalistic lighting, Roger Deakins style. 35mm anamorphic, film grain, cinematic color grade.",
+        "negative_prompt": "low quality, blurry, cartoon, anime, text, watermark, motion blur, temporal inconsistency, flickering, color banding, overexposed, crushed blacks, CGI look, multiple people, bright daylight, neon colors, oversaturated, amateur, plastic",
+        "num_frames": 49,
+        "fps": 8,
+        "guidance_scale": 7.5,
+        "num_inference_steps": 50,
+        "seed": 1001,
+        "shot_type": "wide",
+        "use_i2v": true,
+        "shot_id": "S01_001"
+      },
+      "failed_at": 1782132301459
+    }
+  }
+]

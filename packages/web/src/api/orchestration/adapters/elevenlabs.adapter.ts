@@ -15,7 +15,7 @@ const COSTS = {
 } as const;
 
 // ElevenLabs premade voices (free-tier compatible)
-const DEFAULT_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"; // Roger — Laid-Back, Resonant
+const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — Velvety Actress (Sophia)
 const DEFAULT_MODEL    = "eleven_turbo_v2_5";       // Free tier + paid tier compatible
 
 export const ElevenLabsAdapter: ProviderAdapter = {

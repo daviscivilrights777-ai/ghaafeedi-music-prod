@@ -1,0 +1,68 @@
+{
+  "shots": [
+    {
+      "shot_id": "S01_002",
+      "label": "Shot 2 \u2014 Opens flour/hands, kneads, ends with hands at rest on surface",
+      "job_id": "v2_972fe0f1936b",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_008",
+      "label": "Shot 8 \u2014 Bedroom window at dawn, silhouette, walks toward light",
+      "job_id": "v2_d15c4039d2b5",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_007",
+      "label": "Shot 7 \u2014 Kitchen floor, woman sitting against cabinet",
+      "job_id": "v2_4f5a831b971d",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_001",
+      "label": "Shot 1 \u2014 Wide kitchen push, ends on flour on prep table",
+      "job_id": "v2_fff11b6e5463",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_003",
+      "label": "Shot 3 \u2014 Opens on resting hands, slow pull reveals woman's face",
+      "job_id": "v2_b780c9403577",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_005",
+      "label": "Shot 5 \u2014 Empty chair at dinner table, crane up",
+      "job_id": "v2_48981cbca5fc",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_006",
+      "label": "Shot 6 \u2014 Finding the grocery list in coat pocket",
+      "job_id": "v2_217e8a6dff68",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_004",
+      "label": "Shot 4 \u2014 Hard CUT to cold present: hospital waiting room, daughter",
+      "job_id": "v2_fd4194269549",
+      "status": "timeout",
+      "error": "unknown"
+    },
+    {
+      "shot_id": "S01_009",
+      "label": "Shot 9 \u2014 Exterior: woman walking toward morning light, warm gold returning",
+      "job_id": "v2_8b7476211713",
+      "status": "timeout",
+      "error": "unknown"
+    }
+  ],
+  "elapsed_s": 5323.711677789688
+}

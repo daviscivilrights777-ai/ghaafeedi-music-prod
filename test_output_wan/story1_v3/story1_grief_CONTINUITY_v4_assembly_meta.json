@@ -1,0 +1,66 @@
+{
+  "clips": 9,
+  "total_duration_s": 37.25,
+  "actual_duration_s": 37.25,
+  "transitions_applied": [
+    {
+      "from_clip": 0,
+      "to_clip": 1,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 1,
+      "to_clip": 2,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 2,
+      "to_clip": 3,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 3,
+      "to_clip": 4,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 4,
+      "to_clip": 5,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 5,
+      "to_clip": 6,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 6,
+      "to_clip": 7,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    },
+    {
+      "from_clip": 7,
+      "to_clip": 8,
+      "type": "DISSOLVE",
+      "duration_s": 2.0,
+      "overlap_s": 2.0
+    }
+  ],
+  "output": "test_output_wan/story1_v3/story1_grief_CONTINUITY_v4.mp4",
+  "file_size_bytes": 58463433,
+  "file_size_mb": 55.76
+}

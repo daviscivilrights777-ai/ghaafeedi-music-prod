@@ -126,7 +126,7 @@ sophiaMobileRoutes.post("/speak", async (c) => {
     return c.json({ error: "text exceeds 1200 character limit" }, 400);
   }
 
-  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "CwhRBWXzGAHq8TQ4Fs17";
+  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
 
   // ── Server-side cache check ──────────────────────────────────
   try {
@@ -226,7 +226,7 @@ sophiaMobileRoutes.get("/health", async (c) => {
 sophiaMobileRoutes.get("/cache-status", async (c) => {
   const text      = c.req.query("text") ?? "";
   const stepIndex = parseInt(c.req.query("stepIndex") ?? "0", 10);
-  const voiceId   = process.env["ELEVENLABS_VOICE_ID"] ?? "CwhRBWXzGAHq8TQ4Fs17";
+  const voiceId   = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
 
   if (!text) {
     return c.json({ error: "text query param required" }, 400);

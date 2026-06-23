@@ -219,7 +219,7 @@ Respond with valid JSON only:
 
 // ─── ElevenLabs audio render ─────────────────────────────────────────────────
 
-const ELEVENLABS_VOICE_ID = "CwhRBWXzGAHq8TQ4Fs17"; // Sophia
+const ELEVENLABS_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — Velvety Actress
 const ELEVENLABS_MODEL    = "eleven_turbo_v2_5";
 
 async function renderToAudio(script: string): Promise<string | null> {
