@@ -220,6 +220,81 @@ sophiaMobileRoutes.get("/health", async (c) => {
 });
 
 /**
+ * POST /api/sophia-mobile/tts
+ *
+ * Pure ElevenLabs TTS — returns MP3 audio directly (no Modal, no GPU).
+ * Used as the primary audio path. Lip-sync video is optional bonus on top.
+ *
+ * Request body: { text: string }
+ * Response: audio/mpeg stream (MP3)
+ */
+sophiaMobileRoutes.post("/tts", async (c) => {
+  let body: { text?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { text } = body;
+  if (!text || typeof text !== "string" || text.trim().length === 0) {
+    return c.json({ error: "text is required" }, 400);
+  }
+  if (text.length > 1200) {
+    return c.json({ error: "text exceeds 1200 char limit" }, 400);
+  }
+
+  const apiKey  = process.env["ELEVENLABS_API_KEY"];
+  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
+
+  if (!apiKey) {
+    return c.json({ error: "ElevenLabs API key not configured" }, 503);
+  }
+
+  try {
+    const elResponse = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key":   apiKey,
+          "Content-Type": "application/json",
+          "Accept":       "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: text.trim(),
+          model_id: "eleven_turbo_v2_5",
+          voice_settings: {
+            stability:        0.45,
+            similarity_boost: 0.82,
+            style:            0.35,
+            use_speaker_boost: true,
+          },
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+
+    if (!elResponse.ok) {
+      const errText = await elResponse.text();
+      console.error("[SophiaMobile/tts] ElevenLabs error:", elResponse.status, errText);
+      return c.json({ error: `ElevenLabs TTS failed: ${elResponse.status}` }, 502);
+    }
+
+    // Stream the audio straight back to client
+    c.header("Content-Type", "audio/mpeg");
+    c.header("Cache-Control", "no-store");
+    c.header("X-Voice-Id", voiceId);
+
+    return c.body(elResponse.body as ReadableStream, 200);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[SophiaMobile/tts] Error:", msg);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+/**
  * GET /api/sophia-mobile/cache-status?text=...&stepIndex=...
  * Check if a clip is already cached in R2
  */
