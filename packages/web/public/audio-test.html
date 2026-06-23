@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sophia Audio Test</title>
+  <style>
+    body { background: #050B1A; color: #fff; font-family: monospace; padding: 20px; }
+    button { display: block; width: 100%; padding: 16px; margin: 10px 0;
+             background: #D4AF37; color: #000; font-size: 16px; font-weight: bold;
+             border: none; border-radius: 8px; cursor: pointer; }
+    .log { background: #111; border: 1px solid #333; border-radius: 8px;
+           padding: 12px; margin-top: 10px; font-size: 13px; line-height: 1.8;
+           min-height: 100px; white-space: pre-wrap; word-break: break-all; }
+    .ok  { color: #22C55E; }
+    .err { color: #EF4444; }
+    .inf { color: #D4AF37; }
+  </style>
+</head>
+<body>
+  <h2 style="color:#D4AF37">Sophia Audio Debug</h2>
+  <div class="log" id="log">Tap a button to test...\n</div>
+
+  <button onclick="testMethod1()">Test 1: Audio Element + Blob URL</button>
+  <button onclick="testMethod2()">Test 2: Audio Element + direct src</button>
+  <button onclick="testMethod3()">Test 3: Web Audio API (decodeAudioData)</button>
+  <button onclick="clearLog()">Clear Log</button>
+
+  <script>
+    const TTS_URL = '/api/sophia-mobile/tts';
+    const TEXT    = 'Hello Lawrence, I am Sophia, your AI emotional concierge.';
+
+    function log(msg, type='') {
+      const el = document.getElementById('log');
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = msg + '\n';
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
+    }
+    function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+    async function fetchAudio() {
+      log('⏳ Fetching from ' + TTS_URL, 'inf');
+      const res = await fetch(TTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: TEXT }),
+      });
+      log('✅ HTTP ' + res.status + ' CT:' + res.headers.get('content-type'), 'ok');
+      const buf = await res.arrayBuffer();
+      log('✅ ArrayBuffer: ' + buf.byteLength + ' bytes', 'ok');
+      return buf;
+    }
+
+    // METHOD 1: Blob URL
+    async function testMethod1() {
+      log('\n--- METHOD 1: Blob URL ---', 'inf');
+      try {
+        const buf  = await fetchAudio();
+        const blob = new Blob([buf], { type: 'audio/mpeg' });
+        const url  = URL.createObjectURL(blob);
+        log('Blob URL: ' + url, 'inf');
+        const audio = new Audio(url);
+        audio.oncanplaythrough = () => log('canplaythrough dur:' + audio.duration.toFixed(2), 'ok');
+        audio.onplaying  = () => log('▶️ playing!', 'ok');
+        audio.onended    = () => { log('✅ ended', 'ok'); URL.revokeObjectURL(url); };
+        audio.onerror    = () => {
+          const e = audio.error;
+          log('❌ error code:' + e?.code + ' ' + e?.message, 'err');
+        };
+        const playResult = await audio.play().catch(e => e);
+        if (playResult instanceof Error) log('❌ play() rejected: ' + playResult.name + ' ' + playResult.message, 'err');
+        else log('play() promise resolved', 'ok');
+      } catch(e) { log('❌ ' + e.message, 'err'); }
+    }
+
+    // METHOD 2: Direct URL (no blob)
+    async function testMethod2() {
+      log('\n--- METHOD 2: Direct API URL ---', 'inf');
+      try {
+        // Can't use direct GET — it's POST. So use object URL from fetch but set type differently
+        const buf  = await fetchAudio();
+        const url  = URL.createObjectURL(new Blob([buf])); // no explicit MIME
+        log('Blob URL (no MIME): ' + url, 'inf');
+        const audio = new Audio(url);
+        audio.onplaying = () => log('▶️ playing!', 'ok');
+        audio.onended   = () => { log('✅ ended', 'ok'); URL.revokeObjectURL(url); };
+        audio.onerror   = () => log('❌ error code:' + audio.error?.code, 'err');
+        audio.load();
+        const playResult = await audio.play().catch(e => e);
+        if (playResult instanceof Error) log('❌ play() rejected: ' + playResult.name + ' ' + playResult.message, 'err');
+        else log('play() resolved', 'ok');
+      } catch(e) { log('❌ ' + e.message, 'err'); }
+    }
+
+    // METHOD 3: Web Audio API
+    async function testMethod3() {
+      log('\n--- METHOD 3: Web Audio API ---', 'inf');
+      try {
+        const buf = await fetchAudio();
+        const AC  = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AC();
+        log('AudioContext state: ' + ctx.state, 'inf');
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+          log('Resumed → ' + ctx.state, 'ok');
+        }
+        const decoded = await ctx.decodeAudioData(buf.slice(0));
+        log('✅ Decoded! duration:' + decoded.duration.toFixed(2) + 's channels:' + decoded.numberOfChannels, 'ok');
+        const src  = ctx.createBufferSource();
+        src.buffer = decoded;
+        src.connect(ctx.destination);
+        src.onended = () => { log('✅ ended!', 'ok'); ctx.close(); };
+        src.start(0);
+        log('▶️ source.start(0) called', 'ok');
+      } catch(e) { log('❌ ' + e.message, 'err'); }
+    }
+  </script>
+</body>
+</html>
