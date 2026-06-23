@@ -1,47 +1,43 @@
-# Story 1 — All 9 Shots Dispatch
+# S5/S6 Onboarding Overhaul
 
-## Status: POLLING — waiting for Modal completions
+## STATUS: IN PROGRESS
 
-## Job IDs (all 9 dispatched at 23:54 UTC Jun 22)
-- S01_001: v2_c11b2ba321de
-- S01_002: v2_0eb4170ca4b0
-- S01_003: v2_07fad4216c61
-- S01_004: v2_eabf64508c78
-- S01_005: v2_b93d50a56db1
-- S01_006: v2_40d42c2cf42c
-- S01_007: v2_b24de036f5bc
-- S01_008: v2_64dbf6f3316f
-- S01_009: v2_4845eb5b1446
+## Steps
+1. [x] Read all files — DONE
+2. [ ] Step 1: API — add `reason` + `emotionalFingerprint` to GPT prompt + buildFallback
+3. [ ] Step 2: S5 cleanup — remove all song gen state/functions/render block
+4. [ ] Step 3: S5 report card — add S5AnalysisReport below ob5-layout, inside ob5-scroll
+5. [ ] Step 4: S5 onNext signature change → `onNext: (result: S5AnalysisResult) => void`
+6. [ ] Step 5: Orchestrator bridge — add analysisResult to obData, wire S5 onNext, pass analysisData to S6
+7. [ ] Step 6: S6 real song gen — replace fake RAF sim with real audio player
+8. [ ] TS check: 0 errors
+9. [ ] Git commit + push
 
-## Key Files
-- Shot prompts: `scripts/story1_continuity_shots_full.json`
-- Dispatch script: `scripts/dispatch_story1_all9.py`
-- Poll script: `/tmp/poll_story1.py`
-- Poll log: `/tmp/story1_poll.log`
-- Output dir: `test_output_wan/story1_v3/`
-- Assemble script: `scripts/assemble_story.py`
+## Key line numbers
+- S5AnalysisResult interface: 2956-2963
+- Step5Props/Step5AIAnalysis: 3079+
+- Song gen state vars: 3116-3133
+- triggerSongGeneration: 3385-3440
+- handlePlayPause: 3445
+- handleProgressClick: 3452
+- Song preview section start: 4117 `{phase === "done" && (`
+- Song preview section end: ~4428 (closing the AnimatePresence/div)
+- S5ReassuranceTicker render: 4425
+- Continue button onClick: 4454 `onClick={onNext}`
+- s5audiowave keyframe: ~4546
+- Step6Props: 4625
+- Step6PreviewCreation: 4773
+- RAF sim state: playing/progress/elapsed/tickAudio/togglePlay/restart/seekTo
+- Orchestrator S5 render: ~9980
+- Orchestrator S6 render: ~10000
+- obData setters: ~9579-9587
 
-## Continuity Chain (designed into prompts)
-1. S1 ends → flour on wood table (push in)
-2. S2 opens → same flour, hands enter (CUT — identical frame bridge)
-3. S2 ends → hands at rest on floured surface
-4. S3 opens → same resting hands (CUT), camera pulls back to reveal face
-5. S3 ends → woman's face, amber kitchen
-6. S4 opens → daughter's face COLD (hard grade contrast cut IS the bridge)
-7. S4 ends → daughter's face cold close-up
-8. S5 opens → empty chair, cold grade (same world)
-9. S5 ends → elevated wide, empty chair
-10. S6 opens → grocery list found in pocket
-11. S6 ends → handwritten list in hands
-12. S7 opens → woman on floor with list
-13. S7 ends → floor level, shaft of light
-14. S8 opens → bedroom, rising to window
-15. S8 ends → silhouette at window, dawn
-16. S9 opens → exterior, walking into morning light
-17. S9 ends → woman walking away into gold morning
-
-## After All Done
-1. Check poll_manifest.json
-2. Run assemble_story.py on all 9 (poll script does this auto)
-3. Extract keyframes from seam points
-4. Deliver to Lawrence
+## Decisions
+- S6 design = zero changes, only internals swap
+- S5 song gen block removed entirely (lines 4117-4428)
+- S5AnalysisReport goes inside ob5-scroll, below ob5-layout
+- emotionalFingerprint = 3-5 adjective strings from GPT
+- cat.reason = 2-3 sentence explanation referencing story content
+- S6 fallback if Sunor null: show "preview being crafted" message, Continue still enabled
+- Remove s5audiowave keyframe from S5 (S6 has its own OB6_STYLES)
+- analysisResult stored in obData (need to add to inline state type or separate state)

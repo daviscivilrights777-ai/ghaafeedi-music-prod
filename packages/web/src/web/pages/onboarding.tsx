@@ -2954,9 +2954,10 @@ const S5_PRODUCT_META: Record<string, { name: string; category: string; priceStr
 
 // ── AI Analysis result type ──
 interface S5AnalysisResult {
-  categories: Array<{ key: string; label: string; score: number; insight: string }>;
+  categories: Array<{ key: string; label: string; score: number; insight: string; reason?: string }>;
   dominantEmotion: string;
   emotionalArc: string;
+  emotionalFingerprint?: string[];
   songTitle: string;
   profileSummary: string;
   recommendations: Array<{ id: string; rank: number; reason: string }>;
@@ -3085,7 +3086,7 @@ interface Step5Props {
   uploadedVoiceNotes: UploadedFile[];
   uploadedDocuments: UploadedFile[];
   recordedAudio: string | null;
-  onNext: () => void;
+  onNext: (result: S5AnalysisResult) => void;
   onBack: () => void;
 }
 
@@ -3112,25 +3113,7 @@ function Step5AIAnalysis({
   const [recsVisible,     setRecsVisible]     = useState(false);
   const [showRecs,        setShowRecs]        = useState(false); // toggle recs panel
 
-  // ── Song Preview state ──
-  interface SongPreviewData {
-    title: string; genre: string; subgenre: string; bpm: number; key: string;
-    mood: string[]; instruments: string[]; vocalStyle: string;
-    lyrics: { verse1: string; chorus: string; verse2: string; bridge: string; outroChorus: string };
-    audioUrl: string | null; audioReady: boolean;
-  }
-  const [songPhase, setSongPhase] = useState<"idle"|"lyrics"|"audio"|"art"|"ready">("idle");
-  const [songData,  setSongData]  = useState<SongPreviewData | null>(null);
-  const [albumArt,  setAlbumArt]  = useState<string | null>(null);
-  const [songError, setSongError] = useState(false);
-  // Audio player state
-  const [isPlaying,    setIsPlaying]    = useState(false);
-  const [audioProgress,setAudioProgress]= useState(0); // 0-100
-  const [audioDuration,setAudioDuration]= useState(0);
-  const [audioCurrentT,setAudioCurrentT]= useState(0);
-  const [lyricsOpen,   setLyricsOpen]   = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-  const progressRef = React.useRef<HTMLDivElement>(null);
+  // Song generation moved to Step 6 — no song state here
 
   // ── Interactive eye state ──
   const [eyeGaze,   setEyeGaze]   = useState({ x: 0, y: 0 });
@@ -3195,7 +3178,6 @@ function Step5AIAnalysis({
             setPhase("done");
             setTimeout(() => setRecsVisible(true), 600);
             // Kick off song generation after bars finish
-            triggerSongGeneration(result);
           }
         });
       })
@@ -3209,7 +3191,6 @@ function Step5AIAnalysis({
           if (!cancelled) {
             setPhase("done");
             setTimeout(() => setRecsVisible(true), 600);
-            triggerSongGeneration(fallback);
           }
         });
       });
@@ -3378,85 +3359,9 @@ function Step5AIAnalysis({
     setActiveCategory(null);
     setPhase("done");
     setTimeout(() => setRecsVisible(true), 400);
-    triggerSongGeneration(aiResult);
   };
 
-  // ── Song generation orchestrator ──
-  function triggerSongGeneration(result: S5AnalysisResult) {
-    // Don't re-trigger if already started
-    if (songPhase !== "idle") return;
-    setSongPhase("lyrics");
 
-    const body = {
-      storyText,
-      whoFor: whoFor ?? "",
-      experienceType: experienceType ?? "",
-      dominantEmotion: result.dominantEmotion ?? "",
-      emotionalArc: result.emotionalArc ?? "",
-      suggestedTitle: result.songTitle ?? "",
-    };
-
-    // Fire song gen (includes Sunor.cc polling server-side — may take 60-90s)
-    fetch("/api/onboarding/generate-song", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.success) {
-          setSongData(data);
-          setSongPhase(data.audioReady ? "art" : "audio");
-          // If audio already done, move to art phase immediately
-          if (data.audioReady) setSongPhase("art");
-
-          // Fire album art generation in parallel
-          fetch("/api/onboarding/generate-album-art", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              title: data.title,
-              genre: data.genre,
-              mood: data.mood,
-              dominantEmotion: result.dominantEmotion,
-              whoFor: whoFor ?? "",
-            }),
-          })
-            .then(r => r.json())
-            .then((artData: any) => {
-              if (artData.imageUrl) setAlbumArt(artData.imageUrl);
-              setSongPhase("ready");
-            })
-            .catch(() => {
-              setSongPhase("ready"); // Show without album art
-            });
-        } else {
-          setSongError(true);
-          setSongPhase("ready");
-        }
-      })
-      .catch(() => {
-        setSongError(true);
-        setSongPhase("ready");
-      });
-  }
-
-  // ── Audio player controls ──
-  function handlePlayPause() {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) { audio.pause(); setIsPlaying(false); }
-    else { audio.play().catch(() => {}); setIsPlaying(true); }
-  }
-
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    const audio = audioRef.current;
-    const bar = progressRef.current;
-    if (!audio || !bar) return;
-    const rect = bar.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = pct * audio.duration;
-  }
 
   // ── Derived visual values ──
   const activeCatMeta   = activeCategory ? S5_CATEGORY_META[activeCategory] : null;
@@ -4113,311 +4018,215 @@ function Step5AIAnalysis({
         </div>
       </div>
 
-      {/* ── SONG PREVIEW SECTION ── */}
-      {phase === "done" && (
+      {/* ── ANALYSIS REPORT CARD ── */}
+      {phase === "done" && aiResult && (
         <div style={{
           width:"100%", maxWidth:900, margin:"0 auto",
           padding:"0 clamp(16px,3vw,48px) 24px",
           boxSizing:"border-box",
         }}>
-          <AnimatePresence>
-            <motion.div
-              key="song-preview"
-              initial={{ opacity:0, y:24 }}
-              animate={{ opacity:1, y:0 }}
-              transition={{ duration:0.6, delay:0.3, ease:"easeOut" }}
-              style={{
-                borderRadius:20,
-                border:"1.5px solid rgba(212,175,55,0.28)",
-                background:"linear-gradient(135deg,rgba(11,23,54,0.85) 0%,rgba(5,11,26,0.95) 100%)",
-                backdropFilter:"blur(16px)",
-                overflow:"hidden",
-              }}
-            >
-              {/* Section header */}
+          <motion.div
+            initial={{ opacity:0, y:28 }} animate={{ opacity:1, y:0 }}
+            transition={{ duration:0.6, delay:0.2, ease:"easeOut" }}
+          >
+            {/* ── Profile Summary ── */}
+            <div style={{
+              borderRadius:20, overflow:"hidden",
+              border:"1.5px solid rgba(212,175,55,0.28)",
+              background:"linear-gradient(135deg,rgba(11,23,54,0.88) 0%,rgba(5,11,26,0.96) 100%)",
+              backdropFilter:"blur(16px)",
+              marginBottom:16,
+            }}>
               <div style={{
-                display:"flex", alignItems:"center", gap:10,
-                padding:"clamp(14px,2vh,20px) clamp(16px,2.5vw,24px)",
-                borderBottom:"1px solid rgba(212,175,55,0.14)",
+                padding:"clamp(16px,2.5vh,22px) clamp(16px,2.5vw,28px)",
+                borderBottom:"1px solid rgba(212,175,55,0.12)",
+                display:"flex", alignItems:"flex-start", gap:14,
               }}>
-                <span style={{ fontSize:20 }}>🎵</span>
-                <div>
-                  <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(14px,1.8vw,18px)", fontWeight:700, color:GOLD, margin:0, letterSpacing:"0.02em" }}>
-                    Your AI Song Preview
+                <div style={{
+                  width:44, height:44, borderRadius:12, flexShrink:0,
+                  background:"linear-gradient(135deg,rgba(212,175,55,0.22),rgba(212,175,55,0.06))",
+                  border:"1px solid rgba(212,175,55,0.35)",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:20,
+                }}>✦</div>
+                <div style={{ flex:1 }}>
+                  <p style={{
+                    fontFamily:"'Playfair Display',serif",
+                    fontSize:"clamp(13px,1.8vw,16px)", fontWeight:600,
+                    color:"rgba(255,255,255,0.92)", margin:0,
+                    lineHeight:1.65, fontStyle:"italic",
+                  }}>
+                    "{aiResult.profileSummary}"
                   </p>
-                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.45)", margin:"2px 0 0", letterSpacing:"0.05em" }}>
-                    GENERATED EXCLUSIVELY FOR YOU · FULL SONG DELIVERED POST-CHECKOUT
-                  </p>
-                </div>
-                {/* Status chip */}
-                <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
-                  {songPhase === "ready" && !songError ? (
-                    <span style={{ background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.4)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:GOLD, fontWeight:600, letterSpacing:"0.08em" }}>✓ READY</span>
-                  ) : songError ? (
-                    <span style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:"#EF4444", fontWeight:600 }}>UNAVAILABLE</span>
-                  ) : (
-                    <span style={{ background:"rgba(96,200,255,0.12)", border:"1px solid rgba(96,200,255,0.3)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:"#60c8ff", fontWeight:600, letterSpacing:"0.06em" }}>
-                      {songPhase === "lyrics" ? "● COMPOSING LYRICS…" : songPhase === "audio" ? "● GENERATING SOUND…" : "● RENDERING ART…"}
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Main preview body */}
-              {songError ? (
-                <div style={{ padding:"clamp(20px,3vh,32px)", textAlign:"center" }}>
-                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:13, color:"rgba(255,255,255,0.4)", margin:0 }}>
-                    Preview unavailable right now — your full production will be delivered after checkout.
-                  </p>
-                </div>
-              ) : songPhase === "idle" || songPhase === "lyrics" ? (
-                /* Skeleton / loading state */
-                <div style={{ padding:"clamp(16px,2.5vh,24px)", display:"flex", gap:16, flexWrap:"wrap" }}>
-                  {/* Album art skeleton */}
-                  <div style={{ width:140, height:140, borderRadius:12, background:"linear-gradient(135deg,rgba(212,175,55,0.08),rgba(212,175,55,0.02))", flexShrink:0, position:"relative", overflow:"hidden", animation:"s5shimmer 1.8s ease-in-out infinite" }} />
-                  <div style={{ flex:1, minWidth:180, display:"flex", flexDirection:"column", gap:8 }}>
-                    <div style={{ height:20, borderRadius:6, width:"60%", background:"rgba(212,175,55,0.08)", animation:"s5shimmer 1.8s ease-in-out infinite" }} />
-                    <div style={{ height:14, borderRadius:6, width:"40%", background:"rgba(255,255,255,0.05)", animation:"s5shimmer 1.8s ease-in-out infinite 0.2s" }} />
-                    <div style={{ height:10, borderRadius:6, width:"30%", background:"rgba(255,255,255,0.04)", animation:"s5shimmer 1.8s ease-in-out infinite 0.4s" }} />
-                    <p style={{ fontFamily:"Inter,sans-serif", fontSize:12, color:"rgba(255,255,255,0.3)", marginTop:8, margin:0 }}>
-                      {songPhase === "lyrics" ? "AI is composing your personalized lyrics…" : "Preparing your song…"}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                /* Song data available */
-                <div>
-                  {/* Album art + metadata row */}
-                  <div style={{ padding:"clamp(14px,2vh,20px) clamp(16px,2.5vw,24px)", display:"flex", gap:"clamp(12px,2vw,20px)", alignItems:"flex-start", flexWrap:"wrap" }}>
-                    {/* Album art */}
-                    <div style={{
-                      width:"clamp(100px,18vw,144px)", height:"clamp(100px,18vw,144px)",
-                      borderRadius:12, flexShrink:0, overflow:"hidden", position:"relative",
-                      border:"1.5px solid rgba(212,175,55,0.22)",
-                      background:"linear-gradient(135deg,#1a0f00 0%,#0B1736 40%,#050B1A 100%)",
-                    }}>
-                      {albumArt ? (
-                        <img src={albumArt} alt="Album art" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
-                      ) : songPhase !== "ready" ? (
-                        <div style={{ width:"100%", height:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4 }}>
-                          <span style={{ fontSize:28 }}>🎨</span>
-                          <p style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(255,255,255,0.3)", margin:0, letterSpacing:"0.06em" }}>RENDERING…</p>
-                        </div>
-                      ) : (
-                        /* FAL failed — gold gradient art fallback */
-                        <div style={{
-                          width:"100%", height:"100%",
-                          background:"linear-gradient(135deg,#D4AF37 0%,#8B5CF6 40%,#0B1736 100%)",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                        }}>
-                          <span style={{ fontSize:40 }}>♪</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Song metadata */}
-                    <div style={{ flex:1, minWidth:180 }}>
-                      <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(16px,2.2vw,22px)", fontWeight:700, color:"#FFFFFF", margin:"0 0 4px", lineHeight:1.2 }}>
-                        {songData?.title ?? "Your Song"}
-                      </h3>
-                      <p style={{ fontFamily:"Inter,sans-serif", fontSize:12, color:"rgba(212,175,55,0.8)", margin:"0 0 10px", letterSpacing:"0.04em" }}>
-                        {songData?.genre}{songData?.subgenre ? ` · ${songData.subgenre}` : ""}
-                      </p>
-                      {/* Chips */}
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-                        {songData?.bpm && (
-                          <span style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(212,175,55,0.85)", fontWeight:600 }}>
-                            {songData.bpm} BPM
-                          </span>
-                        )}
-                        {songData?.key && (
-                          <span style={{ background:"rgba(96,200,255,0.08)", border:"1px solid rgba(96,200,255,0.2)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(96,200,255,0.75)", fontWeight:600 }}>
-                            Key of {songData.key}
-                          </span>
-                        )}
-                        {songData?.mood?.slice(0, 3).map((m, i) => (
-                          <span key={i} style={{ background:"rgba(139,92,246,0.08)", border:"1px solid rgba(139,92,246,0.2)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(139,92,246,0.75)", fontWeight:500, textTransform:"capitalize" }}>
-                            {m}
-                          </span>
-                        ))}
-                      </div>
-                      {/* Instruments */}
-                      {songData?.instruments && songData.instruments.length > 0 && (
-                        <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.35)", margin:0 }}>
-                          🎹 {songData.instruments.slice(0,4).join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Audio player */}
-                  <div style={{
-                    margin:"0 clamp(16px,2.5vw,24px) clamp(14px,2vh,20px)",
-                    borderRadius:12,
-                    border:"1px solid rgba(212,175,55,0.18)",
-                    background:"rgba(212,175,55,0.04)",
-                    padding:"clamp(10px,1.5vh,14px) clamp(12px,2vw,16px)",
-                  }}>
-                    {songData?.audioUrl ? (
-                      <div>
-                        {/* Hidden audio element */}
-                        <audio
-                          ref={audioRef}
-                          src={songData.audioUrl}
-                          preload="auto"
-                          onTimeUpdate={(e) => {
-                            const a = e.currentTarget;
-                            setAudioCurrentT(a.currentTime);
-                            if (a.duration > 0) setAudioProgress((a.currentTime / a.duration) * 100);
-                          }}
-                          onLoadedMetadata={(e) => { setAudioDuration(e.currentTarget.duration); }}
-                          onEnded={() => { setIsPlaying(false); setAudioProgress(0); setAudioCurrentT(0); }}
-                        />
-                        {/* Controls row */}
-                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                          {/* Play/Pause */}
-                          <button
-                            onClick={handlePlayPause}
-                            style={{
-                              width:42, height:42, borderRadius:"50%", border:"none", flexShrink:0, cursor:"pointer",
-                              background: isPlaying
-                                ? `linear-gradient(135deg,${GOLD2} 0%,${GOLD} 100%)`
-                                : "rgba(212,175,55,0.15)",
-                              border: isPlaying ? "none" : "1.5px solid rgba(212,175,55,0.35)",
-                              display:"flex", alignItems:"center", justifyContent:"center",
-                              fontSize:16, color: isPlaying ? "#0B1736" : GOLD,
-                              transition:"all 200ms",
-                              boxShadow: isPlaying ? `0 0 20px rgba(212,175,55,0.5)` : "none",
-                            }}
-                            aria-label={isPlaying ? "Pause" : "Play"}
-                          >
-                            {isPlaying ? "⏸" : "▶"}
-                          </button>
-
-                          {/* Progress bar */}
-                          <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
-                            <div
-                              ref={progressRef}
-                              onClick={handleProgressClick}
-                              style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.08)", cursor:"pointer", position:"relative", overflow:"hidden" }}
-                            >
-                              <div style={{
-                                height:"100%", borderRadius:3,
-                                width:`${audioProgress}%`,
-                                background:`linear-gradient(90deg,${GOLD} 0%,${GOLD2} 100%)`,
-                                transition:"width 0.25s linear",
-                              }} />
-                            </div>
-                            {/* Waveform bar visualization */}
-                            <div style={{ display:"flex", alignItems:"flex-end", gap:2, height:16, marginTop:2 }}>
-                              {Array.from({length:28}).map((_, i) => {
-                                const barH = 4 + Math.abs(Math.sin(i * 0.7 + (isPlaying ? Date.now() * 0.001 : 0))) * 10;
-                                const inProgress = (i / 28) * 100 < audioProgress;
-                                return (
-                                  <div key={i} style={{
-                                    flex:1, borderRadius:2,
-                                    height:`${barH}px`,
-                                    background: inProgress ? GOLD : "rgba(255,255,255,0.12)",
-                                    transition: isPlaying ? "none" : "background 200ms",
-                                  }} />
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Time */}
-                          <div style={{ textAlign:"right", flexShrink:0 }}>
-                            <p style={{ fontFamily:"'SF Mono',monospace", fontSize:11, color:"rgba(255,255,255,0.55)", margin:0 }}>
-                              {Math.floor(audioCurrentT / 60)}:{String(Math.floor(audioCurrentT % 60)).padStart(2,"0")}
-                              {audioDuration > 0 && ` / ${Math.floor(audioDuration / 60)}:${String(Math.floor(audioDuration % 60)).padStart(2,"0")}`}
-                            </p>
-                            <p style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(255,255,255,0.25)", margin:"2px 0 0", letterSpacing:"0.06em" }}>PREVIEW</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Audio still generating */
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ width:42, height:42, borderRadius:"50%", background:"rgba(212,175,55,0.08)", border:"1.5px solid rgba(212,175,55,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, color:"rgba(212,175,55,0.4)" }}>▶</div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.06)", position:"relative", overflow:"hidden" }}>
-                            <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg,transparent,rgba(212,175,55,0.3),transparent)", animation:"s5audiowave 1.8s ease-in-out infinite" }} />
-                          </div>
-                          <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.3)", margin:"6px 0 0" }}>
-                            {songPhase === "audio" ? "Generating your sound… this takes ~60 seconds" : songPhase === "art" ? "Rendering audio…" : "Processing…"}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Lyrics accordion */}
-                  {songData?.lyrics && (
-                    <div style={{ margin:"0 clamp(16px,2.5vw,24px) clamp(14px,2vh,20px)" }}>
-                      <button
-                        onClick={() => setLyricsOpen(o => !o)}
-                        style={{
-                          width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
-                          padding:"10px 14px", borderRadius:10,
-                          background: lyricsOpen ? "rgba(212,175,55,0.08)" : "rgba(212,175,55,0.04)",
-                          border:`1px solid rgba(212,175,55,${lyricsOpen?"0.30":"0.14"})`,
-                          cursor:"pointer", transition:"all 180ms",
-                        }}
-                      >
-                        <span style={{ fontFamily:"Inter,sans-serif", fontSize:12, fontWeight:600, color:"rgba(212,175,55,0.9)", letterSpacing:"0.06em" }}>📜 VIEW LYRICS</span>
-                        <span style={{ color:"rgba(212,175,55,0.6)", fontSize:13, transform: lyricsOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 200ms" }}>▾</span>
-                      </button>
-                      <AnimatePresence>
-                        {lyricsOpen && (
-                          <motion.div
-                            initial={{ opacity:0, height:0 }}
-                            animate={{ opacity:1, height:"auto" }}
-                            exit={{ opacity:0, height:0 }}
-                            transition={{ duration:0.3 }}
-                            style={{ overflow:"hidden" }}
-                          >
-                            <div style={{
-                              marginTop:8, borderRadius:10, padding:"clamp(12px,1.8vh,16px) clamp(12px,2vw,16px)",
-                              background:"rgba(0,0,0,0.3)", border:"1px solid rgba(212,175,55,0.10)",
-                              maxHeight:320, overflowY:"auto",
-                            }}>
-                              {([
-                                ["Verse 1", songData.lyrics.verse1],
-                                ["Chorus", songData.lyrics.chorus],
-                                ["Verse 2", songData.lyrics.verse2],
-                                ["Bridge", songData.lyrics.bridge],
-                                ["Outro Chorus", songData.lyrics.outroChorus],
-                              ] as [string, string][]).map(([label, text]) => (
-                                <div key={label} style={{ marginBottom:14 }}>
-                                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700, color:"rgba(212,175,55,0.65)", letterSpacing:"0.12em", textTransform:"uppercase", margin:"0 0 4px" }}>
-                                    [{label}]
-                                  </p>
-                                  <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(12px,1.6vw,14px)", color:"rgba(255,255,255,0.80)", lineHeight:1.7, margin:0, whiteSpace:"pre-line" }}>
-                                    {text}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+              {/* Emotional fingerprint chips */}
+              {aiResult.emotionalFingerprint && aiResult.emotionalFingerprint.length > 0 && (
+                <div style={{
+                  padding:"clamp(10px,1.5vh,14px) clamp(16px,2.5vw,28px)",
+                  display:"flex", flexWrap:"wrap", gap:8, alignItems:"center",
+                }}>
+                  <span style={{
+                    fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700,
+                    color:"rgba(212,175,55,0.55)", letterSpacing:"0.12em", textTransform:"uppercase",
+                    marginRight:4,
+                  }}>Your Fingerprint</span>
+                  {aiResult.emotionalFingerprint.map((adj, i) => (
+                    <span key={i} style={{
+                      fontFamily:"Inter,sans-serif", fontSize:11, fontWeight:600,
+                      color:GOLD, letterSpacing:"0.06em",
+                      background:"rgba(212,175,55,0.10)",
+                      border:"1px solid rgba(212,175,55,0.32)",
+                      borderRadius:999, padding:"3px 12px",
+                    }}>{adj}</span>
+                  ))}
+                  {aiResult.dominantEmotion && (
+                    <span style={{
+                      fontFamily:"Inter,sans-serif", fontSize:11, fontWeight:600,
+                      color:"rgba(96,200,255,0.85)", letterSpacing:"0.06em",
+                      background:"rgba(96,200,255,0.08)",
+                      border:"1px solid rgba(96,200,255,0.22)",
+                      borderRadius:999, padding:"3px 12px",
+                      marginLeft:4,
+                    }}>{aiResult.dominantEmotion}</span>
                   )}
-
-                  {/* Footer note */}
-                  <div style={{ padding:"clamp(10px,1.5vh,14px) clamp(16px,2.5vw,24px)", borderTop:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-                    <p style={{ fontFamily:"Inter,sans-serif", fontSize:10, color:"rgba(255,255,255,0.25)", margin:0 }}>
-                      Full-length production delivered within 48h after checkout. Preview is 30-45s.
-                    </p>
-                    <div style={{ display:"flex", gap:6 }}>
-                      <span style={{ background:"rgba(212,175,55,0.08)", borderRadius:999, padding:"2px 8px", fontSize:9, fontFamily:"Inter,sans-serif", color:"rgba(212,175,55,0.5)", letterSpacing:"0.08em" }}>AI GENERATED</span>
-                      <span style={{ background:"rgba(16,185,129,0.08)", borderRadius:999, padding:"2px 8px", fontSize:9, fontFamily:"Inter,sans-serif", color:"rgba(16,185,129,0.5)", letterSpacing:"0.08em" }}>PERSONALIZED</span>
-                    </div>
-                  </div>
                 </div>
               )}
-            </motion.div>
-          </AnimatePresence>
+            </div>
+
+            {/* ── Per-bar score breakdown ── */}
+            <div style={{
+              borderRadius:20, overflow:"hidden",
+              border:"1.5px solid rgba(212,175,55,0.18)",
+              background:"linear-gradient(135deg,rgba(11,23,54,0.82) 0%,rgba(5,11,26,0.94) 100%)",
+              backdropFilter:"blur(14px)",
+              marginBottom:16,
+            }}>
+              {/* Header */}
+              <div style={{
+                padding:"clamp(12px,1.8vh,18px) clamp(16px,2.5vw,28px)",
+                borderBottom:"1px solid rgba(212,175,55,0.10)",
+                display:"flex", alignItems:"center", gap:10,
+              }}>
+                <span style={{ fontSize:16 }}>📊</span>
+                <p style={{
+                  fontFamily:"'Playfair Display',serif", fontSize:"clamp(13px,1.6vw,16px)",
+                  fontWeight:700, color:GOLD, margin:0, letterSpacing:"0.02em",
+                }}>Emotional Dimension Breakdown</p>
+              </div>
+
+              {/* Score rows */}
+              <div style={{ padding:"clamp(12px,1.8vh,18px) clamp(16px,2.5vw,28px)", display:"flex", flexDirection:"column", gap:16 }}>
+                {aiResult.categories.map((cat) => {
+                  const meta = S5_CATEGORY_META[cat.key] ?? { color:"#D4AF37", icon:"●" };
+                  return (
+                    <div key={cat.key} style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {/* Label + score row */}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:14, color:meta.color }}>{meta.icon}</span>
+                          <span style={{
+                            fontFamily:"Inter,sans-serif", fontSize:12, fontWeight:700,
+                            color:"rgba(255,255,255,0.80)", letterSpacing:"0.05em",
+                          }}>{cat.label}</span>
+                        </div>
+                        <span style={{
+                          fontFamily:"'SF Mono',monospace", fontSize:13, fontWeight:700,
+                          color:meta.color,
+                        }}>{cat.score}</span>
+                      </div>
+                      {/* Insight line */}
+                      <p style={{
+                        fontFamily:"Inter,sans-serif", fontSize:11,
+                        color:"rgba(255,255,255,0.50)", margin:"0 0 4px",
+                        fontStyle:"italic", paddingLeft:22,
+                      }}>{cat.insight}</p>
+                      {/* Score bar */}
+                      <div style={{ height:4, borderRadius:2, background:"rgba(255,255,255,0.06)", overflow:"hidden", marginLeft:22 }}>
+                        <motion.div
+                          initial={{ width:0 }}
+                          animate={{ width:`${cat.score}%` }}
+                          transition={{ duration:0.9, delay:0.1, ease:"easeOut" }}
+                          style={{
+                            height:"100%", borderRadius:2,
+                            background:`linear-gradient(90deg,${meta.color},${meta.color}aa)`,
+                          }}
+                        />
+                      </div>
+                      {/* Reason text */}
+                      {cat.reason && (
+                        <p style={{
+                          fontFamily:"Inter,sans-serif", fontSize:11,
+                          color:"rgba(255,255,255,0.38)", margin:"2px 0 0",
+                          lineHeight:1.55, paddingLeft:22,
+                        }}>{cat.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Song title + Emotional arc ── */}
+            <div style={{
+              borderRadius:20, overflow:"hidden",
+              border:"1.5px solid rgba(212,175,55,0.22)",
+              background:"linear-gradient(135deg,rgba(11,23,54,0.80) 0%,rgba(5,11,26,0.92) 100%)",
+              backdropFilter:"blur(14px)",
+              padding:"clamp(16px,2.5vh,22px) clamp(16px,2.5vw,28px)",
+              marginBottom:16,
+            }}>
+              {/* Song title */}
+              <div style={{ marginBottom:16 }}>
+                <p style={{
+                  fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:700,
+                  color:"rgba(212,175,55,0.55)", letterSpacing:"0.14em",
+                  textTransform:"uppercase", margin:"0 0 6px",
+                }}>Suggested Song Title</p>
+                <p style={{
+                  fontFamily:"'Playfair Display',serif",
+                  fontSize:"clamp(18px,2.5vw,26px)", fontWeight:700,
+                  color:WHITE, margin:0, lineHeight:1.25,
+                  textShadow:"0 0 24px rgba(212,175,55,0.20)",
+                }}>"{aiResult.songTitle}"</p>
+              </div>
+              {/* Emotional arc */}
+              {aiResult.emotionalArc && (
+                <div style={{
+                  borderTop:"1px solid rgba(212,175,55,0.10)",
+                  paddingTop:14,
+                }}>
+                  <p style={{
+                    fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:700,
+                    color:"rgba(212,175,55,0.50)", letterSpacing:"0.14em",
+                    textTransform:"uppercase", margin:"0 0 6px",
+                  }}>Your Emotional Arc</p>
+                  <p style={{
+                    fontFamily:"Inter,sans-serif", fontSize:"clamp(12px,1.6vw,14px)",
+                    color:"rgba(255,255,255,0.65)", margin:0, lineHeight:1.6,
+                    fontStyle:"italic",
+                  }}>{aiResult.emotionalArc}</p>
+                </div>
+              )}
+            </div>
+
+            {/* ── Bridge paragraph ── */}
+            <div style={{
+              borderRadius:16, padding:"clamp(12px,1.8vh,16px) clamp(16px,2.5vw,24px)",
+              background:"rgba(212,175,55,0.05)",
+              border:"1px solid rgba(212,175,55,0.14)",
+              marginBottom:8,
+            }}>
+              <p style={{
+                fontFamily:"Inter,sans-serif", fontSize:"clamp(11px,1.4vw,13px)",
+                color:"rgba(255,255,255,0.55)", margin:0, lineHeight:1.65,
+              }}>
+                On the next step, you'll hear a preview of the song we're building for you — crafted from this exact emotional profile.
+                Every note, lyric, and visual will be shaped by what your story revealed here.
+              </p>
+            </div>
+          </motion.div>
         </div>
       )}
 
@@ -4451,7 +4260,7 @@ function Step5AIAnalysis({
         >← Back</button>
 
         <button
-          onClick={onNext}
+          onClick={() => onNext(aiResult!)}
           onMouseEnter={() => setNextHover(true)}
           onMouseLeave={() => setNextHover(false)}
           disabled={phase !== "done"}
@@ -4543,10 +4352,6 @@ function Step5AIAnalysis({
         @keyframes ob5blink  { 0%,100%{opacity:1} 50%{opacity:0.20} }
         @keyframes ob5shine  { from{opacity:1} to{opacity:0} }
         @keyframes s5shimmer { 0%,100%{opacity:0.4} 50%{opacity:0.9} }
-        @keyframes s5audiowave {
-          0%   { transform:translateX(-100%); }
-          100% { transform:translateX(100%); }
-        }
         @keyframes ob5loadSweep {
           0%   { transform:translateX(-100%) rotate(135deg); }
           100% { transform:translateX(200%) rotate(135deg); }
@@ -4626,7 +4431,7 @@ interface Step6Props {
   whoFor: string | null;
   experienceType: string | null;
   storyText: string;
-  analysisData?: { dominantEmotion: string; songTitle: string };
+  analysisData?: { dominantEmotion: string; songTitle: string; emotionalArc?: string };
   onNext: () => void;
   onBack: () => void;
 }
@@ -4777,40 +4582,70 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
     ? experienceType.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
     : "Cinematic / Inspirational";
 
-  /* ── Simulated audio playback ── */
-  const rafRef    = React.useRef<number | null>(null);
-  const [playing,  setPlaying]  = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [elapsed,  setElapsed]  = useState(0);
-  const DEMO_DUR = 28;
-  React.useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+  /* ── Real audio playback (song gen on mount) ── */
+  interface S6SongData {
+    title?: string; genre?: string; subgenre?: string; bpm?: number; key?: string;
+    mood?: string[]; instruments?: string[]; vocalStyle?: string;
+    lyrics?: { verse1: string; chorus: string; verse2: string; bridge: string; outroChorus: string };
+    audioUrl?: string | null; audioReady?: boolean;
+  }
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const [playing,   setPlaying]   = useState(false);
+  const [progress,  setProgress]  = useState(0);       // 0-1
+  const [elapsed,   setElapsed]   = useState(0);       // seconds
+  const [duration,  setDuration]  = useState(0);       // seconds
+  const [songPhase, setSongPhase] = useState<"idle"|"loading"|"ready"|"error">("idle");
+  const [songData,  setSongData]  = useState<S6SongData | null>(null);
 
-  const tickAudio = React.useCallback(() => {
-    setElapsed(prev => {
-      const next = prev + 0.045;
-      if (next >= DEMO_DUR) {
-        setPlaying(false); setProgress(0);
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        return 0;
-      }
-      setProgress(next / DEMO_DUR);
-      rafRef.current = requestAnimationFrame(tickAudio);
-      return next;
-    });
+  // Fire song gen on mount
+  React.useEffect(() => {
+    if (songPhase !== "idle") return;
+    setSongPhase("loading");
+    fetch("/api/onboarding/generate-song", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storyText: _st ?? "",
+        whoFor: whoFor ?? "",
+        experienceType: experienceType ?? "",
+        dominantEmotion: analysisData?.dominantEmotion ?? "",
+        emotionalArc: analysisData?.emotionalArc ?? "",
+        suggestedTitle: analysisData?.songTitle ?? "",
+      }),
+    })
+      .then(r => r.json())
+      .then((data: any) => {
+        if (data.success) {
+          setSongData(data);
+          setSongPhase("ready");
+        } else {
+          setSongPhase("error");
+        }
+      })
+      .catch(() => setSongPhase("error"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const togglePlay = () => {
-    if (playing) { if (rafRef.current) cancelAnimationFrame(rafRef.current); setPlaying(false); }
-    else         { rafRef.current = requestAnimationFrame(tickAudio); setPlaying(true); }
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) { audio.pause(); setPlaying(false); }
+    else { audio.play().catch(() => {}); setPlaying(true); }
   };
   const restart = () => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setElapsed(0); setProgress(0); setPlaying(false);
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.pause();
+    setPlaying(false); setProgress(0); setElapsed(0);
   };
   const seekTo = (r: number) => {
-    setElapsed(r * DEMO_DUR); setProgress(r);
-    if (playing) { if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(tickAudio); }
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = r * audio.duration;
+    setProgress(r); setElapsed(r * audio.duration);
   };
+  const DEMO_DUR = duration > 0 ? duration : 28;
   const fmt = (s: number) => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,"0")}`;
 
   /* ── Mood gallery ── */
@@ -4942,7 +4777,23 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
               fontFamily:"'Playfair Display',serif", fontSize:28, fontWeight:700,
               color:WHITE, lineHeight:1.25, marginBottom:16,
               textShadow:"0 0 30px rgba(212,175,55,0.18)",
-            }}>{songTitle}</div>
+            }}>{songData?.title ?? songTitle}</div>
+
+            {/* Hidden audio element — wired to real Sunor.cc URL */}
+            {songData?.audioUrl && (
+              <audio
+                ref={audioRef}
+                src={songData.audioUrl}
+                preload="auto"
+                onTimeUpdate={(e) => {
+                  const a = e.currentTarget;
+                  setElapsed(a.currentTime);
+                  if (a.duration > 0) setProgress(a.currentTime / a.duration);
+                }}
+                onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); }}
+                onEnded={() => { setPlaying(false); setProgress(0); setElapsed(0); }}
+              />
+            )}
 
             {/* Audio Player */}
             <div className="ob6-player-box" style={{
@@ -4956,20 +4807,23 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
                 {/* Play/Pause button */}
                 <button
                   className="ob6-play-btn"
-                  onClick={togglePlay}
+                  onClick={songData?.audioUrl ? togglePlay : undefined}
+                  disabled={songPhase === "loading" || !songData?.audioUrl}
                   aria-label={playing ? "Pause preview" : "Play preview"}
                   style={{
                     width:56, height:56, borderRadius:"50%", flexShrink:0,
                     border:`2px solid ${playing ? GOLD : "rgba(212,175,55,0.75)"}`,
                     background: playing ? "rgba(212,175,55,0.22)" : "rgba(212,175,55,0.10)",
-                    color:GOLD, fontSize:20, cursor:"pointer",
+                    color: (songPhase === "loading" || !songData?.audioUrl) ? "rgba(212,175,55,0.35)" : GOLD,
+                    fontSize: songPhase === "loading" ? 14 : 20,
+                    cursor: (songPhase === "loading" || !songData?.audioUrl) ? "default" : "pointer",
                     display:"flex", alignItems:"center", justifyContent:"center",
                     boxShadow: playing ? "0 0 28px rgba(212,175,55,0.65)" : "0 0 14px rgba(212,175,55,0.25)",
                     transition:"all .2s ease-out",
-                    animation: playing ? "ob6Pulse 2s ease-in-out infinite" : "none",
+                    animation: playing ? "ob6Pulse 2s ease-in-out infinite" : (songPhase === "loading" ? "ob6Spin 1.2s linear infinite" : "none"),
                     outline:"none",
                   }}
-                >{playing ? "⏸" : "▶"}</button>
+                >{songPhase === "loading" ? "◌" : playing ? "⏸" : "▶"}</button>
 
                 {/* Waveform + timestamps */}
                 <div style={{ flex:1, display:"flex", flexDirection:"column", gap:7 }}>
@@ -4977,8 +4831,10 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
                     className="ob6-waveform"
                     style={{ display:"flex", alignItems:"center", gap:2, height:60, cursor:"pointer", width:"100%" }}
                     onClick={e => {
-                      const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                      seekTo(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+                      if (songData?.audioUrl) {
+                        const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                        seekTo(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
+                      }
                     }}
                     aria-hidden="true"
                   >
@@ -5026,15 +4882,17 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
               <div
                 role="slider" tabIndex={0}
                 aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress*100)} aria-label="Seek audio"
-                onKeyDown={e => { if(e.key==="ArrowRight") seekTo(Math.min(1,progress+0.05)); if(e.key==="ArrowLeft") seekTo(Math.max(0,progress-0.05)); }}
-                onClick={e => { const r=(e.currentTarget as HTMLDivElement).getBoundingClientRect(); seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))); }}
+                onKeyDown={e => { if (songData?.audioUrl) { if(e.key==="ArrowRight") seekTo(Math.min(1,progress+0.05)); if(e.key==="ArrowLeft") seekTo(Math.max(0,progress-0.05)); } }}
+                onClick={e => { if (songData?.audioUrl) { const r=(e.currentTarget as HTMLDivElement).getBoundingClientRect(); seekTo(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))); } }}
                 style={{ width:"100%", height:5, borderRadius:3, background:"rgba(255,255,255,0.10)", cursor:"pointer", position:"relative", overflow:"hidden", outline:"none" }}
               >
                 <div style={{ position:"absolute", left:0, top:0, bottom:0, width:`${progress*100}%`, background:`linear-gradient(90deg,${GOLD},${GOLD2})`, borderRadius:3, transition:"width .05s linear" }}/>
               </div>
 
               <div style={{ fontFamily:"Inter,sans-serif", fontSize:10, color:"rgba(255,255,255,0.28)", textAlign:"center", letterSpacing:0.3 }}>
-                🎵 AI-composed preview · Full master delivered after production
+                {songPhase === "loading" && "● Composing your preview — this takes ~60 seconds…"}
+                {songPhase === "error" && "Preview unavailable — your full song will be delivered after production."}
+                {(songPhase === "ready" || songPhase === "idle") && "🎵 AI-composed preview · Full master delivered after production"}
               </div>
             </div>
           </div>
@@ -9576,6 +9434,7 @@ export default function Onboarding() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [step]); // re-register when step changes so the sentinel stays current
   const [orderModalOpen, setOrderModalOpen] = React.useState(false);
+  const [analysisResult, setAnalysisResult] = React.useState<S5AnalysisResult | null>(null);
   const setWhoFor         = (v: string) => setObData(d => ({ ...d, whoFor: v }));
   const setExperienceType = (v: string) => setObData(d => ({ ...d, experienceType: v }));
   const setStoryText      = (v: string) => setObData(d => ({ ...d, storyText: v }));
@@ -9986,7 +9845,7 @@ export default function Onboarding() {
               uploadedVoiceNotes={obData.uploadedVoiceNotes}
               uploadedDocuments={obData.uploadedDocuments}
               recordedAudio={obData.recordedAudio}
-              onNext={next}
+              onNext={(result) => { setAnalysisResult(result); next(); }}
               onBack={back}
             />
           </motion.div>
@@ -10001,6 +9860,11 @@ export default function Onboarding() {
               whoFor={obData.whoFor}
               experienceType={obData.experienceType}
               storyText={obData.storyText}
+              analysisData={analysisResult ? {
+                dominantEmotion: analysisResult.dominantEmotion,
+                songTitle: analysisResult.songTitle,
+                emotionalArc: analysisResult.emotionalArc,
+              } : undefined}
               onNext={next}
               onBack={back}
             />

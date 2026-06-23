@@ -95,33 +95,39 @@ TASK: Analyze the story and return a JSON object (no markdown, no code blocks, r
       "key": "emotional",
       "label": "Emotional Tone",
       "score": <integer 72-99 based on emotional richness>,
-      "insight": "<specific 6-12 word insight derived from THIS story>"
+      "insight": "<specific 6-12 word insight derived from THIS story>",
+      "reason": "<2-3 sentence explanation of WHY this score was given, referencing specific story content>"
     },
     {
       "key": "arc",
       "label": "Story Arc",
       "score": <integer 68-99>,
-      "insight": "<specific insight about narrative structure>"
+      "insight": "<specific insight about narrative structure>",
+      "reason": "<2-3 sentence explanation of the narrative arc found in their story>"
     },
     {
       "key": "memories",
       "label": "Key Memories",
       "score": <integer 70-99>,
-      "insight": "<specific insight about memory anchors found>"
+      "insight": "<specific insight about memory anchors found>",
+      "reason": "<2-3 sentences on the specific memories or sensory details that stand out>"
     },
     {
       "key": "mood",
       "label": "Mood Profile",
       "score": <integer 65-99>,
-      "insight": "<specific mood signature for THIS person>"
+      "insight": "<specific mood signature for THIS person>",
+      "reason": "<2-3 sentences explaining the mood tone and emotional coloring of their story>"
     },
     {
       "key": "resonance",
       "label": "Cinematic Resonance",
       "score": <integer 75-99>,
-      "insight": "<insight about visual/cinematic potential>"
+      "insight": "<insight about visual/cinematic potential>",
+      "reason": "<2-3 sentences on why this story would translate powerfully to cinematic or musical form>"
     }
   ],
+  "emotionalFingerprint": ["<adjective1>", "<adjective2>", "<adjective3>", "<optional adjective4>", "<optional adjective5>"],
   "dominantEmotion": "<2-4 word emotion label>",
   "emotionalArc": "<one sentence describing their emotional journey>",
   "songTitle": "<evocative song title that fits their story>",
@@ -138,6 +144,8 @@ TASK: Analyze the story and return a JSON object (no markdown, no code blocks, r
 RULES:
 - scores must vary realistically — NOT all 90+. Some lower scores are authentic
 - Each insight must feel specific to THIS person, not generic
+- Each reason must reference specific content from the story (names, places, emotions mentioned), or if no story, reference whoFor + experienceType
+- emotionalFingerprint: 3-5 single adjectives that capture this person's emotional signature (e.g. "Nostalgic", "Resilient", "Devoted", "Tender")
 - Recommend exactly 4 products, ranked 1-4, most relevant first
 - Only recommend products from the available catalog above
 - profileSummary should feel emotionally resonant and personal
@@ -448,14 +456,15 @@ function buildFallback(whoFor: string, experienceType: string, products: typeof 
 
   return {
     categories: [
-      { key: "emotional",  label: "Emotional Tone",      score: base[0] + offsets[0], insight: insights[0] },
-      { key: "arc",        label: "Story Arc",            score: base[1] + offsets[1], insight: "A journey with clear emotional turning points" },
-      { key: "memories",   label: "Key Memories",         score: base[2] + offsets[2], insight: insights[1] ?? "Vivid emotional anchors identified" },
-      { key: "mood",       label: "Mood Profile",         score: base[3] + offsets[3], insight: "Complex emotional signature — rare and powerful" },
-      { key: "resonance",  label: "Cinematic Resonance",  score: base[4] + offsets[4], insight: insights[2] ?? "Strong visual storytelling potential" },
+      { key: "emotional",  label: "Emotional Tone",      score: base[0] + offsets[0], insight: insights[0],                                               reason: "Your story carries a depth of feeling that resonates strongly. The emotional investment you've put into this experience is clear and authentic." },
+      { key: "arc",        label: "Story Arc",            score: base[1] + offsets[1], insight: "A journey with clear emotional turning points",            reason: "There is a discernible narrative shape — a beginning rooted in memory, a middle shaped by feeling, and a resolution that points toward meaning." },
+      { key: "memories",   label: "Key Memories",         score: base[2] + offsets[2], insight: insights[1] ?? "Vivid emotional anchors identified",        reason: "The specific details and emotional anchors in your story provide rich material for cinematic memory sequences and lyrical imagery." },
+      { key: "mood",       label: "Mood Profile",         score: base[3] + offsets[3], insight: "Complex emotional signature — rare and powerful",          reason: "Your emotional coloring is multidimensional — not a single note, but a chord. This complexity makes for richer, more resonant music and film." },
+      { key: "resonance",  label: "Cinematic Resonance",  score: base[4] + offsets[4], insight: insights[2] ?? "Strong visual storytelling potential",      reason: "The imagery and emotion in your story translate naturally to cinematic form. This is the kind of story that moves people on screen and in sound." },
     ],
     dominantEmotion: emotionMap[key] ?? "Deep Emotion",
     emotionalArc: "A story of transformation, memory, and connection.",
+    emotionalFingerprint: ["Nostalgic", "Devoted", "Resilient"],
     songTitle: "Echoes of You",
     profileSummary: "Your story holds something rare — a depth of feeling that most people never put into words. Ghaafeedi Music was built for exactly this moment.",
     recommendations,
