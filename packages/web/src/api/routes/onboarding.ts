@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { generateText } from "ai";
 import { gateway } from "../lib/ai";
 import { logAICall } from "../lib/braintrust";
+import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 
 // All 14 Ghaafeedi Music products + memberships for recommendation engine
 const GM_CATALOG = [
@@ -24,6 +25,29 @@ const GM_CATALOG = [
   { id: "sophia-ai",             name: "Sophia AI Companion",      category: "AI",            price: 49,   priceStr: "$49/mo",   icon: "✨", accent: "#D4AF37", tags: ["ai","companion","emotional","support"] },
   { id: "emotional-soundtrack",  name: "Emotional Soundtrack",     category: "Music",         price: 19,   priceStr: "$19/mo",   icon: "🎶", accent: "#F472B6", tags: ["music","emotion","soundtrack","mood"] },
 ];
+
+// ─── Sunor.cc polling helper ─────────────────────────────────
+const SUNOR_API = "https://sunor.cc/api/v1";
+
+async function sunorPoll(taskId: string, apiKey: string, timeoutMs = 90_000): Promise<string | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 6_000));
+    try {
+      const res = await fetch(`${SUNOR_API}/task/${taskId}`, {
+        headers: { "x-api-key": apiKey },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json() as { status: string; audio_url?: string; output?: { audio_url?: string }[] };
+      if (data.status === "complete" || data.status === "success" || data.status === "SUCCESS") {
+        return data.audio_url ?? data.output?.[0]?.audio_url ?? null;
+      }
+      if (data.status === "error" || data.status === "failed") return null;
+    } catch { /* retry */ }
+  }
+  return null;
+}
 
 export const onboardingRoutes = new Hono()
   .post("/analyze", async (c) => {
@@ -164,6 +188,230 @@ RULES:
       // Return graceful fallback so S5 never hard-fails
       const fallback = buildFallback("", "", GM_CATALOG);
       return c.json({ success: true, analysis: fallback, fallback: true }, 200);
+    }
+  })
+
+  // ─── POST /api/onboarding/generate-song ───────────────────────
+  // Step 1: GPT-4o-mini → title, lyrics, BPM, genre, mood, suno prompt
+  // Step 2: Sunor.cc → submit + poll for 30-45s audio preview URL
+  .post("/generate-song", async (c) => {
+    try {
+      const body = await c.req.json() as {
+        storyText?: string;
+        whoFor?: string;
+        experienceType?: string;
+        dominantEmotion?: string;
+        emotionalArc?: string;
+        suggestedTitle?: string;
+      };
+      const { storyText = "", whoFor = "", experienceType = "", dominantEmotion = "", emotionalArc = "", suggestedTitle = "" } = body;
+
+      // ── Step 1: GPT-4o-mini → song metadata ──
+      const lyricsPrompt = `You are a professional songwriter and music producer for Ghaafeedi Music, a luxury AI-powered emotional storytelling platform.
+
+CUSTOMER STORY CONTEXT:
+- Who this is for: ${whoFor || "themselves"}
+- Experience type: ${experienceType || "song"}
+- Dominant emotion: ${dominantEmotion || "deep emotion"}
+- Emotional arc: ${emotionalArc || "a journey of memory and meaning"}
+- Story excerpt: ${storyText.slice(0, 1000) || "Personal emotional story"}
+- Suggested title from AI analysis: ${suggestedTitle || ""}
+
+Create a complete, emotionally resonant song. Return ONLY raw JSON (no markdown, no code blocks):
+{
+  "title": "<evocative, personal song title — 2-5 words>",
+  "genre": "<primary genre: Soul / R&B / Pop / Cinematic / Gospel / Neo-Soul / Indie>",
+  "subgenre": "<specific subgenre e.g. Cinematic Soul, Emotional R&B>",
+  "bpm": <integer 65-110, emotionally appropriate tempo>,
+  "key": "<musical key e.g. A minor, D major>",
+  "mood": ["<mood tag 1>", "<mood tag 2>", "<mood tag 3>"],
+  "instruments": ["<instrument 1>", "<instrument 2>", "<instrument 3>"],
+  "vocalStyle": "<vocal description e.g. warm tenor, soulful soprano, intimate whisper>",
+  "lyrics": {
+    "verse1": "<verse 1 lyrics — 4-8 lines, deeply personal>",
+    "chorus": "<chorus lyrics — 4-6 lines, anthemic, repeatable>",
+    "verse2": "<verse 2 lyrics — 4-8 lines, continuing the story>",
+    "bridge": "<bridge lyrics — 2-4 lines, emotional climax>",
+    "outroChorus": "<final chorus — same as chorus or slight variation>"
+  },
+  "sunoPrompt": "<30-50 word music generation prompt for Suno AI: genre, instruments, BPM, mood, vocal style — NO lyrics in this field>"
+}
+
+RULES:
+- Lyrics must feel personal, not generic — reference the specific emotion and story context
+- sunoPrompt: only describe the SOUND and STYLE, never include actual lyrics
+- BPM: ballad 65-80, mid-tempo 80-95, upbeat 95-110
+- Match the dominant emotion: grief=slower, love=mid-tempo warm, joy=upbeat`;
+
+      const { text: lyricsRaw } = await generateText({
+        model: gateway("openai/gpt-4o-mini"),
+        prompt: lyricsPrompt,
+        maxTokens: 1200,
+      });
+
+      let songMeta: any;
+      try {
+        const clean = lyricsRaw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        songMeta = JSON.parse(clean);
+      } catch {
+        songMeta = {
+          title: suggestedTitle || "Echoes of You",
+          genre: "Cinematic Soul",
+          subgenre: "Emotional R&B",
+          bpm: 78,
+          key: "A minor",
+          mood: ["nostalgic", "intimate", "hopeful"],
+          instruments: ["piano", "strings", "soft drums"],
+          vocalStyle: "warm soulful tenor",
+          lyrics: {
+            verse1: "I carry your memory like morning light\nIn the quiet spaces where you once shined\nThese walls still echo what we left behind\nA story written between the lines",
+            chorus: "You are the song I never could forget\nThe harmony that holds me when I break\nEvery note we shared, I hear it yet\nIn the music only love can make",
+            verse2: "The photographs have faded at the edge\nBut you remain as vivid as the day\nI made a promise standing on that ledge\nThat I would find the words to finally say",
+            bridge: "Some stories never end, they just transform\nInto the melody that keeps you warm",
+            outroChorus: "You are the song I never could forget\nThe harmony that holds me, holds me yet",
+          },
+          sunoPrompt: "Cinematic soul ballad, warm piano, lush orchestral strings, intimate vocals, emotional and nostalgic, 78 BPM, key of A minor, slow build to powerful chorus",
+        };
+      }
+
+      // ── Step 2: Sunor.cc → generate audio preview ──
+      let audioUrl: string | null = null;
+      try {
+        const apiKey = await getSecret(SECRET_KEYS.SUNO_API_KEY);
+
+        // Format lyrics as a single block for Suno
+        const fullLyrics = [
+          "[Verse 1]", songMeta.lyrics.verse1,
+          "[Chorus]", songMeta.lyrics.chorus,
+          "[Verse 2]", songMeta.lyrics.verse2,
+          "[Bridge]", songMeta.lyrics.bridge,
+          "[Outro Chorus]", songMeta.lyrics.outroChorus,
+        ].join("\n");
+
+        const dispatchRes = await fetch(`${SUNOR_API}/task`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+          body: JSON.stringify({
+            model: "suno",
+            task_type: "music",
+            input: {
+              gpt_description_prompt: songMeta.sunoPrompt,
+              prompt: fullLyrics,
+              title: songMeta.title,
+              tags: `${songMeta.genre} ${songMeta.mood?.join(" ")}`,
+              make_instrumental: false,
+            },
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+
+        if (dispatchRes.ok) {
+          const dispatchData = await dispatchRes.json() as { task_id?: string; id?: string; taskId?: string };
+          const taskId = dispatchData.task_id ?? dispatchData.taskId ?? dispatchData.id;
+          if (taskId) {
+            audioUrl = await sunorPoll(String(taskId), apiKey, 90_000);
+          }
+        }
+      } catch (sunoErr: any) {
+        console.warn("[generate-song] Sunor.cc error:", sunoErr?.message);
+        // audioUrl stays null — frontend will show "preview generating" state
+      }
+
+      return c.json({
+        success: true,
+        title: songMeta.title,
+        genre: songMeta.genre,
+        subgenre: songMeta.subgenre,
+        bpm: songMeta.bpm,
+        key: songMeta.key,
+        mood: songMeta.mood ?? [],
+        instruments: songMeta.instruments ?? [],
+        vocalStyle: songMeta.vocalStyle,
+        lyrics: songMeta.lyrics,
+        sunoPrompt: songMeta.sunoPrompt,
+        audioUrl,      // null if Sunor.cc not yet ready
+        audioReady: !!audioUrl,
+      }, 200);
+    } catch (err: any) {
+      console.error("[generate-song] Fatal:", err?.message);
+      return c.json({ success: false, error: err?.message ?? "Song generation failed" }, 500);
+    }
+  })
+
+  // ─── POST /api/onboarding/generate-album-art ──────────────────
+  // FAL.ai Flux Schnell → cinematic album art image
+  .post("/generate-album-art", async (c) => {
+    try {
+      const body = await c.req.json() as {
+        title?: string;
+        genre?: string;
+        mood?: string[];
+        dominantEmotion?: string;
+        whoFor?: string;
+      };
+      const { title = "Echoes of You", genre = "Cinematic Soul", mood = [], dominantEmotion = "", whoFor = "" } = body;
+
+      const moodStr = mood.slice(0, 3).join(", ") || "emotional, cinematic";
+      const emotionContext = dominantEmotion ? `Dominant emotion: ${dominantEmotion}. ` : "";
+      const forContext = whoFor ? `Created for: ${whoFor}. ` : "";
+
+      const artPrompt = `Ultra-premium album cover art for a luxury AI music platform. Song: "${title}". Genre: ${genre}. ${emotionContext}${forContext}Visual style: cinematic luxury, deep space-black background, dramatic gold and navy gradient lighting, volumetric god rays, floating particles of light, abstract human silhouette dissolving into music notes and stars, emotional and ethereal atmosphere, moody bokeh, ${moodStr}. Art direction: A24 film meets Apple Vision Pro aesthetic, stunning 4K quality, dark luxury mood board, no text, no typography, pure visual emotion.`;
+
+      const FAL_API_KEY = await getSecret(SECRET_KEYS.FAL_API_KEY);
+
+      // FAL.ai flux/schnell via queue API
+      const submitRes = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Key ${FAL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          prompt: artPrompt,
+          image_size: "square_hd",
+          num_inference_steps: 4,
+          num_images: 1,
+          enable_safety_checker: false,
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (!submitRes.ok) {
+        throw new Error(`FAL submit failed: ${submitRes.status}`);
+      }
+
+      const submitData = await submitRes.json() as { request_id?: string; images?: { url: string }[] };
+
+      // If synchronous response (some FAL models return immediately)
+      if (submitData.images?.[0]?.url) {
+        return c.json({ success: true, imageUrl: submitData.images[0].url }, 200);
+      }
+
+      const requestId = submitData.request_id;
+      if (!requestId) throw new Error("No request_id from FAL");
+
+      // Poll FAL queue
+      const pollDeadline = Date.now() + 45_000;
+      while (Date.now() < pollDeadline) {
+        await new Promise(r => setTimeout(r, 3_000));
+        const statusRes = await fetch(`https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`, {
+          headers: { "Authorization": `Key ${FAL_API_KEY}` },
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!statusRes.ok) continue;
+        const statusData = await statusRes.json() as { status?: string; images?: { url: string }[] };
+        if (statusData.status === "COMPLETED" || statusData.images?.[0]?.url) {
+          return c.json({ success: true, imageUrl: statusData.images?.[0]?.url ?? null }, 200);
+        }
+        if (statusData.status === "FAILED") break;
+      }
+
+      // FAL timed out — return null, frontend shows gold gradient fallback
+      return c.json({ success: true, imageUrl: null }, 200);
+    } catch (err: any) {
+      console.warn("[generate-album-art] Error:", err?.message);
+      // Never hard-fail — frontend handles null gracefully
+      return c.json({ success: true, imageUrl: null }, 200);
     }
   });
 

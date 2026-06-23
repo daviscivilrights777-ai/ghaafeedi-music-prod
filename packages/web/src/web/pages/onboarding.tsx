@@ -2873,6 +2873,26 @@ function Step5AIAnalysis({
   const [recsVisible,     setRecsVisible]     = useState(false);
   const [showRecs,        setShowRecs]        = useState(false); // toggle recs panel
 
+  // ── Song Preview state ──
+  interface SongPreviewData {
+    title: string; genre: string; subgenre: string; bpm: number; key: string;
+    mood: string[]; instruments: string[]; vocalStyle: string;
+    lyrics: { verse1: string; chorus: string; verse2: string; bridge: string; outroChorus: string };
+    audioUrl: string | null; audioReady: boolean;
+  }
+  const [songPhase, setSongPhase] = useState<"idle"|"lyrics"|"audio"|"art"|"ready">("idle");
+  const [songData,  setSongData]  = useState<SongPreviewData | null>(null);
+  const [albumArt,  setAlbumArt]  = useState<string | null>(null);
+  const [songError, setSongError] = useState(false);
+  // Audio player state
+  const [isPlaying,    setIsPlaying]    = useState(false);
+  const [audioProgress,setAudioProgress]= useState(0); // 0-100
+  const [audioDuration,setAudioDuration]= useState(0);
+  const [audioCurrentT,setAudioCurrentT]= useState(0);
+  const [lyricsOpen,   setLyricsOpen]   = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const progressRef = React.useRef<HTMLDivElement>(null);
+
   // ── Interactive eye state ──
   const [eyeGaze,   setEyeGaze]   = useState({ x: 0, y: 0 });
   const [eyePulse,  setEyePulse]  = useState(0);
@@ -2935,6 +2955,8 @@ function Step5AIAnalysis({
           if (!cancelled) {
             setPhase("done");
             setTimeout(() => setRecsVisible(true), 600);
+            // Kick off song generation after bars finish
+            triggerSongGeneration(result);
           }
         });
       })
@@ -2948,6 +2970,7 @@ function Step5AIAnalysis({
           if (!cancelled) {
             setPhase("done");
             setTimeout(() => setRecsVisible(true), 600);
+            triggerSongGeneration(fallback);
           }
         });
       });
@@ -3116,7 +3139,85 @@ function Step5AIAnalysis({
     setActiveCategory(null);
     setPhase("done");
     setTimeout(() => setRecsVisible(true), 400);
+    triggerSongGeneration(aiResult);
   };
+
+  // ── Song generation orchestrator ──
+  function triggerSongGeneration(result: S5AnalysisResult) {
+    // Don't re-trigger if already started
+    if (songPhase !== "idle") return;
+    setSongPhase("lyrics");
+
+    const body = {
+      storyText,
+      whoFor: whoFor ?? "",
+      experienceType: experienceType ?? "",
+      dominantEmotion: result.dominantEmotion ?? "",
+      emotionalArc: result.emotionalArc ?? "",
+      suggestedTitle: result.songTitle ?? "",
+    };
+
+    // Fire song gen (includes Sunor.cc polling server-side — may take 60-90s)
+    fetch("/api/onboarding/generate-song", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(r => r.json())
+      .then((data: any) => {
+        if (data.success) {
+          setSongData(data);
+          setSongPhase(data.audioReady ? "art" : "audio");
+          // If audio already done, move to art phase immediately
+          if (data.audioReady) setSongPhase("art");
+
+          // Fire album art generation in parallel
+          fetch("/api/onboarding/generate-album-art", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: data.title,
+              genre: data.genre,
+              mood: data.mood,
+              dominantEmotion: result.dominantEmotion,
+              whoFor: whoFor ?? "",
+            }),
+          })
+            .then(r => r.json())
+            .then((artData: any) => {
+              if (artData.imageUrl) setAlbumArt(artData.imageUrl);
+              setSongPhase("ready");
+            })
+            .catch(() => {
+              setSongPhase("ready"); // Show without album art
+            });
+        } else {
+          setSongError(true);
+          setSongPhase("ready");
+        }
+      })
+      .catch(() => {
+        setSongError(true);
+        setSongPhase("ready");
+      });
+  }
+
+  // ── Audio player controls ──
+  function handlePlayPause() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) { audio.pause(); setIsPlaying(false); }
+    else { audio.play().catch(() => {}); setIsPlaying(true); }
+  }
+
+  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
+    const audio = audioRef.current;
+    const bar = progressRef.current;
+    if (!audio || !bar) return;
+    const rect = bar.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * audio.duration;
+  }
 
   // ── Derived visual values ──
   const activeCatMeta   = activeCategory ? S5_CATEGORY_META[activeCategory] : null;
@@ -3773,6 +3874,314 @@ function Step5AIAnalysis({
         </div>
       </div>
 
+      {/* ── SONG PREVIEW SECTION ── */}
+      {phase === "done" && (
+        <div style={{
+          width:"100%", maxWidth:900, margin:"0 auto",
+          padding:"0 clamp(16px,3vw,48px) 24px",
+          boxSizing:"border-box",
+        }}>
+          <AnimatePresence>
+            <motion.div
+              key="song-preview"
+              initial={{ opacity:0, y:24 }}
+              animate={{ opacity:1, y:0 }}
+              transition={{ duration:0.6, delay:0.3, ease:"easeOut" }}
+              style={{
+                borderRadius:20,
+                border:"1.5px solid rgba(212,175,55,0.28)",
+                background:"linear-gradient(135deg,rgba(11,23,54,0.85) 0%,rgba(5,11,26,0.95) 100%)",
+                backdropFilter:"blur(16px)",
+                overflow:"hidden",
+              }}
+            >
+              {/* Section header */}
+              <div style={{
+                display:"flex", alignItems:"center", gap:10,
+                padding:"clamp(14px,2vh,20px) clamp(16px,2.5vw,24px)",
+                borderBottom:"1px solid rgba(212,175,55,0.14)",
+              }}>
+                <span style={{ fontSize:20 }}>🎵</span>
+                <div>
+                  <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(14px,1.8vw,18px)", fontWeight:700, color:GOLD, margin:0, letterSpacing:"0.02em" }}>
+                    Your AI Song Preview
+                  </p>
+                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.45)", margin:"2px 0 0", letterSpacing:"0.05em" }}>
+                    GENERATED EXCLUSIVELY FOR YOU · FULL SONG DELIVERED POST-CHECKOUT
+                  </p>
+                </div>
+                {/* Status chip */}
+                <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
+                  {songPhase === "ready" && !songError ? (
+                    <span style={{ background:"rgba(212,175,55,0.15)", border:"1px solid rgba(212,175,55,0.4)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:GOLD, fontWeight:600, letterSpacing:"0.08em" }}>✓ READY</span>
+                  ) : songError ? (
+                    <span style={{ background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:"#EF4444", fontWeight:600 }}>UNAVAILABLE</span>
+                  ) : (
+                    <span style={{ background:"rgba(96,200,255,0.12)", border:"1px solid rgba(96,200,255,0.3)", borderRadius:999, padding:"3px 10px", fontSize:10, fontFamily:"Inter,sans-serif", color:"#60c8ff", fontWeight:600, letterSpacing:"0.06em" }}>
+                      {songPhase === "lyrics" ? "● COMPOSING LYRICS…" : songPhase === "audio" ? "● GENERATING SOUND…" : "● RENDERING ART…"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Main preview body */}
+              {songError ? (
+                <div style={{ padding:"clamp(20px,3vh,32px)", textAlign:"center" }}>
+                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:13, color:"rgba(255,255,255,0.4)", margin:0 }}>
+                    Preview unavailable right now — your full production will be delivered after checkout.
+                  </p>
+                </div>
+              ) : songPhase === "idle" || songPhase === "lyrics" ? (
+                /* Skeleton / loading state */
+                <div style={{ padding:"clamp(16px,2.5vh,24px)", display:"flex", gap:16, flexWrap:"wrap" }}>
+                  {/* Album art skeleton */}
+                  <div style={{ width:140, height:140, borderRadius:12, background:"linear-gradient(135deg,rgba(212,175,55,0.08),rgba(212,175,55,0.02))", flexShrink:0, position:"relative", overflow:"hidden", animation:"s5shimmer 1.8s ease-in-out infinite" }} />
+                  <div style={{ flex:1, minWidth:180, display:"flex", flexDirection:"column", gap:8 }}>
+                    <div style={{ height:20, borderRadius:6, width:"60%", background:"rgba(212,175,55,0.08)", animation:"s5shimmer 1.8s ease-in-out infinite" }} />
+                    <div style={{ height:14, borderRadius:6, width:"40%", background:"rgba(255,255,255,0.05)", animation:"s5shimmer 1.8s ease-in-out infinite 0.2s" }} />
+                    <div style={{ height:10, borderRadius:6, width:"30%", background:"rgba(255,255,255,0.04)", animation:"s5shimmer 1.8s ease-in-out infinite 0.4s" }} />
+                    <p style={{ fontFamily:"Inter,sans-serif", fontSize:12, color:"rgba(255,255,255,0.3)", marginTop:8, margin:0 }}>
+                      {songPhase === "lyrics" ? "AI is composing your personalized lyrics…" : "Preparing your song…"}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* Song data available */
+                <div>
+                  {/* Album art + metadata row */}
+                  <div style={{ padding:"clamp(14px,2vh,20px) clamp(16px,2.5vw,24px)", display:"flex", gap:"clamp(12px,2vw,20px)", alignItems:"flex-start", flexWrap:"wrap" }}>
+                    {/* Album art */}
+                    <div style={{
+                      width:"clamp(100px,18vw,144px)", height:"clamp(100px,18vw,144px)",
+                      borderRadius:12, flexShrink:0, overflow:"hidden", position:"relative",
+                      border:"1.5px solid rgba(212,175,55,0.22)",
+                      background:"linear-gradient(135deg,#1a0f00 0%,#0B1736 40%,#050B1A 100%)",
+                    }}>
+                      {albumArt ? (
+                        <img src={albumArt} alt="Album art" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                      ) : songPhase !== "ready" ? (
+                        <div style={{ width:"100%", height:"100%", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4 }}>
+                          <span style={{ fontSize:28 }}>🎨</span>
+                          <p style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(255,255,255,0.3)", margin:0, letterSpacing:"0.06em" }}>RENDERING…</p>
+                        </div>
+                      ) : (
+                        /* FAL failed — gold gradient art fallback */
+                        <div style={{
+                          width:"100%", height:"100%",
+                          background:"linear-gradient(135deg,#D4AF37 0%,#8B5CF6 40%,#0B1736 100%)",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                        }}>
+                          <span style={{ fontSize:40 }}>♪</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Song metadata */}
+                    <div style={{ flex:1, minWidth:180 }}>
+                      <h3 style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(16px,2.2vw,22px)", fontWeight:700, color:"#FFFFFF", margin:"0 0 4px", lineHeight:1.2 }}>
+                        {songData?.title ?? "Your Song"}
+                      </h3>
+                      <p style={{ fontFamily:"Inter,sans-serif", fontSize:12, color:"rgba(212,175,55,0.8)", margin:"0 0 10px", letterSpacing:"0.04em" }}>
+                        {songData?.genre}{songData?.subgenre ? ` · ${songData.subgenre}` : ""}
+                      </p>
+                      {/* Chips */}
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                        {songData?.bpm && (
+                          <span style={{ background:"rgba(212,175,55,0.1)", border:"1px solid rgba(212,175,55,0.25)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(212,175,55,0.85)", fontWeight:600 }}>
+                            {songData.bpm} BPM
+                          </span>
+                        )}
+                        {songData?.key && (
+                          <span style={{ background:"rgba(96,200,255,0.08)", border:"1px solid rgba(96,200,255,0.2)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(96,200,255,0.75)", fontWeight:600 }}>
+                            Key of {songData.key}
+                          </span>
+                        )}
+                        {songData?.mood?.slice(0, 3).map((m, i) => (
+                          <span key={i} style={{ background:"rgba(139,92,246,0.08)", border:"1px solid rgba(139,92,246,0.2)", borderRadius:999, padding:"2px 9px", fontSize:10, fontFamily:"Inter,sans-serif", color:"rgba(139,92,246,0.75)", fontWeight:500, textTransform:"capitalize" }}>
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                      {/* Instruments */}
+                      {songData?.instruments && songData.instruments.length > 0 && (
+                        <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.35)", margin:0 }}>
+                          🎹 {songData.instruments.slice(0,4).join(" · ")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Audio player */}
+                  <div style={{
+                    margin:"0 clamp(16px,2.5vw,24px) clamp(14px,2vh,20px)",
+                    borderRadius:12,
+                    border:"1px solid rgba(212,175,55,0.18)",
+                    background:"rgba(212,175,55,0.04)",
+                    padding:"clamp(10px,1.5vh,14px) clamp(12px,2vw,16px)",
+                  }}>
+                    {songData?.audioUrl ? (
+                      <div>
+                        {/* Hidden audio element */}
+                        <audio
+                          ref={audioRef}
+                          src={songData.audioUrl}
+                          preload="auto"
+                          onTimeUpdate={(e) => {
+                            const a = e.currentTarget;
+                            setAudioCurrentT(a.currentTime);
+                            if (a.duration > 0) setAudioProgress((a.currentTime / a.duration) * 100);
+                          }}
+                          onLoadedMetadata={(e) => { setAudioDuration(e.currentTarget.duration); }}
+                          onEnded={() => { setIsPlaying(false); setAudioProgress(0); setAudioCurrentT(0); }}
+                        />
+                        {/* Controls row */}
+                        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                          {/* Play/Pause */}
+                          <button
+                            onClick={handlePlayPause}
+                            style={{
+                              width:42, height:42, borderRadius:"50%", border:"none", flexShrink:0, cursor:"pointer",
+                              background: isPlaying
+                                ? `linear-gradient(135deg,${GOLD2} 0%,${GOLD} 100%)`
+                                : "rgba(212,175,55,0.15)",
+                              border: isPlaying ? "none" : "1.5px solid rgba(212,175,55,0.35)",
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                              fontSize:16, color: isPlaying ? "#0B1736" : GOLD,
+                              transition:"all 200ms",
+                              boxShadow: isPlaying ? `0 0 20px rgba(212,175,55,0.5)` : "none",
+                            }}
+                            aria-label={isPlaying ? "Pause" : "Play"}
+                          >
+                            {isPlaying ? "⏸" : "▶"}
+                          </button>
+
+                          {/* Progress bar */}
+                          <div style={{ flex:1, display:"flex", flexDirection:"column", gap:4 }}>
+                            <div
+                              ref={progressRef}
+                              onClick={handleProgressClick}
+                              style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.08)", cursor:"pointer", position:"relative", overflow:"hidden" }}
+                            >
+                              <div style={{
+                                height:"100%", borderRadius:3,
+                                width:`${audioProgress}%`,
+                                background:`linear-gradient(90deg,${GOLD} 0%,${GOLD2} 100%)`,
+                                transition:"width 0.25s linear",
+                              }} />
+                            </div>
+                            {/* Waveform bar visualization */}
+                            <div style={{ display:"flex", alignItems:"flex-end", gap:2, height:16, marginTop:2 }}>
+                              {Array.from({length:28}).map((_, i) => {
+                                const barH = 4 + Math.abs(Math.sin(i * 0.7 + (isPlaying ? Date.now() * 0.001 : 0))) * 10;
+                                const inProgress = (i / 28) * 100 < audioProgress;
+                                return (
+                                  <div key={i} style={{
+                                    flex:1, borderRadius:2,
+                                    height:`${barH}px`,
+                                    background: inProgress ? GOLD : "rgba(255,255,255,0.12)",
+                                    transition: isPlaying ? "none" : "background 200ms",
+                                  }} />
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Time */}
+                          <div style={{ textAlign:"right", flexShrink:0 }}>
+                            <p style={{ fontFamily:"'SF Mono',monospace", fontSize:11, color:"rgba(255,255,255,0.55)", margin:0 }}>
+                              {Math.floor(audioCurrentT / 60)}:{String(Math.floor(audioCurrentT % 60)).padStart(2,"0")}
+                              {audioDuration > 0 && ` / ${Math.floor(audioDuration / 60)}:${String(Math.floor(audioDuration % 60)).padStart(2,"0")}`}
+                            </p>
+                            <p style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(255,255,255,0.25)", margin:"2px 0 0", letterSpacing:"0.06em" }}>PREVIEW</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Audio still generating */
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ width:42, height:42, borderRadius:"50%", background:"rgba(212,175,55,0.08)", border:"1.5px solid rgba(212,175,55,0.2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, color:"rgba(212,175,55,0.4)" }}>▶</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ height:6, borderRadius:3, background:"rgba(255,255,255,0.06)", position:"relative", overflow:"hidden" }}>
+                            <div style={{ position:"absolute", inset:0, background:"linear-gradient(90deg,transparent,rgba(212,175,55,0.3),transparent)", animation:"s5audiowave 1.8s ease-in-out infinite" }} />
+                          </div>
+                          <p style={{ fontFamily:"Inter,sans-serif", fontSize:11, color:"rgba(255,255,255,0.3)", margin:"6px 0 0" }}>
+                            {songPhase === "audio" ? "Generating your sound… this takes ~60 seconds" : songPhase === "art" ? "Rendering audio…" : "Processing…"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lyrics accordion */}
+                  {songData?.lyrics && (
+                    <div style={{ margin:"0 clamp(16px,2.5vw,24px) clamp(14px,2vh,20px)" }}>
+                      <button
+                        onClick={() => setLyricsOpen(o => !o)}
+                        style={{
+                          width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between",
+                          padding:"10px 14px", borderRadius:10,
+                          background: lyricsOpen ? "rgba(212,175,55,0.08)" : "rgba(212,175,55,0.04)",
+                          border:`1px solid rgba(212,175,55,${lyricsOpen?"0.30":"0.14"})`,
+                          cursor:"pointer", transition:"all 180ms",
+                        }}
+                      >
+                        <span style={{ fontFamily:"Inter,sans-serif", fontSize:12, fontWeight:600, color:"rgba(212,175,55,0.9)", letterSpacing:"0.06em" }}>📜 VIEW LYRICS</span>
+                        <span style={{ color:"rgba(212,175,55,0.6)", fontSize:13, transform: lyricsOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 200ms" }}>▾</span>
+                      </button>
+                      <AnimatePresence>
+                        {lyricsOpen && (
+                          <motion.div
+                            initial={{ opacity:0, height:0 }}
+                            animate={{ opacity:1, height:"auto" }}
+                            exit={{ opacity:0, height:0 }}
+                            transition={{ duration:0.3 }}
+                            style={{ overflow:"hidden" }}
+                          >
+                            <div style={{
+                              marginTop:8, borderRadius:10, padding:"clamp(12px,1.8vh,16px) clamp(12px,2vw,16px)",
+                              background:"rgba(0,0,0,0.3)", border:"1px solid rgba(212,175,55,0.10)",
+                              maxHeight:320, overflowY:"auto",
+                            }}>
+                              {([
+                                ["Verse 1", songData.lyrics.verse1],
+                                ["Chorus", songData.lyrics.chorus],
+                                ["Verse 2", songData.lyrics.verse2],
+                                ["Bridge", songData.lyrics.bridge],
+                                ["Outro Chorus", songData.lyrics.outroChorus],
+                              ] as [string, string][]).map(([label, text]) => (
+                                <div key={label} style={{ marginBottom:14 }}>
+                                  <p style={{ fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700, color:"rgba(212,175,55,0.65)", letterSpacing:"0.12em", textTransform:"uppercase", margin:"0 0 4px" }}>
+                                    [{label}]
+                                  </p>
+                                  <p style={{ fontFamily:"'Playfair Display',serif", fontSize:"clamp(12px,1.6vw,14px)", color:"rgba(255,255,255,0.80)", lineHeight:1.7, margin:0, whiteSpace:"pre-line" }}>
+                                    {text}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
+
+                  {/* Footer note */}
+                  <div style={{ padding:"clamp(10px,1.5vh,14px) clamp(16px,2.5vw,24px)", borderTop:"1px solid rgba(212,175,55,0.08)", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                    <p style={{ fontFamily:"Inter,sans-serif", fontSize:10, color:"rgba(255,255,255,0.25)", margin:0 }}>
+                      Full-length production delivered within 48h after checkout. Preview is 30-45s.
+                    </p>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <span style={{ background:"rgba(212,175,55,0.08)", borderRadius:999, padding:"2px 8px", fontSize:9, fontFamily:"Inter,sans-serif", color:"rgba(212,175,55,0.5)", letterSpacing:"0.08em" }}>AI GENERATED</span>
+                      <span style={{ background:"rgba(16,185,129,0.08)", borderRadius:999, padding:"2px 8px", fontSize:9, fontFamily:"Inter,sans-serif", color:"rgba(16,185,129,0.5)", letterSpacing:"0.08em" }}>PERSONALIZED</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
+
       {/* ── REASSURANCE + TRUST ── */}
       <S5ReassuranceTicker phase={phase} />
 
@@ -3894,6 +4303,11 @@ function Step5AIAnalysis({
         }
         @keyframes ob5blink  { 0%,100%{opacity:1} 50%{opacity:0.20} }
         @keyframes ob5shine  { from{opacity:1} to{opacity:0} }
+        @keyframes s5shimmer { 0%,100%{opacity:0.4} 50%{opacity:0.9} }
+        @keyframes s5audiowave {
+          0%   { transform:translateX(-100%); }
+          100% { transform:translateX(100%); }
+        }
         @keyframes ob5loadSweep {
           0%   { transform:translateX(-100%) rotate(135deg); }
           100% { transform:translateX(200%) rotate(135deg); }
