@@ -354,6 +354,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Lip sync state
   const [sophiaReady,    setSophiaReady]    = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
+  const [audioUnlocked,  setAudioUnlocked]  = useState(false);
   const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
   const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
 
@@ -406,8 +407,38 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }
   }, []);
 
-  // Fire TTS on every step change
+  // ── Unlock audio on first user interaction (mobile requirement) ────────────
+  const handleAudioUnlock = useCallback(() => {
+    if (audioUnlocked) return;
+    // Create + immediately suspend a silent AudioContext to unlock audio policy
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      ctx.resume().catch(() => {});
+    } catch { /* ignore */ }
+    setAudioUnlocked(true);
+    // Now actually play the queued speech
+    if (speakQueueRef.current) {
+      const q = speakQueueRef.current;
+      speakQueueRef.current = null;
+      playTTS(q.text, q.step);
+    } else {
+      playTTS(speechLine, step);
+    }
+  }, [audioUnlocked, playTTS, speechLine, step]);
+
+  // Fire TTS on every step change (after unlock; on step 0 wait for tap)
   useEffect(() => {
+    if (step === 0) {
+      // Queue it — will fire when user taps "Tap to hear Sophia"
+      speakQueueRef.current = { text: speechLine, step: 0 };
+      return;
+    }
+    // Steps 1+ user has already tapped, audio is unlocked
     playTTS(speechLine, step);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -549,9 +580,10 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   onReady={(speakFn) => {
                     speakRef.current = speakFn;
                     setSophiaReady(true);
-                    // Drain any queued speech from before engine was ready
+                    // Only drain queue if user has already unlocked audio
+                    // (step 0 queue waits for tap; steps 1+ are already unlocked)
                     const queued = speakQueueRef.current;
-                    if (queued) {
+                    if (queued && queued.step > 0) {
                       speakQueueRef.current = null;
                       speakFn(queued.text, queued.step).catch(() => {});
                     }
@@ -566,6 +598,46 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   style={{ width: "100%", height: "100%" }}
                 />
               </div>
+
+              {/* ── Tap-to-Hear overlay (mobile audio unlock) ── */}
+              {!audioUnlocked && (
+                <div
+                  onClick={handleAudioUnlock}
+                  style={{
+                    position: "absolute", inset: 0, zIndex: 20,
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: 12,
+                    background: "rgba(5,7,13,0.55)",
+                    backdropFilter: "blur(4px)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  {/* Pulsing ring */}
+                  <div style={{
+                    width: 64, height: 64, borderRadius: "50%",
+                    border: "2px solid rgba(212,175,55,0.9)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: "0 0 24px rgba(212,175,55,0.4)",
+                    animation: "sef-glow-pulse 1.8s ease-in-out infinite",
+                  }}>
+                    {/* Speaker icon */}
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="#D4AF37"/>
+                      <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Playfair Display',serif",
+                    color: "rgba(212,175,55,0.95)",
+                    fontSize: 15, letterSpacing: "0.06em",
+                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                  }}>
+                    Tap to hear Sophia
+                  </span>
+                </div>
+              )}
 
               {/* Sophia name badge */}
               <div style={{
