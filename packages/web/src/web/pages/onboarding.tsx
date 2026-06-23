@@ -9554,7 +9554,27 @@ export default function Onboarding() {
     }
     setStep(s => Math.min(s + 1, 9));
   };
+  // back() always stays inside onboarding — S1 is the terminal back point (never exits to / or /sophia)
   const back = () => setStep(s => Math.max(s - 1, 1));
+
+  // ── Browser back button intercept ─────────────────────────────────────────
+  // Pushes a fake history entry so browser back stays inside the onboarding flow
+  useEffect(() => {
+    // Push a sentinel so there's always an entry to pop back to
+    window.history.pushState({ gmOb: true, step }, "", "/onboarding");
+
+    const handlePopState = (e: PopStateEvent) => {
+      // Always prevent navigating away — handle back internally
+      e.preventDefault();
+      // Re-push so the URL stays as /onboarding
+      window.history.pushState({ gmOb: true, step }, "", "/onboarding");
+      // Trigger internal back (stops at step 1)
+      setStep(s => Math.max(s - 1, 1));
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [step]); // re-register when step changes so the sentinel stays current
   const [orderModalOpen, setOrderModalOpen] = React.useState(false);
   const setWhoFor         = (v: string) => setObData(d => ({ ...d, whoFor: v }));
   const setExperienceType = (v: string) => setObData(d => ({ ...d, experienceType: v }));
@@ -9774,8 +9794,8 @@ export default function Onboarding() {
         display:"flex", flexDirection:"row",
       }}>
 
-        {/* ── TASK 2: Sidebar step rail — desktop only (≥1024px) ── */}
-        {winW >= 1024 && (
+        {/* ── TASK 2: Sidebar step rail — desktop only (≥1024px), hidden on S1 which has its own full-screen hero ── */}
+        {winW >= 1024 && step > 1 && (
           <div style={{
             width: 200, flexShrink: 0,
             background: "rgba(6,4,15,0.95)",
@@ -9859,8 +9879,8 @@ export default function Onboarding() {
         {/* Right column: breadcrumb + step content */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", position:"relative" }}>
 
-          {/* ── TASK 3: Breadcrumb — hidden mobile (<768px) ── */}
-          {winW >= 768 && (
+          {/* ── TASK 3: Breadcrumb — hidden mobile (<768px) and hidden on S1 (has its own full-screen header) ── */}
+          {winW >= 768 && step > 1 && (
             <div style={{
               flexShrink: 0,
               display: "flex", alignItems: "center", gap: 6,

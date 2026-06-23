@@ -9,10 +9,11 @@
  * Error Boundary wraps SophiaEntryFlow — any crash auto-skips to home.
  * Universal Wav2Lip path — no Simli, no WebRTC, works on all devices.
  */
-import { useState, Suspense, lazy, Component } from "react";
+import { useState, useEffect, Suspense, lazy, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { SophiaEntryFlow } from "../components/SophiaEntryFlow";
 import { useLocation } from "wouter";
+import { useSession } from "../lib/authClient";
 
 // ─── Error Boundary ──────────────────────────────────────────────────────────
 // Any crash inside SophiaEntryFlow → auto-skip to homepage (never black screen)
@@ -50,6 +51,17 @@ type Stage = "sophia" | "home";
 export default function Index() {
   const [stage, setStage] = useState<Stage>("sophia");
   const [, setLocation] = useLocation();
+  const { data: session, isPending: sessionLoading } = useSession();
+
+  // ── ONE-WAY DOOR: logged-in users never see Sophia or homepage ──────────────
+  useEffect(() => {
+    if (!sessionLoading && session?.user) {
+      setLocation("/onboarding");
+    }
+  }, [sessionLoading, session]);
+
+  // While checking auth, render nothing (avoid flash of Sophia for authed users)
+  if (sessionLoading) return <div style={{ background: "#06040f", position: "fixed", inset: 0 }} />;
 
   const handleComplete = (path?: "onboarding" | "products" | "home") => {
     if (path === "onboarding") {

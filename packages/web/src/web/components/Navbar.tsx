@@ -359,33 +359,13 @@ export function Navbar() {
           <GhaafeediLogo variant="navbar" height={42} />
         </Link>
 
-        {/* ── Right: auth area ── */}
+        {/* ── Right: auth area — public homepage only shows Sign In + Get Started ── */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {sessionLoading ? null : isLoggedIn ? (
 
-            /* ── Logged-in: go to onboarding (the hub) ── */
-            <Link href="/onboarding" style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "rgba(212,175,55,0.08)",
-              border: "1.5px solid rgba(212,175,55,0.28)",
-              borderRadius: 999, padding: "7px 18px",
-              textDecoration: "none", transition: "all 0.22s",
-              color: GOLD, fontFamily: "Inter, sans-serif",
-              fontSize: 13, fontWeight: 600, letterSpacing: "0.02em",
-            }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(212,175,55,0.15)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.55)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "0 0 18px rgba(212,175,55,0.22)";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(212,175,55,0.08)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(212,175,55,0.28)";
-                (e.currentTarget as HTMLElement).style.boxShadow = "none";
-              }}
-            >
-              My Journey
-            </Link>
+            /* ── Logged-in users should not be on homepage (one-way door).
+                 If they somehow land here, show nothing — index.tsx will redirect them. ── */
+            null
 
           ) : (
 
