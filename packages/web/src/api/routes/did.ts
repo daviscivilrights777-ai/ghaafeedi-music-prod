@@ -4,18 +4,16 @@
 //
 // Flow:
 // 1. Receive text from client
-// 2. Generate ElevenLabs audio (MP3) → upload to R2 as temp URL
-// 3. POST to D-ID /talks with Sophia portrait URL + audio URL
-// 4. Poll D-ID until video is ready
-// 5. Return D-ID video URL to client
+// 2. POST to D-ID /talks — D-ID calls ElevenLabs directly (native provider)
+// 3. Poll D-ID until video is ready
+// 4. Return D-ID video URL to client
 //
 // D-ID replaces Wav2Lip/Modal. REST only — no WebRTC.
 // Works on ALL devices: desktop, iOS, Android.
+// Portrait: sophia-lipsync-portrait.png on R2 CDN
 // ============================================================
 
 import { Hono } from "hono";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import crypto from "node:crypto";
 
 export const didRoutes = new Hono();
 
@@ -33,99 +31,26 @@ function getDIDKey(): string {
   return key;
 }
 
-// ─── R2 Client ───────────────────────────────────────────────────────────────
+// ─── D-ID: Create talk (native ElevenLabs provider) ─────────────────────────
 
-function getR2Client(): S3Client {
-  return new S3Client({
-    region: "auto",
-    endpoint: `https://${process.env["R2_ACCOUNT_ID"]}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: process.env["R2_ACCESS_KEY_ID"] ?? "",
-      secretAccessKey: process.env["R2_SECRET_ACCESS_KEY"] ?? "",
-    },
-  });
-}
-
-// ─── ElevenLabs TTS → ArrayBuffer ────────────────────────────────────────────
-
-async function fetchTTSAudio(text: string): Promise<ArrayBuffer> {
-  const apiKey = process.env["ELEVENLABS_API_KEY"];
-  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
-
-  if (!apiKey) throw new Error("ELEVENLABS_API_KEY not configured");
-
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": apiKey,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg",
-      },
-      body: JSON.stringify({
-        text: text.trim(),
-        model_id: "eleven_turbo_v2_5",
-        voice_settings: {
-          stability: 0.45,
-          similarity_boost: 0.82,
-          style: 0.35,
-          use_speaker_boost: true,
-        },
-      }),
-      signal: AbortSignal.timeout(30000),
-    }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`ElevenLabs TTS failed: ${res.status} — ${err}`);
-  }
-
-  return res.arrayBuffer();
-}
-
-// ─── Upload audio to R2 → return public URL ───────────────────────────────────
-
-async function uploadAudioToR2(audioBuffer: ArrayBuffer, hash: string): Promise<string> {
-  const r2 = getR2Client();
-  const bucket = process.env["R2_BUCKET_NAME"] ?? "ghaafeedi-media";
-  const publicUrl = process.env["R2_PUBLIC_URL"] ?? "https://pub-bc7b203485814e1186102277ad450211.r2.dev";
-  const key = `sophia/tts_${hash}.mp3`;
-
-  await r2.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: Buffer.from(audioBuffer),
-      ContentType: "audio/mpeg",
-      // Public read
-      ACL: "public-read",
-    })
-  );
-
-  return `${publicUrl}/${key}`;
-}
-
-// ─── D-ID: Create talk ────────────────────────────────────────────────────────
-
-async function createDIDTalk(audioUrl: string): Promise<string> {
+async function createDIDTalk(text: string): Promise<string> {
   const key = getDIDKey();
+  const voiceId = process.env["ELEVENLABS_VOICE_ID"] ?? "pFZP5JQG7iQjIQuC4Bku";
 
   const body = {
     source_url: SOPHIA_PORTRAIT_URL,
     script: {
-      type: "audio",
-      audio_url: audioUrl,
+      type: "text",
+      input: text.trim(),
+      provider: {
+        type: "elevenlabs",
+        voice_id: voiceId,
+        voice_config: { model_id: "eleven_turbo_v2_5" },
+      },
     },
     config: {
-      stitch: true,           // blend face into portrait seamlessly
+      stitch: true,
       result_format: "mp4",
-    },
-    // Keep Sophia's face proportions — no crop
-    face: {
-      size: 1.0,
-      top_left: [0, 0],
     },
   };
 
@@ -217,39 +142,11 @@ didRoutes.post("/speak", async (c) => {
     return c.json({ error: "text exceeds 1200 char limit" }, 400);
   }
 
-  const hash = crypto
-    .createHash("sha256")
-    .update(text.trim().toLowerCase())
-    .digest("hex")
-    .slice(0, 16);
-
-  // ── Step 1: Generate TTS audio ──────────────────────────────
-  let audioBuffer: ArrayBuffer;
-  try {
-    console.log(`[D-ID] Generating TTS for: "${text.slice(0, 60)}..."`);
-    audioBuffer = await fetchTTSAudio(text);
-    console.log(`[D-ID] TTS done: ${audioBuffer.byteLength} bytes in ${Date.now() - t0}ms`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[D-ID] TTS failed:", msg);
-    return c.json({ error: msg, fallback: "use_static_portrait" }, 503);
-  }
-
-  // ── Step 2: Upload audio to R2 ──────────────────────────────
-  let audioUrl: string;
-  try {
-    audioUrl = await uploadAudioToR2(audioBuffer, hash);
-    console.log(`[D-ID] Audio uploaded: ${audioUrl}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[D-ID] R2 upload failed:", msg);
-    return c.json({ error: msg, fallback: "use_static_portrait" }, 503);
-  }
-
-  // ── Step 3: Create D-ID talk ────────────────────────────────
+  // ── Create D-ID talk (D-ID calls ElevenLabs directly) ──────
   let talkId: string;
   try {
-    talkId = await createDIDTalk(audioUrl);
+    console.log(`[D-ID] Creating talk for: "${text.slice(0, 60)}..."`);
+    talkId = await createDIDTalk(text);
     console.log(`[D-ID] Talk created: ${talkId} in ${Date.now() - t0}ms`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
