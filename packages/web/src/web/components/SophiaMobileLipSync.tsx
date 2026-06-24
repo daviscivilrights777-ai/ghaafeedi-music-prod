@@ -70,7 +70,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     // Fetch TTS audio from server proxy — no API key in browser
     let arrayBuffer: ArrayBuffer;
     try {
-      const res = await fetch("/api/sophia/tts", {
+      const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.trim() }),

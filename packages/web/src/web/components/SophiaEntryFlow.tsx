@@ -405,7 +405,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     const warmUp = async () => {
       // First try a quick ping — if server is already warm, done immediately
       try {
-        const quick = await fetch("/api/sophia/tts/health", {
+        const quick = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
           signal: AbortSignal.timeout(4000),
         });
         if (!cancelled && quick.ok) { setServerWarm(true); return; }
@@ -419,7 +419,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
         if (cancelled) return;
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const res = await fetch("/api/sophia/tts/health", {
+          const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
             signal: AbortSignal.timeout(5000),
           });
           if (res.ok) {
