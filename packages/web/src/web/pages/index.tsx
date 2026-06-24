@@ -7,7 +7,7 @@
  *   2. onComplete() → stage "home"
  *
  * Error Boundary wraps SophiaEntryFlow — any crash auto-skips to home.
- * Universal Wav2Lip path — no Simli, no WebRTC, works on all devices.
+ * Universal D-ID path — REST API only, no WebRTC, works on all devices.
  */
 import { useState, useEffect, Suspense, lazy, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";

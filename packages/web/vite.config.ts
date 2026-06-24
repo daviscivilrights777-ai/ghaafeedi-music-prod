@@ -28,9 +28,6 @@ export default defineConfig(({ mode }) => {
 			target: "esnext",
 			minify: "esbuild",
 			rollupOptions: {
-				// livekit-client is a CJS package that breaks Rollup's resolver.
-				// We load it via UMD CDN <script> in index.html instead.
-				external: ["livekit-client"],
 				output: {
 					// Only split our OWN page code — never node_modules.
 					manualChunks: (id) => {
