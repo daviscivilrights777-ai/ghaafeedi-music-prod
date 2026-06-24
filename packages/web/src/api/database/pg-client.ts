@@ -28,7 +28,23 @@ function getPool(): Pool {
   return pool;
 }
 
-export const db = drizzle(getPool(), { schema });
+// Lazy db — only initialises pool when first query is made.
+// This prevents a crash-on-import when DATABASE_URL is not yet set
+// (e.g. Render cold start before env vars are injected).
+let _db: ReturnType<typeof drizzle> | null = null;
+
+function getDb() {
+  if (!_db) {
+    _db = drizzle(getPool(), { schema });
+  }
+  return _db;
+}
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop];
+  },
+});
 export type DB = typeof db;
 
 // Graceful shutdown
