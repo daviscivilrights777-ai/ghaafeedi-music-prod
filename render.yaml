@@ -50,15 +50,15 @@ services:
         value: gm-n8n-secret-2026-prod
       - key: ADMIN_EMAIL
         value: lawrence@ghaafeedi.com
-      - key: SIMLI_API_KEY
+      - key: DID_API_KEY
         sync: false
       - key: MODAL_TOKEN_ID
         sync: false
       - key: MODAL_TOKEN_SECRET
         sync: false
       - key: ELEVENLABS_VOICE_ID
-        value: CwhRBWXzGAHq8TQ4Fs17
+        value: pFZP5JQG7iQjIQuC4Bku
       - key: R2_PUBLIC_URL
         value: https://pub-bc7b203485814e1186102277ad450211.r2.dev
       - key: SOPHIA_PORTRAIT_URL
-        value: https://pub-bc7b203485814e1186102277ad450211.r2.dev/assets/sophia-lipsync-portrait.png
+        value: https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-lipsync-portrait.png
