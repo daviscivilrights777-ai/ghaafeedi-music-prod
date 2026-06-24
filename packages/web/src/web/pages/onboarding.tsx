@@ -4431,16 +4431,17 @@ interface Step6Props {
   whoFor: string | null;
   experienceType: string | null;
   storyText: string;
-  analysisData?: { dominantEmotion: string; songTitle: string; emotionalArc?: string };
+  analysisData?: { dominantEmotion: string; songTitle: string; emotionalArc?: string; emotionalFingerprint?: string[] };
   onNext: () => void;
   onBack: () => void;
 }
 
-const MOOD_IMAGES = [
-  { src: "/assets/mood-1.png", label: "Golden Hands" },
-  { src: "/assets/mood-2.png", label: "Grand Silhouette" },
-  { src: "/assets/mood-3.png", label: "Ethereal Lights" },
-  { src: "/assets/mood-4.png", label: "Memory" },
+// Cinematic gradient fallbacks per emotion slot (shown while loading or on FAL failure)
+const MOOD_GRADIENT_FALLBACKS = [
+  "linear-gradient(135deg,#1a0a2e 0%,#2d1b4e 40%,#4a2070 70%,#D4AF37 100%)",
+  "linear-gradient(135deg,#0a1628 0%,#1a3a5c 40%,#2a6090 70%,#D4AF37 100%)",
+  "linear-gradient(135deg,#1a0808 0%,#3d1a1a 40%,#6b2a2a 70%,#D4AF37 100%)",
+  "linear-gradient(135deg,#0a1a0a 0%,#1a3d2a 40%,#2a6b4a 70%,#D4AF37 100%)",
 ];
 
 const INCLUDED_ITEMS = [
@@ -4573,6 +4574,10 @@ const OB6_STYLES = `
     0%,100% { transform: scaleY(1); }
     50%      { transform: scaleY(1.65); }
   }
+  @keyframes ob6Shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
 `;
 
 function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysisData, onNext, onBack }: Step6Props) {
@@ -4581,6 +4586,16 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
   const videoStyle = experienceType
     ? experienceType.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
     : "Cinematic / Inspirational";
+
+  // Derive 4 emotion slots from emotionalFingerprint
+  const BASE_MOODS = ["Longing", "Resilience", "Hope", "Peace"];
+  const fp = analysisData?.emotionalFingerprint ?? [];
+  const emotionSlots: string[] = [
+    fp[0] ?? BASE_MOODS[0],
+    fp[1] ?? BASE_MOODS[1],
+    fp[2] ?? BASE_MOODS[2],
+    fp[3] ?? BASE_MOODS[3],
+  ];
 
   /* ── Real audio playback (song gen on mount) ── */
   interface S6SongData {
@@ -4597,32 +4612,64 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
   const [songPhase, setSongPhase] = useState<"idle"|"loading"|"ready"|"error">("idle");
   const [songData,  setSongData]  = useState<S6SongData | null>(null);
 
-  // Fire song gen on mount
+  /* ── AI Mood Images (generate-mood-images on mount) ── */
+  interface MoodImage { emotion: string; url: string | null; }
+  const [moodImages,  setMoodImages]  = useState<MoodImage[]>([]);
+  const [moodPhase,   setMoodPhase]   = useState<"idle"|"loading"|"done">("idle");
+
+  // Fire BOTH on mount in parallel — song gen + mood images
   React.useEffect(() => {
-    if (songPhase !== "idle") return;
-    setSongPhase("loading");
-    fetch("/api/onboarding/generate-song", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        storyText: _st ?? "",
-        whoFor: whoFor ?? "",
-        experienceType: experienceType ?? "",
-        dominantEmotion: analysisData?.dominantEmotion ?? "",
-        emotionalArc: analysisData?.emotionalArc ?? "",
-        suggestedTitle: analysisData?.songTitle ?? "",
-      }),
-    })
-      .then(r => r.json())
-      .then((data: any) => {
-        if (data.success) {
-          setSongData(data);
-          setSongPhase("ready");
-        } else {
-          setSongPhase("error");
-        }
+    // ── Song generation ──
+    if (songPhase === "idle") {
+      setSongPhase("loading");
+      fetch("/api/onboarding/generate-song", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyText: _st ?? "",
+          whoFor: whoFor ?? "",
+          experienceType: experienceType ?? "",
+          dominantEmotion: analysisData?.dominantEmotion ?? "",
+          emotionalArc: analysisData?.emotionalArc ?? "",
+          suggestedTitle: analysisData?.songTitle ?? "",
+        }),
       })
-      .catch(() => setSongPhase("error"));
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.success) { setSongData(data); setSongPhase("ready"); }
+          else { setSongPhase("error"); }
+        })
+        .catch(() => setSongPhase("error"));
+    }
+
+    // ── Mood image generation ──
+    if (moodPhase === "idle") {
+      setMoodPhase("loading");
+      fetch("/api/onboarding/generate-mood-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emotions: emotionSlots,
+          dominantEmotion: analysisData?.dominantEmotion ?? "",
+          storyText: _st ?? "",
+          whoFor: whoFor ?? "",
+        }),
+      })
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.success && Array.isArray(data.images)) {
+            setMoodImages(data.images);
+          } else {
+            // Fallback: use emotion labels with no URLs (gradient fallback rendered in UI)
+            setMoodImages(emotionSlots.map(e => ({ emotion: e, url: null })));
+          }
+          setMoodPhase("done");
+        })
+        .catch(() => {
+          setMoodImages(emotionSlots.map(e => ({ emotion: e, url: null })));
+          setMoodPhase("done");
+        });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -4897,23 +4944,37 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
             </div>
           </div>
 
-          {/* ── SECTION 2: Visual Mood Gallery (highest emphasis, focal point) ── */}
+          {/* ── SECTION 2: Visual Mood Gallery — AI-generated per customer emotional arc ── */}
           <div className="ob6-mood-section" style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700, letterSpacing:3, color:"rgba(212,175,55,0.65)", textTransform:"uppercase" }}>Visual Mood</div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:700, letterSpacing:3, color:"rgba(212,175,55,0.65)", textTransform:"uppercase" }}>Your Emotional Arc</div>
+              {moodPhase === "loading" && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <div style={{ width:8, height:8, borderRadius:"50%", background:GOLD, animation:"ob6Pulse 1.2s ease-in-out infinite" }}/>
+                  <span style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(212,175,55,0.60)", letterSpacing:1 }}>AI GENERATING VISUALS…</span>
+                </div>
+              )}
+              {moodPhase === "done" && (
+                <span style={{ fontFamily:"Inter,sans-serif", fontSize:9, color:"rgba(212,175,55,0.50)", letterSpacing:1 }}>✦ UNIQUE TO YOUR STORY</span>
+              )}
+            </div>
             <div
               className="ob6-mood-grid"
-              role="radiogroup" aria-label="Visual mood selection"
+              role="radiogroup" aria-label="Emotional arc mood selection"
               style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}
             >
-              {MOOD_IMAGES.map((img, mi) => {
-                const isSel = selMood === mi;
-                const isHov = hovMood === mi;
+              {emotionSlots.map((emotionLabel, mi) => {
+                const isSel   = selMood === mi;
+                const isHov   = hovMood === mi;
+                const imgData = moodImages[mi] ?? null;
+                const isLoading = moodPhase === "loading";
+                const hasImage  = !!imgData?.url;
                 return (
                   <div
                     key={mi}
                     className="ob6-mood-thumb"
                     role="radio" tabIndex={0}
-                    aria-checked={isSel} aria-label={`${img.label}${isSel ? " (selected)" : ""}`}
+                    aria-checked={isSel} aria-label={`${emotionLabel}${isSel ? " (selected)" : ""}`}
                     onClick={() => setSelMood(mi)}
                     onKeyDown={e => { if(e.key==="Enter"||e.key===" ") { e.preventDefault(); setSelMood(mi); }}}
                     onMouseEnter={() => setHovMood(mi)}
@@ -4928,21 +4989,66 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
                       transform: isHov && !isSel ? "scale(1.04)" : "scale(1)",
                       transition:"all .18s ease-out",
                       outline:"none",
+                      background: !hasImage ? MOOD_GRADIENT_FALLBACKS[mi] : "transparent",
                     }}
                   >
-                    <img
-                      src={img.src} alt={img.label} loading="lazy"
-                      style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", pointerEvents:"none" }}
-                    />
-                    {isSel && (
-                      <div style={{ position:"absolute", inset:0, background:"rgba(212,175,55,0.10)", display:"flex", alignItems:"flex-end", justifyContent:"flex-end", padding:6 }}>
-                        <div style={{ background:"rgba(212,175,55,0.95)", borderRadius:5, width:17, height:17, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, color:"#000", fontWeight:900 }}>✓</div>
+                    {/* Shimmer skeleton while loading */}
+                    {isLoading && (
+                      <div style={{
+                        position:"absolute", inset:0,
+                        background:"linear-gradient(90deg,rgba(255,255,255,0.03) 25%,rgba(212,175,55,0.08) 50%,rgba(255,255,255,0.03) 75%)",
+                        backgroundSize:"200% 100%",
+                        animation:"ob6Shimmer 1.8s ease-in-out infinite",
+                      }}/>
+                    )}
+
+                    {/* Real AI-generated image */}
+                    {hasImage && !isLoading && (
+                      <img
+                        src={imgData!.url!}
+                        alt={emotionLabel}
+                        loading="lazy"
+                        style={{ width:"100%", height:"100%", objectFit:"cover", display:"block", pointerEvents:"none" }}
+                      />
+                    )}
+
+                    {/* Gradient fallback: always show emotion label overlay */}
+                    {!hasImage && !isLoading && (
+                      <div style={{
+                        position:"absolute", inset:0,
+                        display:"flex", flexDirection:"column",
+                        alignItems:"center", justifyContent:"center",
+                        background:"rgba(0,0,0,0.25)",
+                      }}>
+                        <div style={{ fontSize:20, marginBottom:4, opacity:0.85 }}>
+                          {["✦","◈","⬡","◇"][mi]}
+                        </div>
                       </div>
                     )}
-                    {isHov && !isSel && (
-                      <div style={{ position:"absolute", inset:0, background:"linear-gradient(0deg,rgba(0,0,0,0.70) 0%,transparent 55%)", display:"flex", alignItems:"flex-end", padding:"5px 8px" }}>
-                        <span style={{ fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:600, color:"rgba(255,255,255,0.92)", letterSpacing:0.5 }}>{img.label}</span>
-                      </div>
+
+                    {/* Always: bottom emotion label bar */}
+                    <div style={{
+                      position:"absolute", left:0, right:0, bottom:0,
+                      background:"linear-gradient(0deg,rgba(0,0,0,0.82) 0%,rgba(0,0,0,0.40) 60%,transparent 100%)",
+                      padding:"18px 7px 6px",
+                      display:"flex", alignItems:"flex-end", justifyContent:"space-between",
+                    }}>
+                      <span style={{
+                        fontFamily:"Inter,sans-serif", fontSize:9, fontWeight:700,
+                        color: isSel ? GOLD : "rgba(255,255,255,0.92)",
+                        letterSpacing:0.8, textTransform:"uppercase",
+                        textShadow:"0 1px 4px rgba(0,0,0,0.9)",
+                        lineHeight:1.2,
+                        maxWidth:"80%",
+                      }}>{emotionLabel}</span>
+                      {isSel && (
+                        <div style={{ background:"rgba(212,175,55,0.95)", borderRadius:4, width:14, height:14, display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color:"#000", fontWeight:900, flexShrink:0 }}>✓</div>
+                      )}
+                    </div>
+
+                    {/* Selected overlay tint */}
+                    {isSel && (
+                      <div style={{ position:"absolute", inset:0, background:"rgba(212,175,55,0.08)", pointerEvents:"none" }}/>
                     )}
                   </div>
                 );
@@ -9864,6 +9970,7 @@ export default function Onboarding() {
                 dominantEmotion: analysisResult.dominantEmotion,
                 songTitle: analysisResult.songTitle,
                 emotionalArc: analysisResult.emotionalArc,
+                emotionalFingerprint: analysisResult.emotionalFingerprint,
               } : undefined}
               onNext={next}
               onBack={back}

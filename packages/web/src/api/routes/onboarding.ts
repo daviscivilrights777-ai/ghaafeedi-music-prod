@@ -423,6 +423,122 @@ RULES:
     }
   });
 
+  // ─── POST /api/onboarding/generate-mood-images ────────────────
+  // 4 parallel FAL.ai flux/schnell calls — one per emotional arc point
+  // Returns: { success, images: [{ emotion, url }] }
+  .post("/generate-mood-images", async (c) => {
+    try {
+      const body = await c.req.json() as {
+        emotions?: string[];          // up to 4 adjectives from emotionalFingerprint
+        dominantEmotion?: string;
+        storyText?: string;
+        whoFor?: string;
+      };
+      const {
+        emotions = [],
+        dominantEmotion = "Deep Emotion",
+        storyText = "",
+        whoFor = "",
+      } = body;
+
+      // Ensure exactly 4 emotions — pad/trim as needed
+      const BASE_EMOTIONS = ["Longing", "Resilience", "Hope", "Peace"];
+      const emotionSlots: string[] = [
+        emotions[0] ?? BASE_EMOTIONS[0],
+        emotions[1] ?? BASE_EMOTIONS[1],
+        emotions[2] ?? BASE_EMOTIONS[2],
+        emotions[3] ?? BASE_EMOTIONS[3],
+      ];
+
+      const FAL_API_KEY = await getSecret(SECRET_KEYS.FAL_API_KEY);
+      const storySnippet = storyText.slice(0, 300);
+
+      // Cinematic prompt builder per emotion
+      function buildEmotionPrompt(emotion: string): string {
+        const emotionLower = emotion.toLowerCase();
+        const visualMap: Record<string, string> = {
+          nostalgic:   "soft golden light, faded photographs, warm bokeh, empty chairs at sunrise, gentle mist over water",
+          devoted:     "two silhouettes holding hands against city lights, warm amber glow, rain-soaked streets, intimate close-up",
+          resilient:   "lone figure standing on a cliff edge at dawn, dramatic storm clearing, rays of light breaking through dark clouds",
+          tender:      "close-up hands cradling something precious, soft candlelight, shallow depth of field, warm honey tones",
+          hopeful:     "golden hour horizon, figure walking toward light, vast open landscape, ethereal god rays, morning mist",
+          grief:       "empty bench in rain, wilted flowers, silver moonlight, fog-covered graveyard, dramatic shadows",
+          longing:     "figure standing at a window looking out, city lights blurred in rain, solitary silhouette, blue-silver tones",
+          joy:         "burst of golden confetti, laughing silhouette, warm sunlight, vibrant colors exploding from center",
+          strength:    "powerful silhouette against stormy sky, lightning in background, defiant stance, dramatic volumetric light",
+          peace:       "still water at twilight, single lotus flower, purple-gold sky reflection, serene minimalist landscape",
+          love:        "intertwined silhouettes, rose gold light, floating petals, soft lens flare, warm cinematic mood",
+          healing:     "new green shoots through cracked earth, dawn light, gentle rain, rebirth symbolism, hope imagery",
+          wonder:      "cosmic nebula with human figure, stars and galaxies, awe-inspiring scale, electric blue and gold",
+          melancholy:  "overcast city street, lone umbrella, blue-grey tones, reflections in puddles, cinematic sadness",
+          passion:     "deep red and gold flames, intense lighting, dramatic shadows, powerful energy, cinematic intensity",
+        };
+
+        const lookup = Object.keys(visualMap).find(k => emotionLower.includes(k));
+        const visualDesc = lookup ? visualMap[lookup] : `cinematic emotion of ${emotion}, dramatic lighting, deep shadows, gold accents`;
+
+        return `Ultra-cinematic emotional portrait for a luxury AI music platform. Emotion: "${emotion}". Visual: ${visualDesc}. Style: A24 film meets Apple Vision Pro aesthetic, deep space-black background, dramatic gold and navy gradient lighting, volumetric god rays, floating particles of light, shallow depth of field, 4K quality, luxury dark mood board, no text, no people's faces, no typography, pure visual emotion. ${whoFor ? `Story context: created for ${whoFor}.` : ""} ${storySnippet ? `Story essence: ${storySnippet.slice(0, 120)}.` : ""}`;
+      }
+
+      // Fire all 4 in parallel
+      async function generateOne(emotion: string): Promise<{ emotion: string; url: string | null }> {
+        try {
+          const prompt = buildEmotionPrompt(emotion);
+          const submitRes = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Key ${FAL_API_KEY}`,
+            },
+            body: JSON.stringify({
+              prompt,
+              image_size: "landscape_4_3",
+              num_inference_steps: 4,
+              num_images: 1,
+              enable_safety_checker: false,
+            }),
+            signal: AbortSignal.timeout(12_000),
+          });
+
+          if (!submitRes.ok) return { emotion, url: null };
+
+          const submitData = await submitRes.json() as { request_id?: string; images?: { url: string }[] };
+
+          // Synchronous response
+          if (submitData.images?.[0]?.url) return { emotion, url: submitData.images[0].url };
+
+          const requestId = submitData.request_id;
+          if (!requestId) return { emotion, url: null };
+
+          // Poll up to 30s
+          const deadline = Date.now() + 30_000;
+          while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 2_500));
+            const statusRes = await fetch(`https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`, {
+              headers: { "Authorization": `Key ${FAL_API_KEY}` },
+              signal: AbortSignal.timeout(8_000),
+            });
+            if (!statusRes.ok) continue;
+            const s = await statusRes.json() as { status?: string; images?: { url: string }[] };
+            if (s.images?.[0]?.url) return { emotion, url: s.images[0].url };
+            if (s.status === "COMPLETED") return { emotion, url: s.images?.[0]?.url ?? null };
+            if (s.status === "FAILED") return { emotion, url: null };
+          }
+          return { emotion, url: null };
+        } catch {
+          return { emotion, url: null };
+        }
+      }
+
+      const results = await Promise.all(emotionSlots.map(e => generateOne(e)));
+
+      return c.json({ success: true, images: results }, 200);
+    } catch (err: any) {
+      console.warn("[generate-mood-images] Error:", err?.message);
+      return c.json({ success: true, images: [] }, 200);
+    }
+  });
+
 function buildFallback(whoFor: string, experienceType: string, products: typeof GM_CATALOG) {
   // Context-aware variance so fallback never looks the same
   const seed = (whoFor + experienceType).length % 7;
