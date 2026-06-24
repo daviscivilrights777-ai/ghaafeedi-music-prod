@@ -49,16 +49,22 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 }: SophiaMobileLipSyncProps) {
 
   const sourceNodeRef  = useRef<AudioBufferSourceNode | null>(null);
+  const audioElRef     = useRef<HTMLAudioElement | null>(null);
   const activeRef      = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
 
   const portrait = portraitSrc ?? SOPHIA_PORTRAIT;
 
-  // ── Core speak: fetch audio from server proxy, play via Web Audio ──
+  // ── Core speak: fetch TTS audio, play via HTMLAudioElement (Android-safe) ──
   const speak = useCallback(async (text: string, _stepIndex = 0): Promise<void> => {
     if (!activeRef.current) return;
 
-    // Stop prior audio
+    // Stop any prior audio
+    if (audioElRef.current) {
+      audioElRef.current.pause();
+      audioElRef.current.src = "";
+      audioElRef.current = null;
+    }
     if (sourceNodeRef.current) {
       try { sourceNodeRef.current.stop(); } catch { /**/ }
       sourceNodeRef.current = null;
@@ -67,8 +73,8 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     setIsLoading(true);
     onSpeakingChange(false);
 
-    // Fetch TTS audio from server proxy — no API key in browser
-    let arrayBuffer: ArrayBuffer;
+    // Fetch TTS audio from Cloudflare Worker
+    let blob: Blob;
     try {
       const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
         method: "POST",
@@ -79,10 +85,10 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
       if (!res.ok) {
         const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`TTS proxy ${res.status}: ${errText}`);
+        throw new Error(`TTS ${res.status}: ${errText}`);
       }
 
-      arrayBuffer = await res.arrayBuffer();
+      blob = await res.blob();
     } catch (err) {
       console.error("[Sophia] TTS fetch failed:", err);
       setIsLoading(false);
@@ -93,45 +99,38 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
     if (!activeRef.current) return;
 
-    // Decode + play via Web Audio API
+    // Play via HTMLAudioElement — works on Android Chrome without AudioContext gesture timing
     try {
-      let ctx = externalAudioCtxRef?.current ?? null;
-      if (!ctx || ctx.state === "closed") {
-        const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-        ctx = new AC();
-        if (externalAudioCtxRef)
-          (externalAudioCtxRef as React.MutableRefObject<AudioContext | null>).current = ctx;
-      }
-      if (ctx.state === "suspended") {
-        try { await ctx.resume(); } catch { /**/ }
-      }
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.preload = "auto";
+      audioElRef.current = audio;
 
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-      if (!activeRef.current) return;
+      setIsLoading(false);
+      onSpeakingChange(true);
 
-      const source = ctx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(ctx.destination);
-      sourceNodeRef.current = source;
-
-      await new Promise<void>(resolve => {
-        source.onended = () => {
-          sourceNodeRef.current = null;
+      await new Promise<void>((resolve, reject) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          audioElRef.current = null;
           if (activeRef.current) onSpeakingChange(false);
           resolve();
         };
-        source.start(0);
-        setIsLoading(false);
-        onSpeakingChange(true);
+        audio.onerror = (e) => {
+          URL.revokeObjectURL(url);
+          audioElRef.current = null;
+          reject(new Error(`Audio playback error: ${(e as ErrorEvent).message ?? e}`));
+        };
+        audio.play().catch(reject);
       });
 
     } catch (err) {
-      console.error("[Sophia] Audio decode/play failed:", err);
+      console.error("[Sophia] Audio play failed:", err);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
     }
-  }, [onSpeakingChange, onError, externalAudioCtxRef]);
+  }, [onSpeakingChange, onError]);
 
   // ── Register with parent ──
   useEffect(() => {
@@ -139,6 +138,11 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     onReady(speak);
     return () => {
       activeRef.current = false;
+      if (audioElRef.current) {
+        audioElRef.current.pause();
+        audioElRef.current.src = "";
+        audioElRef.current = null;
+      }
       if (sourceNodeRef.current) {
         try { sourceNodeRef.current.stop(); } catch { /**/ }
         sourceNodeRef.current = null;
