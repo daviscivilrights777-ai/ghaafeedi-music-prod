@@ -410,25 +410,49 @@ const DURATION_GROUP_A = [
   {
     label: "2 min",
     tiers: [
-      { price: 79,  features: ["2-min film", "1 revision", "Digital delivery", "Original score"] },
-      { price: 129, features: ["2-min film", "2 revisions", "Digital + USB", "Color grading"] },
-      { price: 199, features: ["2-min film", "4 revisions", "4K delivery", "Priority production"] },
+      { price: 79,  features: ["2-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 129, features: ["2-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Color grading"] },
+      { price: 199, features: ["2-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "Priority production", "Digital delivery"] },
+    ],
+  },
+  {
+    label: "4 min",
+    tiers: [
+      { price: 89,  features: ["4-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 149, features: ["4-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Color grading"] },
+      { price: 229, features: ["4-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "3 revisions", "Priority production", "Digital delivery"] },
     ],
   },
   {
     label: "5 min",
     tiers: [
-      { price: 199, features: ["5-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "1 revision", "Digital delivery", "Original score"] },
-      { price: 349, features: ["5-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
-      { price: 599, features: ["5-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "3 revisions", "4K delivery", "Priority production", "Premiere kit"] },
+      { price: 199, features: ["5-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 349, features: ["5-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 599, features: ["5-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "3 revisions", "4K delivery", "Priority production", "Premiere kit"] },
+    ],
+  },
+  {
+    label: "6 min",
+    tiers: [
+      { price: 229, features: ["6-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 299, features: ["6-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Color grading"] },
+      { price: 449, features: ["6-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "3 revisions", "Priority production", "Digital delivery"] },
     ],
   },
   {
     label: "10 min",
     tiers: [
-      { price: 299, features: ["10-min film", "1 revision", "Digital delivery", "Original score"] },
-      { price: 499, features: ["10-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
-      { price: 799, features: ["10-min film", "4 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+      { price: 299, features: ["10-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 499, features: ["10-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 799, features: ["10-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
+    ],
+  },
+  {
+    label: "15 min",
+    tiers: [
+      { price: 449, features: ["15-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 749, features: ["15-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 1199, features: ["15-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Legacy screening"] },
     ],
   },
 ];
@@ -437,25 +461,25 @@ const DURATION_GROUP_B = [
   {
     label: "20 min",
     tiers: [
-      { price: 449, features: ["20-min film", "1 revision", "Digital delivery", "Original score"] },
-      { price: 600, features: ["20-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
-      { price: 799, features: ["20-min film", "4 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+      { price: 449, features: ["20-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { price: 600, features: ["20-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 799, features: ["20-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
     ],
   },
   {
     label: "25 min",
     tiers: [
-      { price: 549, features: ["25-min film", "2 revisions", "Digital delivery", "Original score"] },
-      { price: 749, features: ["25-min film", "3 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
-      { price: 999, features: ["25-min film", "5 revisions", "4K + physical box set", "Priority production", "Premiere event kit"] },
+      { price: 549, features: ["25-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "2 revisions", "Digital delivery"] },
+      { price: 749, features: ["25-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "3 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 999, features: ["25-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "5 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
     ],
   },
   {
     label: "30 min",
     tiers: [
-      { price: 649, features: ["30-min film", "2 revisions", "Digital + USB", "Original score"] },
-      { price: 899, features: ["30-min film", "3 revisions", "4K delivery", "Full orchestral score", "Color grading"] },
-      { price: 1199, features: ["30-min film", "5 revisions", "4K + physical box set", "Priority production", "Premiere event kit", "Legacy screening"] },
+      { price: 649, features: ["30-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "Original music score", "2 revisions", "Digital + USB"] },
+      { price: 899, features: ["30-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "3 revisions", "4K delivery", "Full orchestral score", "Color grading"] },
+      { price: 1199, features: ["30-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "5 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit", "Legacy screening"] },
     ],
   },
 ];

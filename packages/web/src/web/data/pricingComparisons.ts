@@ -63,38 +63,38 @@ export const FILM_COMPARISON_BY_LENGTH: {
     // 5 min
     [
       { name: "Essential", price: 199, features: ["5-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
-      { name: "Creator",   price: 349, features: ["5-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "2 revisions", "Color grading"] },
-      { name: "Pro",       price: 599, features: ["5-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "3 revisions", "Premiere kit"] },
+      { name: "Creator",   price: 349, features: ["5-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Color grading", "Digital + USB"] },
+      { name: "Pro",       price: 599, features: ["5-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "3 revisions", "Priority production", "Premiere kit"] },
     ],
     // 10 min
     [
-      { name: "Essential", price: 299, features: ["Full film production", "AI scripting", "Original music", "Voiceover", "1 revision"] },
-      { name: "Creator",   price: 499, features: ["Everything in Essential", "Priority production", "2 revisions", "4K delivery"] },
-      { name: "Pro",       price: 799, features: ["Everything in Creator", "Full orchestral score", "4 revisions", "Physical keepsake"] },
+      { name: "Essential", price: 299, features: ["10-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { name: "Creator",   price: 499, features: ["10-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { name: "Pro",       price: 799, features: ["10-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
     ],
     // 15 min
     [
-      { name: "Essential", price: 449, features: ["Full film production", "AI scripting", "Original music", "Voiceover", "1 revision"] },
-      { name: "Creator",   price: 749, features: ["Everything in Essential", "Priority production", "2 revisions", "4K delivery"] },
-      { name: "Pro",       price: 1199, features: ["Everything in Creator", "Full orchestral score", "4 revisions", "Physical keepsake"] },
+      { name: "Essential", price: 449, features: ["15-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { name: "Creator",   price: 749, features: ["15-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { name: "Pro",       price: 1199, features: ["15-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Legacy screening"] },
     ],
     // 20 min
     [
-      { name: "Essential", price: 599, features: ["Full film production", "AI scripting", "Original music", "Voiceover", "1 revision"] },
-      { name: "Creator",   price: 999, features: ["Everything in Essential", "Priority production", "2 revisions", "4K delivery"] },
-      { name: "Pro",       price: 1599, features: ["Everything in Creator", "Full orchestral score", "4 revisions", "Physical keepsake"] },
+      { name: "Essential", price: 449, features: ["20-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "1 revision", "Digital delivery"] },
+      { name: "Creator",   price: 600, features: ["20-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { name: "Pro",       price: 799, features: ["20-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "4 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
     ],
     // 25 min
     [
-      { name: "Essential", price: 749, features: ["Full film production", "AI scripting", "Original music", "Voiceover", "1 revision"] },
-      { name: "Creator",   price: 1249, features: ["Everything in Essential", "Priority production", "2 revisions", "4K delivery"] },
-      { name: "Pro",       price: 1999, features: ["Everything in Creator", "Full orchestral score", "4 revisions", "Physical keepsake"] },
+      { name: "Essential", price: 549, features: ["25-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "2 revisions", "Digital delivery"] },
+      { name: "Creator",   price: 749, features: ["25-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "3 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { name: "Pro",       price: 999, features: ["25-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "5 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit"] },
     ],
     // 30 min
     [
-      { name: "Essential", price: 899, features: ["Full film production", "AI scripting", "Original music", "Voiceover", "1 revision"] },
-      { name: "Creator",   price: 1499, features: ["Everything in Essential", "Priority production", "2 revisions", "4K delivery"] },
-      { name: "Pro",       price: 2399, features: ["Everything in Creator", "Full orchestral score", "4 revisions", "Physical keepsake"] },
+      { name: "Essential", price: 649, features: ["30-min film · 480p · Seedance 2.0", "AI Emotional Story Script", "Original music score", "2 revisions", "Digital + USB"] },
+      { name: "Creator",   price: 899, features: ["30-min film · 720p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "Original music score", "3 revisions", "4K delivery", "Full orchestral score", "Color grading"] },
+      { name: "Pro",       price: 1199, features: ["30-min film · 1080p · Seedance 2.0", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "Original music score", "5 revisions", "4K + physical keepsake", "Priority production", "Premiere event kit", "Legacy screening"] },
     ],
   ],
   competitorsByLength: [
@@ -298,12 +298,18 @@ export const FILM_COMPARISON_BY_LENGTH: {
     ],
   ],
   savingsByLength: [
-    { vsCheapest: "Save $1+ vs Kling — with story script, narration & concierge included", vsMostExpensive: "Up to $1,601 saved vs HiggsField Seedance 2.0 DIY", badge: "Save $1–$1,601 vs DIY — with everything included" },
-    { vsCheapest: "Save $76+ vs Kling — full story, narration & concierge included",       vsMostExpensive: "Up to $3,201 saved vs HiggsField Seedance 2.0",    badge: "Save $76–$3,201 vs DIY — everything included" },
-    { vsCheapest: "Save $101+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $4,751 saved vs HiggsField Seedance 2.0",    badge: "Save $101–$4,751 vs DIY — everything included" },
-    { vsCheapest: "Save $120+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $6,301 saved vs HiggsField Seedance 2.0",    badge: "Save $120–$6,301 vs DIY — everything included" },
-    { vsCheapest: "Save $140+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $7,851 saved vs HiggsField Seedance 2.0",    badge: "Save $140–$7,851 vs DIY — everything included" },
-    { vsCheapest: "Save $160+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $9,401 saved vs HiggsField Seedance 2.0",    badge: "Save $160–$9,401 vs DIY — everything included" },
+    // 5 min — Essential $199 vs Kling $200 (cheapest DIY), Pro $599 vs Seedance DIY $1,800
+    { vsCheapest: "Save $1+ vs Kling — story script, narration & concierge included",      vsMostExpensive: "Up to $1,201 saved vs HiggsField Seedance 2.0 DIY", badge: "Save $1–$1,201 vs DIY — everything included" },
+    // 10 min — Essential $299 vs Kling $375, Pro $799 vs Seedance DIY $3,500
+    { vsCheapest: "Save $76+ vs Kling — full story, narration & concierge included",       vsMostExpensive: "Up to $2,701 saved vs HiggsField Seedance 2.0",     badge: "Save $76–$2,701 vs DIY — everything included" },
+    // 15 min — Essential $449 vs Kling $550, Pro $1,199 vs Seedance DIY $5,200
+    { vsCheapest: "Save $101+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $4,001 saved vs HiggsField Seedance 2.0",     badge: "Save $101–$4,001 vs DIY — everything included" },
+    // 20 min — Essential $449 vs Kling $719, Pro $799 vs Seedance DIY $6,900
+    { vsCheapest: "Save $270+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $6,101 saved vs HiggsField Seedance 2.0",     badge: "Save $270–$6,101 vs DIY — everything included" },
+    // 25 min — Essential $549 vs Kling $889, Pro $999 vs Seedance DIY $8,600
+    { vsCheapest: "Save $340+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $7,601 saved vs HiggsField Seedance 2.0",     badge: "Save $340–$7,601 vs DIY — everything included" },
+    // 30 min — Essential $649 vs Kling $1,059, Pro $1,199 vs Seedance DIY $10,300
+    { vsCheapest: "Save $410+ vs Kling — full story, narration & concierge included",      vsMostExpensive: "Up to $9,101 saved vs HiggsField Seedance 2.0",     badge: "Save $410–$9,101 vs DIY — everything included" },
   ],
 };
 
