@@ -367,8 +367,8 @@ RULES:
 
       const FAL_API_KEY = await getSecret(SECRET_KEYS.FAL_API_KEY);
 
-      // FAL.ai flux/schnell via queue API
-      const submitRes = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
+      // FAL.ai nano-banana-2 (Gemini 3.1 Flash Image) via queue API
+      const submitRes = await fetch("https://queue.fal.run/fal-ai/nano-banana-2", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -376,12 +376,11 @@ RULES:
         },
         body: JSON.stringify({
           prompt: artPrompt,
-          image_size: "square_hd",
-          num_inference_steps: 4,
+          aspect_ratio: "1:1",
           num_images: 1,
-          enable_safety_checker: false,
+          output_format: "jpeg",
         }),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!submitRes.ok) {
@@ -390,7 +389,7 @@ RULES:
 
       const submitData = await submitRes.json() as { request_id?: string; images?: { url: string }[] };
 
-      // If synchronous response (some FAL models return immediately)
+      // If synchronous response
       if (submitData.images?.[0]?.url) {
         return c.json({ success: true, imageUrl: submitData.images[0].url }, 200);
       }
@@ -402,9 +401,9 @@ RULES:
       const pollDeadline = Date.now() + 45_000;
       while (Date.now() < pollDeadline) {
         await new Promise(r => setTimeout(r, 3_000));
-        const statusRes = await fetch(`https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`, {
+        const statusRes = await fetch(`https://queue.fal.run/fal-ai/nano-banana-2/requests/${requestId}`, {
           headers: { "Authorization": `Key ${FAL_API_KEY}` },
-          signal: AbortSignal.timeout(8_000),
+          signal: AbortSignal.timeout(10_000),
         });
         if (!statusRes.ok) continue;
         const statusData = await statusRes.json() as { status?: string; images?: { url: string }[] };
@@ -424,7 +423,7 @@ RULES:
   })
 
   // ─── POST /api/onboarding/generate-mood-images ────────────────
-  // 4 parallel FAL.ai flux/schnell calls — one per emotional arc point
+  // 4 parallel FAL.ai nano-banana-2 calls — one per emotional arc point
   // Returns: { success, images: [{ emotion, url }] }
   .post("/generate-mood-images", async (c) => {
     try {
@@ -484,7 +483,7 @@ RULES:
       async function generateOne(emotion: string): Promise<{ emotion: string; url: string | null }> {
         try {
           const prompt = buildEmotionPrompt(emotion);
-          const submitRes = await fetch("https://queue.fal.run/fal-ai/flux/schnell", {
+          const submitRes = await fetch("https://queue.fal.run/fal-ai/nano-banana-2", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -492,12 +491,11 @@ RULES:
             },
             body: JSON.stringify({
               prompt,
-              image_size: "landscape_4_3",
-              num_inference_steps: 4,
+              aspect_ratio: "4:3",
               num_images: 1,
-              enable_safety_checker: false,
+              output_format: "jpeg",
             }),
-            signal: AbortSignal.timeout(12_000),
+            signal: AbortSignal.timeout(15_000),
           });
 
           if (!submitRes.ok) return { emotion, url: null };
@@ -510,13 +508,13 @@ RULES:
           const requestId = submitData.request_id;
           if (!requestId) return { emotion, url: null };
 
-          // Poll up to 30s
-          const deadline = Date.now() + 30_000;
+          // Poll up to 45s (nano-banana-2 may take slightly longer than schnell)
+          const deadline = Date.now() + 45_000;
           while (Date.now() < deadline) {
-            await new Promise(r => setTimeout(r, 2_500));
-            const statusRes = await fetch(`https://queue.fal.run/fal-ai/flux/schnell/requests/${requestId}`, {
+            await new Promise(r => setTimeout(r, 3_000));
+            const statusRes = await fetch(`https://queue.fal.run/fal-ai/nano-banana-2/requests/${requestId}`, {
               headers: { "Authorization": `Key ${FAL_API_KEY}` },
-              signal: AbortSignal.timeout(8_000),
+              signal: AbortSignal.timeout(10_000),
             });
             if (!statusRes.ok) continue;
             const s = await statusRes.json() as { status?: string; images?: { url: string }[] };
