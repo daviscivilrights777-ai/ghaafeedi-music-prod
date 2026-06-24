@@ -105,6 +105,10 @@ const INJECT_CSS = `
   from { opacity:0; transform:translateY(10px); }
   to   { opacity:1; transform:translateY(0);    }
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 @keyframes sef-breathe {
   0%,100% { transform:scale(1.00); }
   50%      { transform:scale(1.015); }
@@ -355,6 +359,8 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   const [sophiaReady,    setSophiaReady]    = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
   const [audioUnlocked,  setAudioUnlocked]  = useState(false);
+  const [serverWarm,     setServerWarm]     = useState(false);
+  const [serverWaking,   setServerWaking]   = useState(false);
   const audioUnlockedRef = useRef(false); // ref copy — readable inside gesture handlers without re-render
   const audioCtxRef   = useRef<AudioContext | null>(null); // persistent AudioContext
   const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
@@ -391,6 +397,42 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     const el = document.createElement("style");
     el.id = "sef-css4"; el.textContent = INJECT_CSS;
     document.head.appendChild(el);
+  }, []);
+
+  // ── Warm up Render server on mount so TTS is ready when user taps ─────────
+  useEffect(() => {
+    let cancelled = false;
+    const warmUp = async () => {
+      // First try a quick ping — if server is already warm, done immediately
+      try {
+        const quick = await fetch("/api/sophia/tts/health", {
+          signal: AbortSignal.timeout(4000),
+        });
+        if (!cancelled && quick.ok) { setServerWarm(true); return; }
+      } catch { /* cold — continue */ }
+
+      if (cancelled) return;
+      setServerWaking(true);
+
+      // Server is cold — keep pinging until it wakes (Render takes 10-40s)
+      for (let i = 0; i < 20; i++) {
+        if (cancelled) return;
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const res = await fetch("/api/sophia/tts/health", {
+            signal: AbortSignal.timeout(5000),
+          });
+          if (res.ok) {
+            if (!cancelled) { setServerWarm(true); setServerWaking(false); }
+            return;
+          }
+        } catch { /* still waking */ }
+      }
+      // After 60s give up — let user try anyway
+      if (!cancelled) { setServerWarm(true); setServerWaking(false); }
+    };
+    warmUp();
+    return () => { cancelled = true; };
   }, []);
 
   // Lock scroll
@@ -639,7 +681,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               {/* ── Tap-to-Hear overlay (mobile audio unlock) ── */}
               {!audioUnlocked && (
                 <div
-                  onClick={handleAudioUnlock}
+                  onClick={serverWarm ? handleAudioUnlock : undefined}
                   style={{
                     position: "absolute", inset: 0, zIndex: 20,
                     display: "flex", flexDirection: "column",
@@ -647,32 +689,67 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     gap: 12,
                     background: "rgba(5,7,13,0.55)",
                     backdropFilter: "blur(4px)",
-                    cursor: "pointer",
+                    cursor: serverWarm ? "pointer" : "default",
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {/* Pulsing ring */}
-                  <div style={{
-                    width: 64, height: 64, borderRadius: "50%",
-                    border: "2px solid rgba(212,175,55,0.9)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: "0 0 24px rgba(212,175,55,0.4)",
-                    animation: "sef-glow-pulse 1.8s ease-in-out infinite",
-                  }}>
-                    {/* Speaker icon */}
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="#D4AF37"/>
-                      <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                  <span style={{
-                    fontFamily: "'Playfair Display',serif",
-                    color: "rgba(212,175,55,0.95)",
-                    fontSize: 15, letterSpacing: "0.06em",
-                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                  }}>
-                    Tap to hear Sophia
-                  </span>
+                  {serverWaking ? (
+                    /* ── Waking state ── */
+                    <>
+                      <div style={{
+                        width: 64, height: 64, borderRadius: "50%",
+                        border: "2px solid rgba(212,175,55,0.4)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 0 16px rgba(212,175,55,0.15)",
+                      }}>
+                        {/* Spinner */}
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                          style={{ animation: "spin 1.2s linear infinite" }}>
+                          <circle cx="12" cy="12" r="10" stroke="rgba(212,175,55,0.25)" strokeWidth="2"/>
+                          <path d="M12 2a10 10 0 0110 10" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <span style={{
+                        fontFamily: "'Playfair Display',serif",
+                        color: "rgba(212,175,55,0.70)",
+                        fontSize: 14, letterSpacing: "0.06em",
+                        textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                      }}>
+                        Sophia is waking up…
+                      </span>
+                      <span style={{
+                        fontFamily: "Inter, sans-serif",
+                        color: "rgba(255,255,255,0.35)",
+                        fontSize: 11,
+                      }}>
+                        Just a moment
+                      </span>
+                    </>
+                  ) : (
+                    /* ── Ready state ── */
+                    <>
+                      <div style={{
+                        width: 64, height: 64, borderRadius: "50%",
+                        border: "2px solid rgba(212,175,55,0.9)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 0 24px rgba(212,175,55,0.4)",
+                        animation: "sef-glow-pulse 1.8s ease-in-out infinite",
+                      }}>
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z" fill="#D4AF37"/>
+                          <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                      </div>
+                      <span style={{
+                        fontFamily: "'Playfair Display',serif",
+                        color: "rgba(212,175,55,0.95)",
+                        fontSize: 15, letterSpacing: "0.06em",
+                        textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                      }}>
+                        Tap to hear Sophia
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
