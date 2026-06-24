@@ -424,18 +424,27 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     try {
       const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
       freshCtx = new AC();
+      // Resume synchronously — this is what actually unlocks Android Chrome Web Audio
       freshCtx.resume().catch(() => {});
       audioCtxRef.current = freshCtx;
+
+      // CRITICAL: Play a real silent buffer through the AudioContext RIGHT NOW,
+      // synchronously inside the gesture. This permanently unlocks the context
+      // for all future calls — even across await boundaries.
+      // Without this, Android keeps the context in "suspended" state and
+      // decodeAudioData + start() produces no output despite no errors.
+      const silentBuffer = freshCtx.createBuffer(1, 1, 22050);
+      const silentSource = freshCtx.createBufferSource();
+      silentSource.buffer = silentBuffer;
+      silentSource.connect(freshCtx.destination);
+      silentSource.start(0);
     } catch { /* ignore */ }
 
-    // CRITICAL: Pre-unlock an Audio element synchronously inside the tap gesture.
-    // Android Chrome blocks audio.play() if called after any await (gesture window expires).
-    // Fix: create Audio + call .play() NOW (synchronously), store the element.
-    // speak() will reuse this element by swapping .src — element stays "trusted".
+    // Also keep the HTMLAudio unlock for belt-and-suspenders on older devices
     const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
     const unlocked = new Audio(SILENCE_MP3);
     unlocked.volume = 0;
-    unlocked.play().catch(() => {}); // unlock gesture — ignore silence play errors
+    unlocked.play().catch(() => {});
     preUnlockedAudioRef.current = unlocked;
 
     // Update visual state AFTER creating AudioContext (state update schedules re-render but

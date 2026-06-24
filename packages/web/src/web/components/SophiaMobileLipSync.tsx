@@ -104,12 +104,13 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         if (externalAudioCtxRef) (externalAudioCtxRef as React.MutableRefObject<AudioContext | null>).current = ctx;
       }
 
-      // Resume if suspended (needed on iOS)
-      if (ctx.state === "suspended") {
-        await ctx.resume();
-      }
+      setDebugMsg(`🎵 ctx=${ctx.state} decoding...`);
 
-      setDebugMsg("🎵 Decoding buffer...");
+      // If still suspended (shouldn't happen — tap handler plays silent buffer),
+      // try one more resume. On desktop this is fine; on Android this may no-op.
+      if (ctx.state === "suspended") {
+        try { await ctx.resume(); } catch { /* ignore */ }
+      }
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
       if (!activeRef.current) return;
 
