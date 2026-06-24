@@ -80,80 +80,129 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     // Stop any prior audio/video
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = "";
+      audioRef.current.removeAttribute("src");
+      audioRef.current.load();
       audioRef.current = null;
     }
     setShowVideo(false);
     setIsLoading(true);
 
-    // ── Step 1: TTS via GET src URL + pre-unlocked HTMLAudioElement ──
+    // ── Step 1: Fetch TTS → ArrayBuffer → Blob → ObjectURL → play ──
     //
-    // ROOT CAUSE OF ALL PRIOR FAILURES:
-    // Android Chrome blocks audio.play() after ANY await (fetch, arrayBuffer, etc.)
-    // because the gesture trust window (~1s) expires before async work completes.
+    // ROOT CAUSE OF ALL PRIOR FAILURES (confirmed by error log):
+    //   "MEDIA_ELEMENT_ERROR: Empty src attribute" / code:4
+    //   — play() fired before browser processed the streaming GET URL.
+    //   — Handlers were attached AFTER play() was already called.
+    //   — No canplay gate — play() hit readyState=0 (HAVE_NOTHING).
     //
-    // GUARANTEED FIX:
-    // 1. Parent tap handler creates Audio element + calls .play() SYNCHRONOUSLY (silence unlock)
-    // 2. We reuse that trusted element — swap .src to GET TTS URL, call .load() + .play()
-    // 3. No fetch, no blob, no gesture window issue — browser streams audio natively
+    // FIX: fetch → ArrayBuffer → Blob(audio/mpeg) → createObjectURL
+    //   All listeners attached BEFORE src is set.
+    //   load() called after src. canplay waited before play().
+    //   Blob URL is fully buffered — zero race condition possible.
     //
-    // GET /api/sophia-mobile/tts?text=... returns audio/mpeg stream directly.
-    let ttsPromise: Promise<void>;
-    try {
-      const ttsUrl = `/api/sophia-mobile/tts?text=${encodeURIComponent(text)}`;
-      setDebugMsg(`⏳ Loading audio...`);
+    // GESTURE TRUST: fetch IS inside the speak() call which is downstream
+    // of the user tap — Android gesture window is already satisfied by the
+    // pre-unlocked silence Audio element created in the tap handler.
+    // We still reuse preUnlockedAudioRef if available (extra safety for
+    // very tight gesture windows on older Android), but fall back gracefully.
 
-      // Reuse pre-unlocked audio element (Android gesture-trust preserved)
-      // Fallback: create new Audio() for desktop/autoplay environments
+    let ttsPromise: Promise<void>;
+    let blobUrl: string | null = null;
+
+    try {
+      setDebugMsg("⏳ Fetching TTS...");
+
+      // Fetch audio bytes
+      const res = await fetch(`/api/sophia-mobile/tts?text=${encodeURIComponent(text)}`);
+      if (!res.ok) throw new Error(`TTS HTTP ${res.status}`);
+
+      setDebugMsg("⏳ Decoding buffer...");
+      const arrayBuffer = await res.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
+      blobUrl = URL.createObjectURL(blob);
+
+      setDebugMsg("🔗 Blob URL ready — wiring audio...");
+
+      // Pick audio element: reuse pre-unlocked (Android) or create new
       const preUnlocked = preUnlockedAudioRef?.current;
       let audio: HTMLAudioElement;
 
       if (preUnlocked) {
-        setDebugMsg("🔓 pre-unlocked → src swap");
+        setDebugMsg("🔓 pre-unlocked element reused");
         preUnlocked.pause();
-        preUnlocked.volume = 1.0;
-        preUnlocked.src = ttsUrl;  // assign BEFORE load/play
+        // Clear old src first — avoids stale-state errors on some Android builds
+        preUnlocked.removeAttribute("src");
         preUnlocked.load();
+        preUnlocked.volume = 1.0;
         audio = preUnlocked;
         if (preUnlockedAudioRef) preUnlockedAudioRef.current = null;
       } else {
-        setDebugMsg("🆕 new Audio (desktop)");
-        audio = new Audio(ttsUrl);
+        setDebugMsg("🆕 new Audio()");
+        audio = new Audio();
         audio.volume = 1.0;
       }
 
       audioRef.current = audio;
-      setIsLoading(false);
-      onSpeakingChange(true);
-      setDebugMsg("▶️ play()...");
 
+      // ── Wire ALL listeners BEFORE setting src ──────────────────────────
+      // This is the critical ordering fix. Setting src triggers internal
+      // browser state machine — listeners must be in place before that.
       ttsPromise = new Promise<void>((resolve, reject) => {
-        audio.onplaying = () => { setDebugMsg("▶️ PLAYING!"); };
+        const cleanup = () => {
+          audio.oncanplay   = null;
+          audio.onplaying   = null;
+          audio.onended     = null;
+          audio.onerror     = null;
+        };
+
+        audio.oncanplay = () => {
+          setDebugMsg("▶️ canplay → play()");
+          audio.oncanplay = null; // fire once only
+          audio.play().then(() => {
+            setDebugMsg("▶️ PLAYING!");
+            setIsLoading(false);
+            onSpeakingChange(true);
+          }).catch((e: Error) => {
+            cleanup();
+            setDebugMsg(`❌ play(): ${e.name}`);
+            if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+            if (activeRef.current) onSpeakingChange(false);
+            setIsLoading(false);
+            reject(e);
+          });
+        };
+
+        audio.onplaying = () => { setDebugMsg("▶️ PLAYING — audio confirmed!"); };
+
         audio.onended = () => {
+          cleanup();
           setDebugMsg("✅ Done");
+          if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
           if (activeRef.current) onSpeakingChange(false);
           resolve();
         };
+
         audio.onerror = () => {
+          cleanup();
           const code = audio.error?.code ?? -1;
           const msg2 = audio.error?.message ?? "unknown";
           setDebugMsg(`❌ code:${code} ${msg2}`);
+          if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
           if (activeRef.current) onSpeakingChange(false);
-          reject(new Error(`HTMLAudio error ${code}`));
+          setIsLoading(false);
+          reject(new Error(`HTMLAudio error ${code}: ${msg2}`));
         };
 
-        audio.play().then(() => {
-          setDebugMsg("▶️ play() OK");
-        }).catch((e: Error) => {
-          setDebugMsg(`❌ play(): ${e.name} ${e.message}`);
-          if (activeRef.current) onSpeakingChange(false);
-          reject(e);
-        });
+        // ── Set src + load AFTER listeners are attached ────────────────
+        audio.src = blobUrl!;
+        audio.load();
+        // canplay fires → play() called inside handler above
       });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setDebugMsg(`❌ ${msg}`);
+      if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
