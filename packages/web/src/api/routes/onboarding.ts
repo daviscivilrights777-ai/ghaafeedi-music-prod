@@ -421,7 +421,7 @@ RULES:
       // Never hard-fail — frontend handles null gracefully
       return c.json({ success: true, imageUrl: null }, 200);
     }
-  });
+  })
 
   // ─── POST /api/onboarding/generate-mood-images ────────────────
   // 4 parallel FAL.ai flux/schnell calls — one per emotional arc point
