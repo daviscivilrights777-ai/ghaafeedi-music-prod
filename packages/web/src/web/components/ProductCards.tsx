@@ -8,25 +8,25 @@ const DURATION_5_TIERS = [
   {
     label: "5 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
-      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
+      { name: "ESSENTIAL", price: "$199", compareAt: "$299", sub: "5-Min Film · 480p",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$349", compareAt: "$499", sub: "5-Min Film · 720p", revisions: "2 Revisions", highlight: true, saving: "Save $150" },
+      { name: "ELITE",     price: "$599", compareAt: "$799", sub: "5-Min Film · 1080p", revisions: "3 Revisions" },
     ],
   },
   {
     label: "10 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
-      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
+      { name: "ESSENTIAL", price: "$199", compareAt: "$299", sub: "5-Min Film · 480p",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$349", compareAt: "$499", sub: "5-Min Film · 720p", revisions: "2 Revisions", highlight: true, saving: "Save $150" },
+      { name: "ELITE",     price: "$599", compareAt: "$799", sub: "5-Min Film · 1080p", revisions: "3 Revisions" },
     ],
   },
   {
     label: "15 Min",
     tiers: [
-      { name: "ESSENTIAL", price: "$149", compareAt: "$199", sub: "5-Min Film",  revisions: "1 Revision" },
-      { name: "PREMIUM",   price: "$249", compareAt: "$329", sub: "10-Min Film", revisions: "2 Revisions", highlight: true, saving: "Save $80" },
-      { name: "ELITE",     price: "$399", compareAt: "$529", sub: "15-Min Film", revisions: "3 Revisions" },
+      { name: "ESSENTIAL", price: "$199", compareAt: "$299", sub: "5-Min Film · 480p",  revisions: "1 Revision" },
+      { name: "PREMIUM",   price: "$349", compareAt: "$499", sub: "5-Min Film · 720p", revisions: "2 Revisions", highlight: true, saving: "Save $150" },
+      { name: "ELITE",     price: "$599", compareAt: "$799", sub: "5-Min Film · 1080p", revisions: "3 Revisions" },
     ],
   },
 ];

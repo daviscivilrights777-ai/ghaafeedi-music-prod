@@ -2936,7 +2936,7 @@ const S5_PRODUCT_META: Record<string, { name: string; category: string; priceStr
   "mem-elite":             { name: "Elite Membership",      category: "Membership",    priceStr: "$125/mo", icon: "🎵", accent: "#FFD700" },
   "film2-essential":       { name: "2-Min Cinematic Film",  category: "Short Films",   priceStr: "$79",     icon: "🎬", accent: "#D4A574" },
   "film2-premium":         { name: "2-Min Film — Premium",  category: "Short Films",   priceStr: "$129",    icon: "🎬", accent: "#D4A574" },
-  "film5-essential":       { name: "5-Min Cinematic Film",  category: "Feature Films", priceStr: "$149",    icon: "🎥", accent: "#06B6D4" },
+  "film5-essential":       { name: "5-Min Cinematic Film",  category: "Feature Films", priceStr: "$199",    icon: "🎥", accent: "#06B6D4" },
   "film10-premium":        { name: "10-Min Legacy Film",    category: "Masterpiece",   priceStr: "$499",    icon: "🏆", accent: "#10B981" },
   "voice-cloning":         { name: "Voice Cloning Studio",  category: "Studio",        priceStr: "$297",    icon: "🎙️", accent: "#EC4899" },
   "signature-masterpiece": { name: "Signature Masterpiece", category: "Premium",       priceStr: "$4,997",  icon: "💎", accent: "#D4AF37" },
@@ -7584,9 +7584,9 @@ const GM_ADDON_CATALOG: AddonProduct[] = [
   { id:"film2-premium",   name:"2-Min Film — Premium",   sub:"4K + Revisions",      price:129,  priceStr:"$129", category:"Short Films", icon:"🎬", accent:"#D4A574" },
   { id:"film2-elite",     name:"2-Min Film — Elite",     sub:"4K + Unlimited Rev.",  price:199,  priceStr:"$199", category:"Short Films", icon:"🎬", accent:"#D4A574" },
   // ── 5-Min Films ───────────────────────────────────────────────────────────
-  { id:"film5-essential", name:"5-Min Film — Essential", sub:"One-Time Production", price:149,  priceStr:"$149", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
-  { id:"film5-premium",   name:"5-Min Film — Premium",   sub:"4K Master + Vault",   price:249,  priceStr:"$249", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
-  { id:"film5-elite",     name:"5-Min Film — Elite",     sub:"4K + Social Cuts",    price:399,  priceStr:"$399", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
+  { id:"film5-essential", name:"5-Min Film — Essential", sub:"480p · AI Story Script", price:199,  priceStr:"$199", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
+  { id:"film5-premium",   name:"5-Min Film — Premium",   sub:"720p · Sophia Concierge", price:349,  priceStr:"$349", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
+  { id:"film5-elite",     name:"5-Min Film — Elite",     sub:"1080p · Narration + Vault", price:599,  priceStr:"$599", category:"Feature Films", icon:"🎥", accent:"#06B6D4" },
   // ── 10-Min Films ──────────────────────────────────────────────────────────
   { id:"film10-essential",name:"10-Min Film — Essential",sub:"Documentary Grade",   price:299,  priceStr:"$299", category:"Masterpiece",  icon:"🏆", accent:"#10B981" },
   { id:"film10-premium",  name:"10-Min Film — Premium",  sub:"8K Cinema Output",   price:499,  priceStr:"$499", category:"Masterpiece",  icon:"🏆", accent:"#10B981" },

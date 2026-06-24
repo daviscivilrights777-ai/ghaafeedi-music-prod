@@ -418,9 +418,9 @@ const DURATION_GROUP_A = [
   {
     label: "5 min",
     tiers: [
-      { price: 149, features: ["5-min film", "1 revision", "Digital delivery", "Original score"] },
-      { price: 249, features: ["5-min film", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
-      { price: 399, features: ["5-min film", "4 revisions", "4K delivery", "Priority production", "Premiere kit"] },
+      { price: 199, features: ["5-min film · 480p (Seedance 2.0)", "AI Emotional Story Script", "1 revision", "Digital delivery", "Original score"] },
+      { price: 349, features: ["5-min film · 720p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "2 revisions", "Digital + USB", "Full orchestral score", "Color grading"] },
+      { price: 599, features: ["5-min film · 1080p (Seedance 2.0)", "AI Emotional Story Script", "Sophia AI Concierge", "ElevenLabs Narration", "3 revisions", "4K delivery", "Priority production", "Premiere kit"] },
     ],
   },
   {

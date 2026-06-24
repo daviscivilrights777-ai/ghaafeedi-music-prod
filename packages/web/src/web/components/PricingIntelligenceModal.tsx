@@ -216,13 +216,37 @@ function FilmComparisonPanel({ selectedTierIndex }: { selectedTierIndex: number 
         </div>
       </div>
 
+      {/* Comparison anchor */}
+      <div style={{
+        margin: "20px 0",
+        background: "linear-gradient(135deg, rgba(212,175,55,0.06), rgba(11,23,54,0.8))",
+        border: "1px solid rgba(212,175,55,0.25)",
+        borderRadius: 12, padding: "16px 18px",
+        borderLeft: "3px solid #D4AF37",
+      }}>
+        <div style={{ fontFamily: "Playfair Display, serif", fontSize: 13, color: GOLD, fontWeight: 700, marginBottom: 6 }}>
+          The Real Cost of DIY
+        </div>
+        <p style={{ fontFamily: "Inter, sans-serif", fontSize: 12, color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.7 }}>
+          A 5-minute cinematic video from a production studio costs{" "}
+          <span style={{ color: "#FFC24D", fontWeight: 700 }}>$2,000–$5,000</span> and takes 4–6 weeks.
+          Doing it yourself on Runway or HiggsField costs{" "}
+          <span style={{ color: "#FFC24D", fontWeight: 700 }}>$303–$1,800+</span>{" "}
+          in credits alone — with no story, no narration, no concierge, and no delivery guarantee.{" "}
+          Ghaafeedi delivers it in{" "}
+          <span style={{ color: GREEN, fontWeight: 700 }}>24 hours</span>, emotionally crafted by AI, starting at{" "}
+          <span style={{ color: GREEN, fontWeight: 700 }}>$199</span>.
+        </p>
+      </div>
+
       {/* Why we win */}
       <WhyWeWinSection bullets={[
-        "Everything included: scripting, voiceover, music, editing, revisions — one price",
-        "AI orchestration handles 90+ generations per project with zero effort from you",
+        "AI Emotional Story Script included in every tier — no competitor offers this",
+        "Sophia AI Concierge guides Standard & Premium customers through every step",
+        "ElevenLabs professional narration built into Premium — not a $50 add-on",
+        "Seedance 2.0 — the #1 ranked video model on Elo benchmarks — powers every film",
         "Revisions cost $0 extra — DIY platforms charge per re-generation attempt",
-        "Guaranteed delivery with timeline — DIY has no delivery commitment",
-        "No 20–160 hours of your time required to learn platform credit systems",
+        "Guaranteed 24-hour delivery — DIY has no delivery commitment",
       ]} />
     </div>
   );
