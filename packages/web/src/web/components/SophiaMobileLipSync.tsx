@@ -1,18 +1,12 @@
 // ============================================================
 // FILE: packages/web/src/web/components/SophiaMobileLipSync.tsx
-// PURPOSE: Audio-first Sophia component — ALL devices
 //
-// Architecture:
-//   1. GET /api/sophia-mobile/tts?text=... → ElevenLabs MP3
-//      → decoded via Web Audio API → plays IMMEDIATELY
-//   2. POST /api/did/speak → D-ID REST API → talking-head video
-//      (fires in parallel, overlays portrait once ready)
+// Architecture — ALL calls go DIRECT from browser, zero server:
+//   1. ElevenLabs TTS API  → audio plays immediately
+//   2. D-ID /talks API     → lip sync video fires in parallel
 //
-// D-ID replaced Wav2Lip/Modal — REST only, works on all devices.
-// Audio is primary; D-ID video is bonus overlay that appears
-// 5-15s after speak() fires (D-ID processing time).
-//
-// Static portrait always visible; video fades in on top when ready.
+// No Render cold-start, no WebRTC, works on desktop + mobile.
+// Portrait always visible; D-ID video fades in when ready (~30-90s).
 // ============================================================
 
 import React, {
@@ -23,18 +17,110 @@ import React, {
   memo,
 } from "react";
 
-// ─── Props ────────────────────────────────────────────────────
+// ─── Config (baked in at build time via Vite) ─────────────────
+const DID_API_KEY       = import.meta.env["VITE_DID_API_KEY"]       as string | undefined;
+const EL_API_KEY        = import.meta.env["VITE_ELEVENLABS_API_KEY"] as string | undefined;
+const EL_VOICE_ID       = (import.meta.env["VITE_ELEVENLABS_VOICE_ID"] as string | undefined) ?? "pFZP5JQG7iQjIQuC4Bku";
+const SOPHIA_PORTRAIT   = (import.meta.env["VITE_SOPHIA_PORTRAIT_URL"] as string | undefined)
+  ?? "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-lipsync-portrait.png";
+const DID_BASE          = "https://api.d-id.com";
 
+// ─── Props ────────────────────────────────────────────────────
 interface SophiaMobileLipSyncProps {
-  onReady: (speak: (text: string, stepIndex?: number) => Promise<void>) => void;
+  onReady:          (speak: (text: string, stepIndex?: number) => Promise<void>) => void;
   onSpeakingChange: (speaking: boolean) => void;
-  onError?: () => void;
-  nextStepText?: string;
-  portraitSrc?: string;
-  className?: string;
-  style?: React.CSSProperties;
-  audioCtxRef?: React.RefObject<AudioContext | null>;
+  onError?:         () => void;
+  nextStepText?:    string;
+  portraitSrc?:     string;
+  className?:       string;
+  style?:           React.CSSProperties;
+  audioCtxRef?:     React.RefObject<AudioContext | null>;
   preUnlockedAudioRef?: React.RefObject<HTMLAudioElement | null>;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
+
+async function fetchElevenLabsAudio(text: string): Promise<ArrayBuffer> {
+  if (!EL_API_KEY) throw new Error("ElevenLabs key not configured");
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${EL_VOICE_ID}`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": EL_API_KEY,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
+      },
+      body: JSON.stringify({
+        text: text.trim(),
+        model_id: "eleven_turbo_v2_5",
+        voice_settings: {
+          stability: 0.45,
+          similarity_boost: 0.82,
+          style: 0.35,
+          use_speaker_boost: true,
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    }
+  );
+  if (!res.ok) throw new Error(`ElevenLabs ${res.status}`);
+  return res.arrayBuffer();
+}
+
+async function createDIDTalk(text: string): Promise<string> {
+  if (!DID_API_KEY) throw new Error("D-ID key not configured");
+  const res = await fetch(`${DID_BASE}/talks`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${DID_API_KEY}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      source_url: SOPHIA_PORTRAIT,
+      script: {
+        type: "text",
+        input: text.trim(),
+        provider: {
+          type: "elevenlabs",
+          voice_id: EL_VOICE_ID,
+          voice_config: { model_id: "eleven_turbo_v2_5" },
+        },
+      },
+      config: { stitch: true, result_format: "mp4" },
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`D-ID create: ${res.status} — ${err}`);
+  }
+  const data = await res.json() as { id: string };
+  return data.id;
+}
+
+async function pollDIDTalk(talkId: string, signal: AbortSignal): Promise<string> {
+  if (!DID_API_KEY) throw new Error("D-ID key not configured");
+  const deadline = Date.now() + 120_000; // 2 min max
+  while (Date.now() < deadline) {
+    if (signal.aborted) throw new Error("aborted");
+    const res = await fetch(`${DID_BASE}/talks/${talkId}`, {
+      headers: { Authorization: `Basic ${DID_API_KEY}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`D-ID poll: ${res.status}`);
+    const data = await res.json() as {
+      status: string;
+      result_url?: string;
+      error?: { description: string };
+    };
+    if (data.status === "done" && data.result_url) return data.result_url;
+    if (data.status === "error" || data.status === "rejected")
+      throw new Error(`D-ID failed: ${data.error?.description ?? data.status}`);
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  throw new Error("D-ID timed out");
 }
 
 // ─── Component ────────────────────────────────────────────────
@@ -43,56 +129,45 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   onReady,
   onSpeakingChange,
   onError,
-  nextStepText: _nextStepText,
-  portraitSrc = "/assets/sophia-lipsync-portrait.png",
+  portraitSrc,
   className,
   style,
   audioCtxRef: externalAudioCtxRef,
-  preUnlockedAudioRef: _preUnlockedAudioRef,
 }: SophiaMobileLipSyncProps) {
 
   const videoRef        = useRef<HTMLVideoElement>(null);
   const sourceNodeRef   = useRef<AudioBufferSourceNode | null>(null);
   const activeRef       = useRef(true);
   const currentTextRef  = useRef<string>("");
+  const didAbortRef     = useRef<AbortController | null>(null);
 
-  const [showVideo, setShowVideo]   = useState(false);
-  const [isLoading, setIsLoading]   = useState(false);
-  const [didStatus, setDidStatus]   = useState<"idle" | "loading" | "playing" | "error">("idle");
+  const [showVideo,  setShowVideo]  = useState(false);
+  const [didStatus,  setDidStatus]  = useState<"idle"|"loading"|"playing"|"error">("idle");
+  const [isLoading,  setIsLoading]  = useState(false);
 
-  // ─── D-ID video launcher (parallel to audio) ──────────────
+  const portrait = portraitSrc ?? SOPHIA_PORTRAIT;
 
+  // ── D-ID video (fires in parallel, overlays portrait when ready) ──
   const launchDIDVideo = useCallback(async (text: string) => {
+    // Cancel any in-flight D-ID request
+    didAbortRef.current?.abort();
+    const abort = new AbortController();
+    didAbortRef.current = abort;
+
     setDidStatus("loading");
     try {
-      const res = await fetch("/api/did/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-        signal: AbortSignal.timeout(90000),
-      });
+      const talkId = await createDIDTalk(text);
+      console.log("[D-ID] Talk created:", talkId);
 
-      if (!res.ok || !activeRef.current) {
-        setDidStatus("error");
-        return;
-      }
+      const videoUrl = await pollDIDTalk(talkId, abort.signal);
+      if (!activeRef.current || currentTextRef.current !== text) return;
 
-      const data = await res.json() as { video_url?: string; fallback?: string; error?: string };
-
-      if (!data.video_url || !activeRef.current) {
-        setDidStatus("error");
-        return;
-      }
-
-      // Only show video if this text is still the current one
-      if (currentTextRef.current !== text) return;
-
-      console.log(`[D-ID] Video ready: ${data.video_url}`);
+      console.log("[D-ID] Video ready:", videoUrl);
       setDidStatus("playing");
       setShowVideo(true);
 
       if (videoRef.current) {
-        videoRef.current.src = data.video_url;
+        videoRef.current.src = videoUrl;
         videoRef.current.load();
         videoRef.current.play().catch(() => {
           setShowVideo(false);
@@ -100,23 +175,21 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         });
       }
     } catch (err) {
-      if (activeRef.current) {
-        console.warn("[D-ID] Video generation failed — portrait fallback active:", err);
+      if (!abort.signal.aborted && activeRef.current) {
+        console.warn("[D-ID] Fallback to portrait:", err);
         setDidStatus("error");
       }
     }
   }, []);
 
-  // ─── Core speak function ──────────────────────────────────
-
+  // ── Core speak: ElevenLabs audio first, D-ID in parallel ──
   const speak = useCallback(async (text: string, _stepIndex = 0): Promise<void> => {
     if (!activeRef.current) return;
-
     currentTextRef.current = text;
 
-    // Stop any prior audio source
+    // Stop prior audio
     if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch { /* already stopped */ }
+      try { sourceNodeRef.current.stop(); } catch { /**/ }
       sourceNodeRef.current = null;
     }
 
@@ -130,18 +203,15 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
     setIsLoading(true);
 
-    // ── Fire D-ID in parallel (don't await — let audio play first) ──
+    // Fire D-ID in parallel — don't await
     launchDIDVideo(text).catch(() => {});
 
-    // ── Step 1: Fetch TTS bytes ──────────────────────────────
+    // Fetch ElevenLabs audio
     let arrayBuffer: ArrayBuffer;
     try {
-      const res = await fetch(`/api/sophia-mobile/tts?text=${encodeURIComponent(text)}`);
-      if (!res.ok) throw new Error(`TTS HTTP ${res.status}`);
-      arrayBuffer = await res.arrayBuffer();
+      arrayBuffer = await fetchElevenLabsAudio(text);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Sophia] TTS fetch failed:", msg);
+      console.error("[Sophia] ElevenLabs failed:", err);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
@@ -150,17 +220,17 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
 
     if (!activeRef.current) return;
 
-    // ── Step 2: Decode + play via Web Audio API ──────────────
+    // Decode + play via Web Audio API
     try {
       let ctx = externalAudioCtxRef?.current ?? null;
       if (!ctx || ctx.state === "closed") {
         const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
         ctx = new AC();
-        if (externalAudioCtxRef) (externalAudioCtxRef as React.MutableRefObject<AudioContext | null>).current = ctx;
+        if (externalAudioCtxRef)
+          (externalAudioCtxRef as React.MutableRefObject<AudioContext | null>).current = ctx;
       }
-
       if (ctx.state === "suspended") {
-        try { await ctx.resume(); } catch { /* ignore */ }
+        try { await ctx.resume(); } catch { /**/ }
       }
 
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
@@ -171,12 +241,11 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       source.connect(ctx.destination);
       sourceNodeRef.current = source;
 
-      await new Promise<void>((resolve) => {
+      await new Promise<void>(resolve => {
         source.onended = () => {
           sourceNodeRef.current = null;
           if (activeRef.current) {
             onSpeakingChange(false);
-            // Hide D-ID video when audio ends (sync visual + audio)
             setShowVideo(false);
             setDidStatus("idle");
           }
@@ -188,29 +257,26 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       });
 
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Sophia] Audio playback failed:", msg);
+      console.error("[Sophia] Audio playback failed:", err);
       setIsLoading(false);
       onSpeakingChange(false);
       onError?.();
     }
   }, [onSpeakingChange, onError, externalAudioCtxRef, launchDIDVideo]);
 
-  // ─── Register speak with parent ───────────────────────────
-
+  // ── Register with parent ──
   useEffect(() => {
     activeRef.current = true;
     onReady(speak);
     return () => {
       activeRef.current = false;
+      didAbortRef.current?.abort();
       if (sourceNodeRef.current) {
-        try { sourceNodeRef.current.stop(); } catch { /* ok */ }
+        try { sourceNodeRef.current.stop(); } catch { /**/ }
         sourceNodeRef.current = null;
       }
     };
   }, [speak, onReady]);
-
-  // ─── Video event handlers ─────────────────────────────────
 
   const handleVideoEnded = useCallback(() => {
     setShowVideo(false);
@@ -223,7 +289,6 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   }, []);
 
   // ─── Render ───────────────────────────────────────────────
-
   return (
     <div
       className={className}
@@ -237,9 +302,9 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         ...style,
       }}
     >
-      {/* ── Static Portrait (always visible underneath) ──── */}
+      {/* Static portrait — always visible */}
       <img
-        src={portraitSrc}
+        src={portrait}
         alt="Sophia"
         style={{
           position: "absolute",
@@ -253,7 +318,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
 
-      {/* ── D-ID Talking Head Video (fades in when ready) ── */}
+      {/* D-ID talking head — fades in when ready */}
       <video
         ref={videoRef}
         playsInline
@@ -270,65 +335,48 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
           objectPosition: "center top",
           zIndex: 2,
           opacity: showVideo ? 1 : 0,
-          transition: "opacity 400ms ease",
+          transition: "opacity 600ms ease",
         }}
       />
 
-      {/* ── D-ID Processing Indicator ─────────────────────── */}
+      {/* D-ID processing indicator */}
       {didStatus === "loading" && (
         <div style={{
-          position: "absolute",
-          top: 14,
-          right: 14,
-          zIndex: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
+          position: "absolute", top: 14, right: 14, zIndex: 10,
+          display: "flex", alignItems: "center", gap: 6,
           background: "rgba(212,175,55,0.12)",
           border: "1px solid rgba(212,175,55,0.30)",
-          borderRadius: 20,
-          padding: "5px 12px",
+          borderRadius: 20, padding: "5px 12px",
           backdropFilter: "blur(8px)",
         }}>
-          {[0, 1, 2].map(i => (
+          {[0,1,2].map(i => (
             <div key={i} style={{
               width: 5, height: 5, borderRadius: "50%",
               background: "#D4AF37",
-              animation: `did-pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+              animation: `sophia-pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
             }} />
           ))}
           <span style={{
-            color: "rgba(212,175,55,0.85)",
-            fontSize: 11,
-            fontFamily: "Inter, system-ui",
-            letterSpacing: "0.04em",
-          }}>
-            HD Sync
-          </span>
+            color: "rgba(212,175,55,0.85)", fontSize: 11,
+            fontFamily: "Inter, system-ui", letterSpacing: "0.04em",
+          }}>HD Sync</span>
         </div>
       )}
 
-      {/* ── Audio Loading Indicator ───────────────────────── */}
+      {/* Audio loading indicator */}
       {isLoading && (
         <div style={{
-          position: "absolute",
-          bottom: 20,
-          left: "50%",
+          position: "absolute", bottom: 20, left: "50%",
           transform: "translateX(-50%)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "rgba(0,0,0,0.6)",
-          backdropFilter: "blur(8px)",
-          borderRadius: 20,
-          padding: "6px 14px",
-          zIndex: 10,
+          display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)",
+          borderRadius: 20, padding: "6px 14px", zIndex: 10,
         }}>
-          {[0, 1, 2].map(i => (
+          {[0,1,2].map(i => (
             <div key={i} style={{
               width: 6, height: 6, borderRadius: "50%",
               background: "#D4AF37",
-              animation: `did-pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
+              animation: `sophia-pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
             }} />
           ))}
           <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "system-ui" }}>
@@ -338,7 +386,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       )}
 
       <style>{`
-        @keyframes did-pulse {
+        @keyframes sophia-pulse {
           0%, 100% { opacity: 0.3; transform: scale(0.8); }
           50%       { opacity: 1;   transform: scale(1.2); }
         }

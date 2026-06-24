@@ -52,6 +52,14 @@ services:
         value: lawrence@ghaafeedi.com
       - key: DID_API_KEY
         sync: false
+      - key: VITE_DID_API_KEY
+        sync: false
+      - key: VITE_ELEVENLABS_API_KEY
+        sync: false
+      - key: VITE_ELEVENLABS_VOICE_ID
+        value: pFZP5JQG7iQjIQuC4Bku
+      - key: VITE_SOPHIA_PORTRAIT_URL
+        value: https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-lipsync-portrait.png
       - key: MODAL_TOKEN_ID
         sync: false
       - key: MODAL_TOKEN_SECRET
