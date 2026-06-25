@@ -72,6 +72,14 @@ const server = Bun.serve({
 
 console.log(`Web server listening on http://localhost:${server.port}`);
 
+// Self-ping every 10 minutes to prevent Render free tier cold starts
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${server.port}`;
+setInterval(async () => {
+  try {
+    await fetch(`${SELF_URL}/api/ping`, { signal: AbortSignal.timeout(5000) });
+  } catch { /* silent — just keeping the server warm */ }
+}, 10 * 60 * 1000);
+
 function getStaticFilePath(pathname: string) {
   const cleanPath = decodeURIComponent(pathname)
     .replace(/^\/+/, "")
