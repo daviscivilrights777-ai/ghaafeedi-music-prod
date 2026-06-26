@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { SophiaAvatarRenderer, AvatarHandle } from "./SophiaAvatarRenderer";
 import type { RevisionJobPayload } from "../../types/revision";
+import { getToken } from "../../lib/authClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -828,8 +829,12 @@ export const SophiaRevisionGuide: React.FC<SophiaRevisionGuideProps> = ({
   useEffect(() => {
     if (!order.orderId) { setCtxLoading(false); return; }
     setCtxLoading(true);
+    const tok = getToken();
+    const ctxHeaders: Record<string, string> = {};
+    if (tok) ctxHeaders["Authorization"] = `Bearer ${tok}`;
     fetch(`/api/revisions/context?orderId=${order.orderId}&productSlug=${order.productSlug}`, {
       credentials: "include",
+      headers: ctxHeaders,
     })
       .then((r) => r.json())
       .then((json) => {

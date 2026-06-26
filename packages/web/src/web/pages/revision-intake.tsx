@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { RevisionIntakeFlow } from "../components/revision/RevisionIntakeFlow";
+import { getToken } from "../lib/authClient";
 
 const RevisionIntakePage: React.FC = () => {
   const [, setLocation] = useLocation();
@@ -15,7 +16,10 @@ const RevisionIntakePage: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/auth/get-session", { credentials: "include" });
+        const token = getToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch("/api/auth/get-session", { credentials: "include", headers });
         const json = await res.json();
         if (json?.user?.id) {
           setAuthed(true);
