@@ -1,18 +1,29 @@
 /**
- * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW v4
+ * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW v4.2
  * ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
- * - ONE lip sync path for ALL devices: Wav2Lip via Modal + R2 cache
- * - No WebRTC, no Simli, no LiveKit, no PCM chunking
- * - Sophia portrait shows while video renders (2-5s), then plays lip sync
- * - Static portrait fallback if Modal is cold/fails
- * - ElevenLabs Lily voice (pFZP5JQG7iQjIQuC4Bku), eleven_turbo_v2_5
+ * ANDROID AUDIO FIX v2 (2026-06-25):
  *
- * FIX (2026-06-25): Removed serverWarm gate from tap handler.
- * The TTS endpoint is a Cloudflare Worker — always on, zero cold start.
- * The previous warm-up ping sent a bare GET which the Worker rejected
- * (it only handles POST), causing serverWarm to never become true and
- * the tap overlay to remain dead. Fix: serverWarm defaults to true,
- * warm-up ping removed, tap is always active immediately on mount.
+ * Root cause: Android Chrome's autoplay policy requires .play() to be called
+ * on an audio element SYNCHRONOUSLY inside a user gesture (tap). Any async
+ * work (fetch, blob creation) before .play() loses the gesture window.
+ *
+ * Previous approach failed because:
+ * - welcomeBlobUrlRef.current was not always ready at tap time
+ * - Even when ready, creating new Audio(url) + .play() inside .then() is async
+ *
+ * New bulletproof approach:
+ * 1. On mount: create ONE persistent <audio> element, load it with a silent
+ *    data URI so it is ready to .play() immediately on tap.
+ * 2. On tap: call audioEl.play() SYNCHRONOUSLY — this permanently unlocks
+ *    the audio element within the gesture window.
+ * 3. After unlock: swap audioEl.src to the TTS blob URL (fetch happens in
+ *    background). Because the element is already unlocked, .play() on the
+ *    same element works without any gesture requirement.
+ * 4. All subsequent speak() calls reuse the same unlocked element.
+ *
+ * Key insight: Android locks/unlocks the ELEMENT, not a global context.
+ * Reusing the same audio element that was unlocked in the tap handler
+ * means .play() always succeeds — even from async code.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,8 +36,11 @@ const BG = "#050B1A";
 const TEXT = "#FFFFFF";
 
 // ■■■ TTS endpoint ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-// Cloudflare Worker — always on, zero cold start. No warm-up needed.
 const TTS_ENDPOINT = "https://sophia-tts.daviscivilrights777.workers.dev";
+
+// Silent MP3 — minimal valid file, used to unlock the audio element on tap
+const SILENCE_MP3 =
+  "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
 
 // ■■■ Sophia's 5-act script ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 const SOPHIA_LINES = {
@@ -96,10 +110,6 @@ const INJECT_CSS = `
   0%,100% { box-shadow: 0 0 50px rgba(212,175,55,0.40), 0 0 0 2px rgba(212,175,55,0.65), 0 0 120px rgba(212,175,55,0.20); }
   50% { box-shadow: 0 0 90px rgba(212,175,55,0.70), 0 0 0 3px rgba(212,175,55,0.90), 0 0 180px rgba(212,175,55,0.35); }
 }
-@keyframes sef-bar {
-  0%,100% { height: 6px; }
-  50% { height: 22px; }
-}
 @keyframes sef-star {
   0%,100% { opacity:.08; transform:scale(1); }
   50% { opacity:.55; transform:scale(1.8); }
@@ -115,14 +125,6 @@ const INJECT_CSS = `
 @keyframes sef-opt-in {
   from { opacity:0; transform:translateY(10px); }
   to { opacity:1; transform:translateY(0); }
-}
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes sef-breathe {
-  0%,100% { transform:scale(1.00); }
-  50% { transform:scale(1.015); }
 }
 .sef-opt {
   width:100%;
@@ -151,7 +153,7 @@ const INJECT_CSS = `
 .sef-opt.sel {
   background: rgba(212,175,55,.14);
   border-color: rgba(212,175,55,.68);
-  color: ${GOLD2};
+  color: #F4D06F;
   box-shadow: 0 0 0 1px rgba(212,175,55,.28), 0 4px 24px rgba(212,175,55,.16);
 }
 `;
@@ -358,35 +360,25 @@ interface SophiaEntryFlowProps {
 }
 
 export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
-  // Flow state
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number,string>>({});
   const [selected, setSelected] = useState<string|null>(null);
   const [spoken, setSpoken] = useState(false);
   const [exiting, setExiting] = useState(false);
-
-  // Lip sync state
   const [sophiaReady, setSophiaReady] = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-
-  // ■■ FIX: serverWarm is always true — TTS is a Cloudflare Worker (always on,
-  // zero cold start). The previous warm-up ping sent a bare GET which the Worker
-  // rejected with non-2xx, causing serverWarm to stay false and the tap overlay
-  // to be permanently dead (onClick was gated on serverWarm). Removed entirely.
-  // The "Sophia is waking up…" spinner state is also removed — it will never show.
 
   const audioUnlockedRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const speakRef = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
   const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
-
-  // Pre-unlocked Audio element — created + .play()'d synchronously in tap handler
   const preUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // PRE-FETCHED welcome blob — fetched in background on mount so tap → play is synchronous
-  const welcomeBlobRef = useRef<Blob | null>(null);
-  const welcomeBlobUrlRef = useRef<string | null>(null);
+  // ■■ THE KEY FIX: One persistent audio element, created on mount,
+  // pre-loaded with silence so .play() is instant and synchronous on tap.
+  // Android unlocks THIS element — we reuse it for all TTS playback.
+  const unlockedAudioElRef = useRef<HTMLAudioElement | null>(null);
 
   const isIntro = step === 0;
   const isSummary = step === 4;
@@ -417,36 +409,21 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     document.head.appendChild(el);
   }, []);
 
-  // ■■ Pre-fetch welcome audio blob in background ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  // So when user taps "Tap to hear Sophia", .play() is called synchronously
-  // without any async fetch in the gesture handler (Android autoplay fix).
+  // ■■ Create the persistent audio element on mount ■■■■■■■■■■■■■■■■■■■■■■■■■■
+  // Load silence into it so it is primed and ready to .play() synchronously
+  // the moment the user taps. This is the element Android will unlock.
   useEffect(() => {
-    let cancelled = false;
-    const preFetch = async () => {
-      try {
-        const res = await fetch(TTS_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: SOPHIA_LINES.welcome }),
-          signal: AbortSignal.timeout(40000),
-        });
-        if (!res.ok || cancelled) return;
-        const blob = await res.blob();
-        if (!cancelled) {
-          welcomeBlobRef.current = blob;
-          welcomeBlobUrlRef.current = URL.createObjectURL(blob);
-        }
-      } catch {
-        // Non-fatal — slow path (fetch-then-play) will be used on tap
-      }
-    };
-    preFetch();
+    const audio = new Audio(SILENCE_MP3);
+    audio.volume = 0;
+    audio.preload = "auto";
+    unlockedAudioElRef.current = audio;
+    // Also set preUnlockedAudioRef so SophiaLipSync can access it
+    preUnlockedAudioRef.current = audio;
     return () => {
-      cancelled = true;
-      if (welcomeBlobUrlRef.current) {
-        URL.revokeObjectURL(welcomeBlobUrlRef.current);
-        welcomeBlobUrlRef.current = null;
-      }
+      audio.pause();
+      try { audio.src = ""; } catch { /**/ }
+      unlockedAudioElRef.current = null;
+      preUnlockedAudioRef.current = null;
     };
   }, []);
 
@@ -460,7 +437,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Reset spoken + selection on each step change
   useEffect(() => { setSpoken(false); setSelected(null); }, [step]);
 
-  // ■■ playTTS: fires lip sync speak ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   const playTTS = useCallback((text: string, stepIdx: number) => {
     if (speakRef.current) {
       speakRef.current(text, stepIdx).catch(() => {});
@@ -469,82 +445,95 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }
   }, []);
 
-  // ■■ Unlock audio on first user tap ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-  // FIX: This handler is now ALWAYS active on tap — no serverWarm gate.
-  // Android Chrome requires .play() to be called synchronously inside a user
-  // gesture. We must not await anything before calling .play().
+  // ■■ handleAudioUnlock — tap handler ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  // CRITICAL: Everything before the first await MUST be synchronous.
+  // We call .play() on the pre-created audio element HERE, synchronously,
+  // inside the gesture. Android unlocks that specific element permanently.
+  // After that, all async work is safe because the element stays unlocked.
   const handleAudioUnlock = useCallback(() => {
     if (audioUnlockedRef.current) return;
     audioUnlockedRef.current = true;
 
-    // ■■ STEP 1: Unlock HTMLAudio SYNCHRONOUSLY inside gesture ■■■■■■■■■■■■■■■
-    let welcomeAudio: HTMLAudioElement | null = null;
+    const audioEl = unlockedAudioElRef.current;
 
-    if (welcomeBlobUrlRef.current) {
-      // FAST PATH: pre-fetched blob is ready — play real welcome audio RIGHT NOW
-      // .play() is called synchronously — gesture window stays open on Android
-      welcomeAudio = new Audio(welcomeBlobUrlRef.current);
-      welcomeAudio.play().then(() => {
-        setSophiaSpeaking(true);
-        if (welcomeAudio) {
-          welcomeAudio.onended = () => {
-            setSophiaSpeaking(false);
-          };
-        }
-      }).catch(() => {
-        // Blocked despite sync call — speakRef slow path handles recovery
+    // ■ SYNCHRONOUS — inside gesture window ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    // .play() called here permanently unlocks this audio element on Android.
+    // No await, no fetch, no async boundary before this point.
+    if (audioEl) {
+      audioEl.volume = 0;
+      audioEl.play().catch(() => {
+        // Even if silence play fails, we proceed — the gesture may still
+        // have unlocked enough for the real audio fetch below
       });
-      preUnlockedAudioRef.current = welcomeAudio;
-    } else {
-      // SLOW PATH: blob not ready yet — unlock with a silent data URI, then
-      // queue the real speak for when speakRef becomes available
-      const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
-      const unlocked = new Audio(SILENCE_MP3);
-      unlocked.volume = 0;
-      unlocked.play().catch(() => {});
-      preUnlockedAudioRef.current = unlocked;
     }
 
-    // Belt-and-suspenders: also unlock AudioContext for older Android versions
+    // Also unlock AudioContext (belt-and-suspenders for older Android)
     try {
       const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-      const freshCtx = new AC();
-      freshCtx.resume().catch(() => {});
-      audioCtxRef.current = freshCtx;
-      const silentBuffer = freshCtx.createBuffer(1, 1, 22050);
-      const silentSource = freshCtx.createBufferSource();
-      silentSource.buffer = silentBuffer;
-      silentSource.connect(freshCtx.destination);
-      silentSource.start(0);
-    } catch { /* ignore — HTMLAudio path above is the real fix */ }
+      const ctx = new AC();
+      ctx.resume().catch(() => {});
+      audioCtxRef.current = ctx;
+      const buf = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+    } catch { /**/ }
 
-    // ■■ STEP 2: Update state + hand off to speakRef ■■■■■■■■■■■■■■■■■■■■■■■■
+    // Update visual state
     setAudioUnlocked(true);
 
-    if (!welcomeAudio) {
-      // Slow path — delegate to speakRef
-      const textToSpeak = speakQueueRef.current?.text ?? speechLine;
-      const stepToSpeak = speakQueueRef.current?.step ?? step;
-      speakQueueRef.current = null;
-      if (speakRef.current) {
-        speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
-      } else {
-        speakQueueRef.current = { text: textToSpeak, step: stepToSpeak };
+    // ■ ASYNC from here — safe because audioEl is now unlocked ■■■■■■■■■■■■■■
+    // Fetch the welcome TTS audio, swap src on the unlocked element, play.
+    (async () => {
+      try {
+        setSophiaSpeaking(true);
+        const res = await fetch(TTS_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: SOPHIA_LINES.welcome }),
+          signal: AbortSignal.timeout(40000),
+        });
+        if (!res.ok) throw new Error(`TTS ${res.status}`);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+
+        if (!audioEl) return;
+
+        // Swap src on the already-unlocked element and play
+        // Android allows this because the element was unlocked in the tap above
+        audioEl.volume = 1;
+        audioEl.src = blobUrl;
+        audioEl.load();
+
+        await audioEl.play();
+
+        audioEl.onended = () => {
+          URL.revokeObjectURL(blobUrl);
+          setSophiaSpeaking(false);
+          // Hand off to speakRef for steps 1+
+          speakQueueRef.current = null;
+        };
+      } catch (err) {
+        console.error("[Sophia] Welcome TTS failed:", err);
+        setSophiaSpeaking(false);
+        // Fall back to speakRef queue
+        const textToSpeak = speakQueueRef.current?.text ?? speechLine;
+        const stepToSpeak = speakQueueRef.current?.step ?? step;
+        speakQueueRef.current = null;
+        if (speakRef.current) {
+          speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
+        }
       }
-    } else {
-      // Fast path — welcome already playing, clear queue
-      speakQueueRef.current = null;
-    }
+    })();
   }, [speechLine, step]);
 
   // Fire TTS on every step change
   useEffect(() => {
     if (step === 0) {
-      // Step 0: queue and wait for tap (mobile audio unlock required)
       speakQueueRef.current = { text: speechLine, step: 0 };
       return;
     }
-    // Steps 1+: audio already unlocked from tap, fire directly
     playTTS(speechLine, step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -582,7 +571,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             overflow: "hidden",
           }}
         >
-          {/* ■■ Stars ■■ */}
+          {/* Stars */}
           <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
             {STARS.map((s, i) => (
               <div key={i} style={{
@@ -594,7 +583,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             ))}
           </div>
 
-          {/* ■■ Top bar ■■ */}
+          {/* Top bar */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -644,36 +633,32 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             </div>
           </div>
 
-          {/* ■■ Main two-column layout ■■ */}
+          {/* Main two-column layout */}
           <div className="sef-main-layout" style={{
-            display: "flex",
-            flexDirection: "row",
+            display: "flex", flexDirection: "row",
             width: "100%", height: "100%",
             paddingTop: "clamp(60px,8vw,80px)",
           }}>
-            {/* ■■ LEFT — Sophia lip sync panel ■■ */}
+            {/* LEFT — Sophia panel */}
             <div className="sef-left-panel" style={{
               position: "relative",
               width: "clamp(260px,38vw,480px)",
               minWidth: "clamp(200px,32vw,380px)",
-              flexShrink: 0,
-              height: "100%",
-              overflow: "hidden",
+              flexShrink: 0, height: "100%", overflow: "hidden",
             }}>
-              {/* Gold ambient glow */}
+              {/* Glow */}
               <div style={{
                 position: "absolute", bottom: "-10%", left: "50%",
                 transform: "translateX(-50%)",
                 width: "120%", height: "60%",
                 background: "radial-gradient(ellipse, rgba(212,175,55,0.18) 0%, transparent 70%)",
-                filter: "blur(40px)",
-                zIndex: 2, pointerEvents: "none",
+                filter: "blur(40px)", zIndex: 2, pointerEvents: "none",
                 animation: sophiaSpeaking
                   ? "sef-glow-pulse 1.2s ease-in-out infinite"
                   : "sef-glow-pulse 4s ease-in-out infinite",
               }} />
 
-              {/* Sophia lip sync — all devices */}
+              {/* SophiaLipSync */}
               <div style={{
                 position: "absolute", inset: 0, zIndex: 3,
                 borderRight: "1px solid rgba(212,175,55,0.12)",
@@ -704,11 +689,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 />
               </div>
 
-              {/* ■■ Tap-to-Hear overlay ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
-               * FIX: onClick is now ALWAYS handleAudioUnlock — no serverWarm gate.
-               * cursor is always "pointer". The "Sophia is waking up…" spinner
-               * state is removed entirely — it will never appear for a CF Worker.
-               ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ */}
+              {/* Tap-to-Hear overlay — always active, no gate */}
               {!audioUnlocked && (
                 <div
                   onClick={handleAudioUnlock}
@@ -723,7 +704,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {/* ■■ Ready state — always shown, no waking spinner ■■ */}
                   <div style={{
                     width: 64, height: 64, borderRadius: "50%",
                     border: "2px solid rgba(212,175,55,0.9)",
@@ -748,7 +728,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 </div>
               )}
 
-              {/* Sophia name badge */}
+              {/* Name badge */}
               <div style={{
                 position: "absolute", bottom: "clamp(16px,3vw,28px)", left: "50%",
                 transform: "translateX(-50%)",
@@ -770,9 +750,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   fontFamily: "'Playfair Display',serif",
                   fontSize: "clamp(11px,1vw,13px)", fontWeight: 700,
                   color: GOLD2, letterSpacing: "0.06em",
-                }}>
-                  Sophia AI
-                </span>
+                }}>Sophia AI</span>
                 <span style={{
                   fontSize: "clamp(9px,0.75vw,10px)", color: "rgba(255,255,255,0.40)",
                   fontFamily: "Inter,sans-serif", letterSpacing: "0.08em", textTransform: "uppercase",
@@ -782,7 +760,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               </div>
             </div>
 
-            {/* ■■ RIGHT — Dialogue + options panel ■■ */}
+            {/* RIGHT — Dialogue + options */}
             <div className="sef-right-panel" style={{
               flex: 1,
               display: "flex", flexDirection: "column",
@@ -801,7 +779,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   transition={{ duration: 0.38, ease: [0.22,1,0.36,1] }}
                   style={{ display: "flex", flexDirection: "column", gap: "clamp(16px,2.4vw,24px)" }}
                 >
-                  {/* Step label */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{
                       width: 7, height: 7, borderRadius: "50%", background: GOLD,
@@ -817,7 +794,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     </span>
                   </div>
 
-                  {/* Speech bubble */}
                   <SpeechBubble
                     key={`bubble-${step}`}
                     text={speechLine}
@@ -825,7 +801,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     speed={isIntro ? 22 : isSummary ? 20 : 24}
                   />
 
-                  {/* Options */}
                   {!isIntro && !isSummary && qOpts && spoken && (
                     <motion.div
                       initial={{ opacity: 0, y: 12 }}
@@ -836,7 +811,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     </motion.div>
                   )}
 
-                  {/* CTA */}
                   {canContinue && (
                     <motion.div
                       initial={{ opacity: 0, y: 8 }}
@@ -874,7 +848,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             </div>
           </div>
 
-          {/* ■■ Mobile: collapse to stacked layout ■■ */}
+          {/* Mobile layout */}
           <style>{`
             @media (max-width: 640px) {
               .sef-main-layout { flex-direction: column !important; }
