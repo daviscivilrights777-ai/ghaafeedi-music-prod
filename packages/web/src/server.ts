@@ -33,6 +33,7 @@ function getMimeType(pathname: string): string {
 
 const server = Bun.serve({
   port,
+  hostname: "0.0.0.0", // bind to all interfaces — required for Render load balancer
   async fetch(request) {
     const url = new URL(request.url);
 
