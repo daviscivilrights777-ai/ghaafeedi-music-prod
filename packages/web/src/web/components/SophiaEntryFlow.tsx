@@ -1,26 +1,37 @@
 /**
- * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW  v4
- * ══════════════════════════════════════════════════════════════════════════
+ * GHAAFEEDI MUSIC — SOPHIA ENTRY FLOW v4
+ * ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
  * - ONE lip sync path for ALL devices: Wav2Lip via Modal + R2 cache
  * - No WebRTC, no Simli, no LiveKit, no PCM chunking
  * - Sophia portrait shows while video renders (2-5s), then plays lip sync
  * - Static portrait fallback if Modal is cold/fails
  * - ElevenLabs Lily voice (pFZP5JQG7iQjIQuC4Bku), eleven_turbo_v2_5
+ *
+ * FIX (2026-06-25): Removed serverWarm gate from tap handler.
+ * The TTS endpoint is a Cloudflare Worker — always on, zero cold start.
+ * The previous warm-up ping sent a bare GET which the Worker rejected
+ * (it only handles POST), causing serverWarm to never become true and
+ * the tap overlay to remain dead. Fix: serverWarm defaults to true,
+ * warm-up ping removed, tap is always active immediately on mount.
  */
-
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { SophiaLipSync } from "./SophiaLipSync";
 
-// ─── Brand tokens ─────────────────────────────────────────────────────────────
-const GOLD   = "#D4AF37";
-const GOLD2  = "#F4D06F";
-const BG     = "#050B1A";
-const TEXT   = "#FFFFFF";
+// ■■■ Brand tokens ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+const GOLD = "#D4AF37";
+const GOLD2 = "#F4D06F";
+const BG = "#050B1A";
+const TEXT = "#FFFFFF";
 
-// ─── Sophia's 5-act script ────────────────────────────────────────────────────
+// ■■■ TTS endpoint ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+// Cloudflare Worker — always on, zero cold start. No warm-up needed.
+const TTS_ENDPOINT = "https://sophia-tts.daviscivilrights777.workers.dev";
+
+// ■■■ Sophia's 5-act script ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 const SOPHIA_LINES = {
-  welcome: "Welcome to Ghaafeedi Music. I'm Sophia, your AI Emotional Concierge. I'm here to turn your most precious memories into cinematic songs and films. How can I help you today?",
+  welcome:
+    "Welcome to Ghaafeedi Music. I'm Sophia, your AI Emotional Concierge. I'm here to turn your most precious memories into cinematic songs and films. How can I help you today?",
   q1: "What brings you to Ghaafeedi Music today?",
   q2: "Beautiful. And who is this story for?",
   q3: "Perfect. What matters most to you in this experience?",
@@ -28,26 +39,26 @@ const SOPHIA_LINES = {
     `${summary} I can't wait to see what we create together. Enjoy your cinematic experience through Ghaafeedi Music.`,
 };
 
-// ─── Q&A options ──────────────────────────────────────────────────────────────
+// ■■■ Q&A options ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 interface Option { key: string; icon: string; label: string; sub: string }
 
 const Q1_OPTS: Option[] = [
-  { key: "preserve",  icon: "🎞️", label: "Preserve a memory or moment",     sub: "Someone or something I never want to forget" },
-  { key: "celebrate", icon: "✨", label: "Celebrate a person or milestone",  sub: "Birthday, anniversary, graduation, reunion" },
-  { key: "heal",      icon: "💛", label: "Process loss or heal emotionally", sub: "Grief, breakup, life transition" },
-  { key: "legacy",    icon: "🏛️", label: "Create a lasting legacy",          sub: "For my family, children, or future generations" },
+  { key: "preserve", icon: "🎞", label: "Preserve a memory or moment", sub: "Someone or something I never want to forget" },
+  { key: "celebrate", icon: "🎉", label: "Celebrate a person or milestone", sub: "Birthday, anniversary, graduation, reunion" },
+  { key: "heal", icon: "🕊", label: "Process loss or heal emotionally", sub: "Grief, breakup, life transition" },
+  { key: "legacy", icon: "📖", label: "Create a lasting legacy", sub: "For my family, children, or future generations" },
 ];
 const Q2_OPTS: Option[] = [
-  { key: "me",      icon: "🙋",   label: "For myself",                  sub: "My own healing or reflection" },
-  { key: "partner", icon: "💑",   label: "For a partner or spouse",      sub: "Romance, wedding, relationship milestone" },
-  { key: "family",  icon: "👨‍👩‍👧", label: "For family",                  sub: "Parents, children, grandparents" },
-  { key: "gift",    icon: "🎁",   label: "As a gift for someone special", sub: "A meaningful, one-of-a-kind present" },
+  { key: "me", icon: "🪞", label: "For myself", sub: "My own healing or reflection" },
+  { key: "partner", icon: "💍", label: "For a partner or spouse", sub: "Romance, wedding, relationship milestone" },
+  { key: "family", icon: "👨‍👩‍👧‍👦", label: "For family", sub: "Parents, children, grandparents" },
+  { key: "gift", icon: "🎁", label: "As a gift for someone special", sub: "A meaningful, one-of-a-kind present" },
 ];
 const Q3_OPTS: Option[] = [
-  { key: "song",   icon: "🎵", label: "A cinematic song in my voice or style", sub: "Original music built from my story" },
-  { key: "film",   icon: "🎬", label: "A full cinematic film or video",         sub: "Visual storytelling with narration" },
-  { key: "both",   icon: "🌟", label: "Both — the full experience",             sub: "Song + film together" },
-  { key: "unsure", icon: "🤔", label: "I'm not sure yet — show me everything",  sub: "Let Sophia guide me" },
+  { key: "song", icon: "🎵", label: "A cinematic song in my voice or style", sub: "Original music built from my story" },
+  { key: "film", icon: "🎬", label: "A full cinematic film or video", sub: "Visual storytelling with narration" },
+  { key: "both", icon: "✨", label: "Both — the full experience", sub: "Song + film together" },
+  { key: "unsure", icon: "🧭", label: "I'm not sure yet — show me everything", sub: "Let Sophia guide me" },
 ];
 
 function buildSummary(a: Record<number, string>): string {
@@ -69,51 +80,50 @@ function buildSummary(a: Record<number, string>): string {
     both: "The full Ghaafeedi experience — song and film — was made for exactly this.",
     unsure: "I'll walk you through everything once you're inside.",
   };
-  const why  = whyMap[a[1] as string] ?? "create something meaningful";
-  const who  = whoMap[a[2] as string] ?? "for someone special";
+  const why = whyMap[a[1] as string] ?? "create something meaningful";
+  const who = whoMap[a[2] as string] ?? "for someone special";
   const what = whatMap[a[3] as string] ?? "Let's find the perfect experience together.";
   return `You're here to ${why} — ${who}. ${what}`;
 }
 
-// ─── CSS injected once ───────────────────────────────────────────────────────
+// ■■■ CSS injected once ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 const INJECT_CSS = `
 @keyframes sef-glow-pulse {
   0%,100% { box-shadow: 0 0 40px rgba(212,175,55,0.18), 0 0 0 1.5px rgba(212,175,55,0.22); }
-  50%      { box-shadow: 0 0 80px rgba(212,175,55,0.45), 0 0 0 2px rgba(212,175,55,0.55); }
+  50% { box-shadow: 0 0 80px rgba(212,175,55,0.45), 0 0 0 2px rgba(212,175,55,0.55); }
 }
 @keyframes sef-speaking-glow {
   0%,100% { box-shadow: 0 0 50px rgba(212,175,55,0.40), 0 0 0 2px rgba(212,175,55,0.65), 0 0 120px rgba(212,175,55,0.20); }
-  50%      { box-shadow: 0 0 90px rgba(212,175,55,0.70), 0 0 0 3px rgba(212,175,55,0.90), 0 0 180px rgba(212,175,55,0.35); }
+  50% { box-shadow: 0 0 90px rgba(212,175,55,0.70), 0 0 0 3px rgba(212,175,55,0.90), 0 0 180px rgba(212,175,55,0.35); }
 }
 @keyframes sef-bar {
   0%,100% { height: 6px; }
-  50%      { height: 22px; }
+  50% { height: 22px; }
 }
 @keyframes sef-star {
   0%,100% { opacity:.08; transform:scale(1); }
-  50%      { opacity:.55; transform:scale(1.8); }
+  50% { opacity:.55; transform:scale(1.8); }
 }
 @keyframes sef-cursor {
   0%,100% { opacity:1; }
-  50%      { opacity:0; }
+  50% { opacity:0; }
 }
 @keyframes sef-pulse-btn {
   0%,100% { box-shadow:0 0 28px rgba(212,175,55,.22), 0 4px 20px rgba(0,0,0,.55); }
-  50%      { box-shadow:0 0 52px rgba(212,175,55,.52), 0 4px 28px rgba(0,0,0,.65); }
+  50% { box-shadow:0 0 52px rgba(212,175,55,.52), 0 4px 28px rgba(0,0,0,.65); }
 }
 @keyframes sef-opt-in {
   from { opacity:0; transform:translateY(10px); }
-  to   { opacity:1; transform:translateY(0);    }
+  to { opacity:1; transform:translateY(0); }
 }
 @keyframes spin {
   from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 @keyframes sef-breathe {
   0%,100% { transform:scale(1.00); }
-  50%      { transform:scale(1.015); }
+  50% { transform:scale(1.015); }
 }
-
 .sef-opt {
   width:100%;
   padding: clamp(11px,1.5vw,15px) clamp(14px,2vw,20px);
@@ -146,19 +156,19 @@ const INJECT_CSS = `
 }
 `;
 
-// ─── Background stars ─────────────────────────────────────────────────────────
+// ■■■ Background stars ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 const STARS = Array.from({ length: 60 }, (_, i) => ({
   x: ((i * 137.5 + 31) % 100),
-  y: ((i * 73.2  + 17) % 100),
+  y: ((i * 73.2 + 17) % 100),
   r: 0.6 + ((i * 11.3) % 1.5),
   delay: ((i * 0.29) % 4.8).toFixed(2),
-  dur:   (2.2 + ((i * 0.21) % 2.8)).toFixed(2),
-  gold:  i % 8 === 0,
+  dur: (2.2 + ((i * 0.21) % 2.8)).toFixed(2),
+  gold: i % 8 === 0,
 }));
 
-// ─── Typewriter ───────────────────────────────────────────────────────────────
+// ■■■ Typewriter ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 function useTypewriter(text: string, speed = 24) {
-  const [out,  setOut]  = useState("");
+  const [out, setOut] = useState("");
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -179,7 +189,7 @@ function useTypewriter(text: string, speed = 24) {
   return { out, done };
 }
 
-// ─── Option grid ──────────────────────────────────────────────────────────────
+// ■■■ Option grid ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 function OptionGrid({ opts, selected, onSelect }: { opts: Option[]; selected: string|null; onSelect:(k:string)=>void }) {
   return (
     <div style={{
@@ -220,7 +230,7 @@ function OptionGrid({ opts, selected, onSelect }: { opts: Option[]; selected: st
   );
 }
 
-// ─── Progress dots ────────────────────────────────────────────────────────────
+// ■■■ Progress dots ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 function Dots({ cur, total }: { cur: number; total: number }) {
   return (
     <div style={{ display: "flex", gap: 5 }}>
@@ -235,7 +245,7 @@ function Dots({ cur, total }: { cur: number; total: number }) {
   );
 }
 
-// ─── CTA Buttons ──────────────────────────────────────────────────────────────
+// ■■■ CTA Buttons ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 function ContinueBtn({ onClick, disabled, label }: { onClick:()=>void; disabled:boolean; label:string }) {
   const [hov, setHov] = useState(false);
   return (
@@ -247,8 +257,8 @@ function ContinueBtn({ onClick, disabled, label }: { onClick:()=>void; disabled:
         background: disabled
           ? "rgba(212,175,55,0.12)"
           : hov
-            ? "linear-gradient(135deg,#FFD966 0%,#E8C84A 35%,#D4AF37 70%,#B8950A 100%)"
-            : "linear-gradient(135deg,#D4AF37 0%,#B8950A 55%,#966A00 100%)",
+          ? "linear-gradient(135deg,#FFD966 0%,#E8C84A 35%,#D4AF37 70%,#B8950A 100%)"
+          : "linear-gradient(135deg,#D4AF37 0%,#B8950A 55%,#966A00 100%)",
         border: disabled ? "1.5px solid rgba(212,175,55,0.18)" : "none",
         borderRadius: 12, cursor: disabled ? "not-allowed" : "pointer",
         fontFamily: "'Playfair Display',serif",
@@ -307,7 +317,7 @@ function EnterBtn({ onClick }: { onClick: () => void }) {
   );
 }
 
-// ─── Speech bubble with typewriter ───────────────────────────────────────────
+// ■■■ Speech bubble with typewriter ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 function SpeechBubble({ text, onDone, speed = 24 }: { text: string; onDone: () => void; speed?: number }) {
   const { out, done } = useTypewriter(text, speed);
   useEffect(() => {
@@ -342,39 +352,45 @@ function SpeechBubble({ text, onDone, speed = 24 }: { text: string; onDone: () =
   );
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ■■■ MAIN COMPONENT ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 interface SophiaEntryFlowProps {
   onComplete: () => void;
 }
 
 export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Flow state
-  const [step,     setStep]     = useState(0);
-  const [answers,  setAnswers]  = useState<Record<number,string>>({});
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<number,string>>({});
   const [selected, setSelected] = useState<string|null>(null);
-  const [spoken,   setSpoken]   = useState(false);
-  const [exiting,  setExiting]  = useState(false);
+  const [spoken, setSpoken] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   // Lip sync state
-  const [sophiaReady,    setSophiaReady]    = useState(false);
+  const [sophiaReady, setSophiaReady] = useState(false);
   const [sophiaSpeaking, setSophiaSpeaking] = useState(false);
-  const [audioUnlocked,  setAudioUnlocked]  = useState(false);
-  const [serverWarm,     setServerWarm]     = useState(false);
-  const [serverWaking,   setServerWaking]   = useState(false);
-  const audioUnlockedRef = useRef(false); // ref copy — readable inside gesture handlers without re-render
-  const audioCtxRef   = useRef<AudioContext | null>(null); // persistent AudioContext
-  const speakRef      = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  // ■■ FIX: serverWarm is always true — TTS is a Cloudflare Worker (always on,
+  // zero cold start). The previous warm-up ping sent a bare GET which the Worker
+  // rejected with non-2xx, causing serverWarm to stay false and the tap overlay
+  // to be permanently dead (onClick was gated on serverWarm). Removed entirely.
+  // The "Sophia is waking up…" spinner state is also removed — it will never show.
+
+  const audioUnlockedRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const speakRef = useRef<((text: string, stepIndex?: number) => Promise<void>) | null>(null);
   const speakQueueRef = useRef<{ text: string; step: number } | null>(null);
+
   // Pre-unlocked Audio element — created + .play()'d synchronously in tap handler
-  // speak() reuses this element to bypass Android Chrome autoplay block
   const preUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // PRE-FETCHED welcome blob — fetched in background on mount so tap → play is synchronous
   const welcomeBlobRef = useRef<Blob | null>(null);
   const welcomeBlobUrlRef = useRef<string | null>(null);
 
-  const isIntro   = step === 0;
+  const isIntro = step === 0;
   const isSummary = step === 4;
-  const qOpts     = [null, Q1_OPTS, Q2_OPTS, Q3_OPTS, null][step] ?? null;
+  const qOpts = [null, Q1_OPTS, Q2_OPTS, Q3_OPTS, null][step] ?? null;
 
   const speechLine = (() => {
     if (step === 0) return SOPHIA_LINES.welcome;
@@ -384,7 +400,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     return SOPHIA_LINES.goodbye(buildSummary(answers));
   })();
 
-  // Next step text for pre-fetching
   const nextStepText = (() => {
     const next = step + 1;
     if (next === 1) return SOPHIA_LINES.q1;
@@ -402,50 +417,14 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     document.head.appendChild(el);
   }, []);
 
-  // ── Warm up Render server on mount so TTS is ready when user taps ─────────
-  useEffect(() => {
-    let cancelled = false;
-    const warmUp = async () => {
-      // First try a quick ping — if server is already warm, done immediately
-      try {
-        const quick = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
-          signal: AbortSignal.timeout(4000),
-        });
-        if (!cancelled && quick.ok) { setServerWarm(true); return; }
-      } catch { /* cold — continue */ }
-
-      if (cancelled) return;
-      setServerWaking(true);
-
-      // Server is cold — keep pinging until it wakes (Render takes 10-40s)
-      for (let i = 0; i < 20; i++) {
-        if (cancelled) return;
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-          const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
-            signal: AbortSignal.timeout(5000),
-          });
-          if (res.ok) {
-            if (!cancelled) { setServerWarm(true); setServerWaking(false); }
-            return;
-          }
-        } catch { /* still waking */ }
-      }
-      // After 60s give up — let user try anyway
-      if (!cancelled) { setServerWarm(true); setServerWaking(false); }
-    };
-    warmUp();
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── Pre-fetch welcome audio blob in background ─────────────────────────────
-  // So when user taps "Tap to hear Sophia", we can call .play() synchronously
+  // ■■ Pre-fetch welcome audio blob in background ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  // So when user taps "Tap to hear Sophia", .play() is called synchronously
   // without any async fetch in the gesture handler (Android autoplay fix).
   useEffect(() => {
     let cancelled = false;
     const preFetch = async () => {
       try {
-        const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
+        const res = await fetch(TTS_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: SOPHIA_LINES.welcome }),
@@ -464,7 +443,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     preFetch();
     return () => {
       cancelled = true;
-      // Revoke pre-fetched blob URL on unmount
       if (welcomeBlobUrlRef.current) {
         URL.revokeObjectURL(welcomeBlobUrlRef.current);
         welcomeBlobUrlRef.current = null;
@@ -482,7 +460,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Reset spoken + selection on each step change
   useEffect(() => { setSpoken(false); setSelected(null); }, [step]);
 
-  // ── playTTS: fires Wav2Lip speak ──────────────────────────────────────────
+  // ■■ playTTS: fires lip sync speak ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   const playTTS = useCallback((text: string, stepIdx: number) => {
     if (speakRef.current) {
       speakRef.current(text, stepIdx).catch(() => {});
@@ -491,35 +469,35 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }
   }, []);
 
-  // ── Unlock audio on first user interaction (mobile requirement) ────────────
+  // ■■ Unlock audio on first user tap ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  // FIX: This handler is now ALWAYS active on tap — no serverWarm gate.
+  // Android Chrome requires .play() to be called synchronously inside a user
+  // gesture. We must not await anything before calling .play().
   const handleAudioUnlock = useCallback(() => {
     if (audioUnlockedRef.current) return;
     audioUnlockedRef.current = true;
 
-    // ── STEP 1: Unlock HTMLAudio + AudioContext SYNCHRONOUSLY inside gesture ──
-    // Android Chrome closes the autoplay activation window after the first async
-    // boundary. Everything below MUST happen before any await.
-
-    // Unlock HTMLAudioElement autoplay using a pre-cached blob URL if available,
-    // otherwise use a silent data URI. Either way, .play() is called synchronously.
+    // ■■ STEP 1: Unlock HTMLAudio SYNCHRONOUSLY inside gesture ■■■■■■■■■■■■■■■
     let welcomeAudio: HTMLAudioElement | null = null;
+
     if (welcomeBlobUrlRef.current) {
-      // FAST PATH: pre-fetched blob — play the real welcome audio right now, sync.
+      // FAST PATH: pre-fetched blob is ready — play real welcome audio RIGHT NOW
+      // .play() is called synchronously — gesture window stays open on Android
       welcomeAudio = new Audio(welcomeBlobUrlRef.current);
       welcomeAudio.play().then(() => {
         setSophiaSpeaking(true);
         if (welcomeAudio) {
           welcomeAudio.onended = () => {
             setSophiaSpeaking(false);
-            // After welcome plays, delegate to speakRef for subsequent steps
           };
         }
       }).catch(() => {
-        // Blocked despite sync call — Android is very strict. speakRef slow path handles it.
+        // Blocked despite sync call — speakRef slow path handles recovery
       });
       preUnlockedAudioRef.current = welcomeAudio;
     } else {
-      // SLOW PATH: blob not ready yet — unlock with silence, queue speak for when speakRef fires
+      // SLOW PATH: blob not ready yet — unlock with a silent data URI, then
+      // queue the real speak for when speakRef becomes available
       const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
       const unlocked = new Audio(SILENCE_MP3);
       unlocked.volume = 0;
@@ -527,14 +505,12 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
       preUnlockedAudioRef.current = unlocked;
     }
 
-    // Also create + resume an AudioContext synchronously (belt-and-suspenders for
-    // older Android versions that use Web Audio instead of HTMLAudio)
+    // Belt-and-suspenders: also unlock AudioContext for older Android versions
     try {
       const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
       const freshCtx = new AC();
       freshCtx.resume().catch(() => {});
       audioCtxRef.current = freshCtx;
-      // Play a silent buffer to permanently unlock this context
       const silentBuffer = freshCtx.createBuffer(1, 1, 22050);
       const silentSource = freshCtx.createBufferSource();
       silentSource.buffer = silentBuffer;
@@ -542,23 +518,21 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
       silentSource.start(0);
     } catch { /* ignore — HTMLAudio path above is the real fix */ }
 
-    // ── STEP 2: Update visual state + hand off to speakRef ────────────────
+    // ■■ STEP 2: Update state + hand off to speakRef ■■■■■■■■■■■■■■■■■■■■■■■■
     setAudioUnlocked(true);
 
-    // If we played the blob directly above, we're done for step 0.
-    // If not (slow path), queue for speakRef to handle.
     if (!welcomeAudio) {
+      // Slow path — delegate to speakRef
       const textToSpeak = speakQueueRef.current?.text ?? speechLine;
       const stepToSpeak = speakQueueRef.current?.step ?? step;
       speakQueueRef.current = null;
-
       if (speakRef.current) {
         speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
       } else {
         speakQueueRef.current = { text: textToSpeak, step: stepToSpeak };
       }
     } else {
-      // Clear the queue — welcome is already playing via direct Audio element
+      // Fast path — welcome already playing, clear queue
       speakQueueRef.current = null;
     }
   }, [speechLine, step]);
@@ -572,7 +546,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     }
     // Steps 1+: audio already unlocked from tap, fire directly
     playTTS(speechLine, step);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const handleContinue = () => {
@@ -608,7 +582,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             overflow: "hidden",
           }}
         >
-          {/* ── Stars ── */}
+          {/* ■■ Stars ■■ */}
           <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
             {STARS.map((s, i) => (
               <div key={i} style={{
@@ -620,7 +594,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             ))}
           </div>
 
-          {/* ── Top bar ── */}
+          {/* ■■ Top bar ■■ */}
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -670,14 +644,14 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             </div>
           </div>
 
-          {/* ── Main two-column layout ── */}
+          {/* ■■ Main two-column layout ■■ */}
           <div className="sef-main-layout" style={{
             display: "flex",
             flexDirection: "row",
             width: "100%", height: "100%",
             paddingTop: "clamp(60px,8vw,80px)",
           }}>
-            {/* ══ LEFT — Sophia lip sync panel ══ */}
+            {/* ■■ LEFT — Sophia lip sync panel ■■ */}
             <div className="sef-left-panel" style={{
               position: "relative",
               width: "clamp(260px,38vw,480px)",
@@ -712,8 +686,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   onReady={(speakFn) => {
                     speakRef.current = speakFn;
                     setSophiaReady(true);
-                    // Only drain queue if user has already unlocked audio
-                    // (step 0 queue waits for tap; steps 1+ are already unlocked)
                     const queued = speakQueueRef.current;
                     if (queued && queued.step > 0) {
                       speakQueueRef.current = null;
@@ -722,7 +694,6 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                   }}
                   onSpeakingChange={setSophiaSpeaking}
                   onError={() => {
-                    // Non-fatal — static portrait stays visible, flow continues
                     console.warn("[SophiaFlow] Lip sync error — portrait fallback active");
                   }}
                   nextStepText={nextStepText}
@@ -733,10 +704,14 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                 />
               </div>
 
-              {/* ── Tap-to-Hear overlay (mobile audio unlock) ── */}
+              {/* ■■ Tap-to-Hear overlay ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+               * FIX: onClick is now ALWAYS handleAudioUnlock — no serverWarm gate.
+               * cursor is always "pointer". The "Sophia is waking up…" spinner
+               * state is removed entirely — it will never appear for a CF Worker.
+               ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■ */}
               {!audioUnlocked && (
                 <div
-                  onClick={serverWarm ? handleAudioUnlock : undefined}
+                  onClick={handleAudioUnlock}
                   style={{
                     position: "absolute", inset: 0, zIndex: 20,
                     display: "flex", flexDirection: "column",
@@ -744,67 +719,32 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
                     gap: 12,
                     background: "rgba(5,7,13,0.55)",
                     backdropFilter: "blur(4px)",
-                    cursor: serverWarm ? "pointer" : "default",
+                    cursor: "pointer",
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {serverWaking ? (
-                    /* ── Waking state ── */
-                    <>
-                      <div style={{
-                        width: 64, height: 64, borderRadius: "50%",
-                        border: "2px solid rgba(212,175,55,0.4)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        boxShadow: "0 0 16px rgba(212,175,55,0.15)",
-                      }}>
-                        {/* Spinner */}
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                          style={{ animation: "spin 1.2s linear infinite" }}>
-                          <circle cx="12" cy="12" r="10" stroke="rgba(212,175,55,0.25)" strokeWidth="2"/>
-                          <path d="M12 2a10 10 0 0110 10" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                      </div>
-                      <span style={{
-                        fontFamily: "'Playfair Display',serif",
-                        color: "rgba(212,175,55,0.70)",
-                        fontSize: 14, letterSpacing: "0.06em",
-                        textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                      }}>
-                        Sophia is waking up…
-                      </span>
-                      <span style={{
-                        fontFamily: "Inter, sans-serif",
-                        color: "rgba(255,255,255,0.35)",
-                        fontSize: 11,
-                      }}>
-                        Just a moment
-                      </span>
-                    </>
-                  ) : (
-                    /* ── Ready state ── */
-                    <>
-                      <div style={{
-                        width: 64, height: 64, borderRadius: "50%",
-                        border: "2px solid rgba(212,175,55,0.9)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        boxShadow: "0 0 24px rgba(212,175,55,0.4)",
-                        animation: "sef-glow-pulse 1.8s ease-in-out infinite",
-                      }}>
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                          <path d="M11 5L6 9H2v6h4l5 4V5z" fill="#D4AF37"/>
-                          <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round"/>
-                        </svg>
-                      </div>
-                      <span style={{
-                        fontFamily: "'Playfair Display',serif",
-                        color: "rgba(212,175,55,0.95)",
-                        fontSize: 15, letterSpacing: "0.06em",
-                        textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                      }}>
-                        Tap to hear Sophia
-                      </span>
-                    </>
-                  )}
+                  {/* ■■ Ready state — always shown, no waking spinner ■■ */}
+                  <div style={{
+                    width: 64, height: 64, borderRadius: "50%",
+                    border: "2px solid rgba(212,175,55,0.9)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: "0 0 24px rgba(212,175,55,0.4)",
+                    animation: "sef-glow-pulse 1.8s ease-in-out infinite",
+                  }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                      <path d="M11 5L6 9H2v6h4l5 4V5z" fill="#D4AF37"/>
+                      <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"
+                        stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <span style={{
+                    fontFamily: "'Playfair Display',serif",
+                    color: "rgba(212,175,55,0.95)",
+                    fontSize: 15, letterSpacing: "0.06em",
+                    textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+                  }}>
+                    Tap to hear Sophia
+                  </span>
                 </div>
               )}
 
@@ -842,7 +782,7 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
               </div>
             </div>
 
-            {/* ══ RIGHT — Dialogue + options panel ══ */}
+            {/* ■■ RIGHT — Dialogue + options panel ■■ */}
             <div className="sef-right-panel" style={{
               flex: 1,
               display: "flex", flexDirection: "column",
@@ -934,11 +874,11 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
             </div>
           </div>
 
-          {/* ── Mobile: collapse to stacked layout ── */}
+          {/* ■■ Mobile: collapse to stacked layout ■■ */}
           <style>{`
             @media (max-width: 640px) {
               .sef-main-layout { flex-direction: column !important; }
-              .sef-left-panel  { width: 100% !important; height: 64vw !important; min-width: unset !important; flex-shrink: 0; }
+              .sef-left-panel { width: 100% !important; height: 64vw !important; min-width: unset !important; flex-shrink: 0 !important; }
               .sef-left-panel img { object-position: center 20% !important; }
               .sef-left-panel video { object-position: center 20% !important; }
               .sef-right-panel { flex: 1; padding: 16px 18px 60px !important; overflow-y: auto; }
