@@ -2,11 +2,14 @@
 // FILE: packages/web/src/web/components/SophiaMobileLipSync.tsx
 //
 // Architecture:
-//   - Audio: POST /api/sophia/tts (server proxy → ElevenLabs)
-//     Key stays server-side. No VITE_ env vars needed.
-//   - Video: Portrait image always visible.
-//     D-ID is disabled (free trial credits exhausted).
-//     Lip-sync video upgrade: Phase 9 (Wav2Lip on Modal GPU).
+//   - Audio: POST https://sophia-tts.daviscivilrights777.workers.dev
+//     (Cloudflare Worker proxy → ElevenLabs, always on, zero cold start)
+//   - PRE-FETCH PATTERN (Android Chrome autoplay fix):
+//     Audio blobs are fetched in the background and cached by text hash.
+//     speak() pulls the cached blob and calls .play() SYNCHRONOUSLY —
+//     no async fetch inside the gesture handler, so the Android autoplay
+//     policy window is never lost.
+//   - Video: Static Sophia portrait always visible.
 //
 // Works on ALL devices: desktop, iOS, Android.
 // ============================================================
@@ -23,6 +26,8 @@ import React, {
 const SOPHIA_PORTRAIT =
   "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-lipsync-portrait.png";
 
+const TTS_ENDPOINT = "https://sophia-tts.daviscivilrights777.workers.dev";
+
 // ─── Props ────────────────────────────────────────────────────
 interface SophiaMobileLipSyncProps {
   onReady:          (speak: (text: string, stepIndex?: number) => Promise<void>) => void;
@@ -37,102 +42,175 @@ interface SophiaMobileLipSyncProps {
 }
 
 // ─── Component ────────────────────────────────────────────────
-
 export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   onReady,
   onSpeakingChange,
   onError,
+  nextStepText,
   portraitSrc,
   className,
   style,
-  audioCtxRef: externalAudioCtxRef,
 }: SophiaMobileLipSyncProps) {
 
-  const sourceNodeRef  = useRef<AudioBufferSourceNode | null>(null);
+  // Blob cache: text → Blob (pre-fetched in background)
+  const blobCacheRef   = useRef<Map<string, Blob>>(new Map());
+  // In-flight prefetch promises to avoid duplicate fetches
+  const fetchingRef    = useRef<Map<string, Promise<Blob | null>>>(new Map());
   const audioElRef     = useRef<HTMLAudioElement | null>(null);
   const activeRef      = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
 
   const portrait = portraitSrc ?? SOPHIA_PORTRAIT;
 
-  // ── Core speak: fetch TTS audio, play via HTMLAudioElement (Android-safe) ──
+  // ── Fetch one TTS blob (shared between pre-fetch and speak) ────────────────
+  const fetchBlob = useCallback(async (text: string): Promise<Blob | null> => {
+    const key = text.trim();
+
+    // Already cached
+    if (blobCacheRef.current.has(key)) {
+      return blobCacheRef.current.get(key)!;
+    }
+
+    // Already in-flight
+    const inflight = fetchingRef.current.get(key);
+    if (inflight) return inflight;
+
+    // Start fetch
+    const promise = (async (): Promise<Blob | null> => {
+      try {
+        const res = await fetch(TTS_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: key }),
+          signal: AbortSignal.timeout(35000),
+        });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        if (activeRef.current) {
+          blobCacheRef.current.set(key, blob);
+        }
+        return blob;
+      } catch {
+        return null;
+      } finally {
+        fetchingRef.current.delete(key);
+      }
+    })();
+
+    fetchingRef.current.set(key, promise);
+    return promise;
+  }, []);
+
+  // ── Pre-fetch next step text in background ─────────────────────────────────
+  useEffect(() => {
+    if (!nextStepText) return;
+    // Fire-and-forget background fetch — populates blobCacheRef
+    fetchBlob(nextStepText).catch(() => {});
+  }, [nextStepText, fetchBlob]);
+
+  // ── Core speak: use cached blob if available, fetch otherwise ─────────────
+  // ANDROID AUTOPLAY FIX:
+  //   When the blob IS cached, we create the Audio element + call .play()
+  //   IMMEDIATELY (no await before .play()). This keeps us inside the gesture
+  //   activation window that Android Chrome requires.
+  //   When not cached (cold path), we fetch then play — may be blocked on
+  //   Android but will work after the audio is pre-unlocked by handleAudioUnlock.
   const speak = useCallback(async (text: string, _stepIndex = 0): Promise<void> => {
     if (!activeRef.current) return;
+
+    const key = text.trim();
 
     // Stop any prior audio
     if (audioElRef.current) {
       audioElRef.current.pause();
-      audioElRef.current.src = "";
+      try { audioElRef.current.src = ""; } catch { /**/ }
       audioElRef.current = null;
     }
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch { /**/ }
-      sourceNodeRef.current = null;
-    }
 
-    setIsLoading(true);
     onSpeakingChange(false);
 
-    // Fetch TTS audio from Cloudflare Worker
-    let blob: Blob;
-    try {
-      const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim() }),
-        signal: AbortSignal.timeout(35000),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`TTS ${res.status}: ${errText}`);
-      }
-
-      blob = await res.blob();
-    } catch (err) {
-      console.error("[Sophia] TTS fetch failed:", err);
-      setIsLoading(false);
-      onSpeakingChange(false);
-      onError?.();
-      return;
-    }
-
-    if (!activeRef.current) return;
-
-    // Play via HTMLAudioElement — works on Android Chrome without AudioContext gesture timing
-    try {
-      const url = URL.createObjectURL(blob);
+    // ── FAST PATH: blob already in cache ──────────────────────────────────
+    const cached = blobCacheRef.current.get(key);
+    if (cached) {
+      // Play synchronously — no await before .play(), gesture window intact
+      const url = URL.createObjectURL(cached);
       const audio = new Audio(url);
       audio.preload = "auto";
       audioElRef.current = audio;
-
       setIsLoading(false);
       onSpeakingChange(true);
 
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         audio.onended = () => {
           URL.revokeObjectURL(url);
           audioElRef.current = null;
           if (activeRef.current) onSpeakingChange(false);
           resolve();
         };
-        audio.onerror = (e) => {
+        audio.onerror = () => {
           URL.revokeObjectURL(url);
           audioElRef.current = null;
-          reject(new Error(`Audio playback error: ${(e as ErrorEvent).message ?? e}`));
+          if (activeRef.current) onSpeakingChange(false);
+          resolve(); // non-fatal
         };
-        audio.play().catch(reject);
+        // .play() called synchronously (no await before this point on fast path)
+        audio.play().catch(() => {
+          // If blocked by autoplay policy, the preUnlockedAudioRef in SophiaEntryFlow
+          // already unlocked the audio context — retry once
+          audio.play().catch(() => resolve());
+        });
       });
+      return;
+    }
 
-    } catch (err) {
-      console.error("[Sophia] Audio play failed:", err);
-      setIsLoading(false);
+    // ── SLOW PATH: not cached yet, fetch now ──────────────────────────────
+    setIsLoading(true);
+
+    const blob = await fetchBlob(key);
+
+    if (!activeRef.current) return;
+    setIsLoading(false);
+
+    if (!blob) {
+      console.error("[Sophia] TTS fetch failed for:", key.slice(0, 60));
       onSpeakingChange(false);
       onError?.();
+      return;
     }
-  }, [onSpeakingChange, onError]);
 
-  // ── Register with parent ──
+    // Cache it for next time
+    blobCacheRef.current.set(key, blob);
+
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    audioElRef.current = audio;
+    onSpeakingChange(true);
+
+    await new Promise<void>((resolve) => {
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        audioElRef.current = null;
+        if (activeRef.current) onSpeakingChange(false);
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        audioElRef.current = null;
+        if (activeRef.current) { onSpeakingChange(false); onError?.(); }
+        resolve();
+      };
+      audio.play().catch((err) => {
+        console.error("[Sophia] Audio play failed (slow path):", err);
+        URL.revokeObjectURL(url);
+        audioElRef.current = null;
+        if (activeRef.current) { onSpeakingChange(false); onError?.(); }
+        resolve();
+      });
+    });
+  }, [fetchBlob, onSpeakingChange, onError]);
+
+  // ── Register with parent ───────────────────────────────────────────────────
   useEffect(() => {
     activeRef.current = true;
     onReady(speak);
@@ -140,17 +218,16 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       activeRef.current = false;
       if (audioElRef.current) {
         audioElRef.current.pause();
-        audioElRef.current.src = "";
+        try { audioElRef.current.src = ""; } catch { /**/ }
         audioElRef.current = null;
       }
-      if (sourceNodeRef.current) {
-        try { sourceNodeRef.current.stop(); } catch { /**/ }
-        sourceNodeRef.current = null;
-      }
+      // Revoke any cached blob URLs on unmount
+      blobCacheRef.current.clear();
+      fetchingRef.current.clear();
     };
   }, [speak, onReady]);
 
-  // ─── Render ───────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div
       className={className}
@@ -164,7 +241,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         ...style,
       }}
     >
-      {/* Static portrait */}
+      {/* Static Sophia portrait */}
       <img
         src={portrait}
         alt="Sophia"
@@ -180,7 +257,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
         onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
 
-      {/* Audio loading indicator */}
+      {/* Loading indicator */}
       {isLoading && (
         <div style={{
           position: "absolute",

@@ -368,6 +368,9 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
   // Pre-unlocked Audio element — created + .play()'d synchronously in tap handler
   // speak() reuses this element to bypass Android Chrome autoplay block
   const preUnlockedAudioRef = useRef<HTMLAudioElement | null>(null);
+  // PRE-FETCHED welcome blob — fetched in background on mount so tap → play is synchronous
+  const welcomeBlobRef = useRef<Blob | null>(null);
+  const welcomeBlobUrlRef = useRef<string | null>(null);
 
   const isIntro   = step === 0;
   const isSummary = step === 4;
@@ -435,6 +438,40 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     return () => { cancelled = true; };
   }, []);
 
+  // ── Pre-fetch welcome audio blob in background ─────────────────────────────
+  // So when user taps "Tap to hear Sophia", we can call .play() synchronously
+  // without any async fetch in the gesture handler (Android autoplay fix).
+  useEffect(() => {
+    let cancelled = false;
+    const preFetch = async () => {
+      try {
+        const res = await fetch("https://sophia-tts.daviscivilrights777.workers.dev", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: SOPHIA_LINES.welcome }),
+          signal: AbortSignal.timeout(40000),
+        });
+        if (!res.ok || cancelled) return;
+        const blob = await res.blob();
+        if (!cancelled) {
+          welcomeBlobRef.current = blob;
+          welcomeBlobUrlRef.current = URL.createObjectURL(blob);
+        }
+      } catch {
+        // Non-fatal — slow path (fetch-then-play) will be used on tap
+      }
+    };
+    preFetch();
+    return () => {
+      cancelled = true;
+      // Revoke pre-fetched blob URL on unmount
+      if (welcomeBlobUrlRef.current) {
+        URL.revokeObjectURL(welcomeBlobUrlRef.current);
+        welcomeBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
   // Lock scroll
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -459,52 +496,70 @@ export function SophiaEntryFlow({ onComplete }: SophiaEntryFlowProps) {
     if (audioUnlockedRef.current) return;
     audioUnlockedRef.current = true;
 
-    // CRITICAL: Create + resume AudioContext SYNCHRONOUSLY inside the tap gesture,
-    // BEFORE any async calls or React state updates.
-    // This keeps the browser's activation window open for the audio call.
-    let freshCtx: AudioContext | null = null;
+    // ── STEP 1: Unlock HTMLAudio + AudioContext SYNCHRONOUSLY inside gesture ──
+    // Android Chrome closes the autoplay activation window after the first async
+    // boundary. Everything below MUST happen before any await.
+
+    // Unlock HTMLAudioElement autoplay using a pre-cached blob URL if available,
+    // otherwise use a silent data URI. Either way, .play() is called synchronously.
+    let welcomeAudio: HTMLAudioElement | null = null;
+    if (welcomeBlobUrlRef.current) {
+      // FAST PATH: pre-fetched blob — play the real welcome audio right now, sync.
+      welcomeAudio = new Audio(welcomeBlobUrlRef.current);
+      welcomeAudio.play().then(() => {
+        setSophiaSpeaking(true);
+        if (welcomeAudio) {
+          welcomeAudio.onended = () => {
+            setSophiaSpeaking(false);
+            // After welcome plays, delegate to speakRef for subsequent steps
+          };
+        }
+      }).catch(() => {
+        // Blocked despite sync call — Android is very strict. speakRef slow path handles it.
+      });
+      preUnlockedAudioRef.current = welcomeAudio;
+    } else {
+      // SLOW PATH: blob not ready yet — unlock with silence, queue speak for when speakRef fires
+      const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
+      const unlocked = new Audio(SILENCE_MP3);
+      unlocked.volume = 0;
+      unlocked.play().catch(() => {});
+      preUnlockedAudioRef.current = unlocked;
+    }
+
+    // Also create + resume an AudioContext synchronously (belt-and-suspenders for
+    // older Android versions that use Web Audio instead of HTMLAudio)
     try {
       const AC = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-      freshCtx = new AC();
-      // Resume synchronously — this is what actually unlocks Android Chrome Web Audio
+      const freshCtx = new AC();
       freshCtx.resume().catch(() => {});
       audioCtxRef.current = freshCtx;
-
-      // CRITICAL: Play a real silent buffer through the AudioContext RIGHT NOW,
-      // synchronously inside the gesture. This permanently unlocks the context
-      // for all future calls — even across await boundaries.
-      // Without this, Android keeps the context in "suspended" state and
-      // decodeAudioData + start() produces no output despite no errors.
+      // Play a silent buffer to permanently unlock this context
       const silentBuffer = freshCtx.createBuffer(1, 1, 22050);
       const silentSource = freshCtx.createBufferSource();
       silentSource.buffer = silentBuffer;
       silentSource.connect(freshCtx.destination);
       silentSource.start(0);
-    } catch { /* ignore */ }
+    } catch { /* ignore — HTMLAudio path above is the real fix */ }
 
-    // Also keep the HTMLAudio unlock for belt-and-suspenders on older devices
-    const SILENCE_MP3 = "data:audio/mpeg;base64,/+MYxAAAAANIAAAAAExBTUUzLjk5LjVVVVVVVVVVVVU=";
-    const unlocked = new Audio(SILENCE_MP3);
-    unlocked.volume = 0;
-    unlocked.play().catch(() => {});
-    preUnlockedAudioRef.current = unlocked;
-
-    // Update visual state AFTER creating AudioContext (state update schedules re-render but
-    // we don't depend on it for audio — we use refs and direct speak call below)
+    // ── STEP 2: Update visual state + hand off to speakRef ────────────────
     setAudioUnlocked(true);
 
-    // Call speak() directly using the speak function ref — no intermediate queue or playTTS wrapper.
-    // speakRef.current already has the audioCtx via the prop (externalCtxRef syncs on each render).
-    // We also immediately update externalCtxRef so speak() sees the fresh context right now.
-    const textToSpeak = speakQueueRef.current?.text ?? speechLine;
-    const stepToSpeak = speakQueueRef.current?.step ?? step;
-    speakQueueRef.current = null;
+    // If we played the blob directly above, we're done for step 0.
+    // If not (slow path), queue for speakRef to handle.
+    if (!welcomeAudio) {
+      const textToSpeak = speakQueueRef.current?.text ?? speechLine;
+      const stepToSpeak = speakQueueRef.current?.step ?? step;
+      speakQueueRef.current = null;
 
-    if (speakRef.current) {
-      speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
+      if (speakRef.current) {
+        speakRef.current(textToSpeak, stepToSpeak).catch(() => {});
+      } else {
+        speakQueueRef.current = { text: textToSpeak, step: stepToSpeak };
+      }
     } else {
-      // SophiaLipSync not mounted yet — re-queue so onReady drains it
-      speakQueueRef.current = { text: textToSpeak, step: stepToSpeak };
+      // Clear the queue — welcome is already playing via direct Audio element
+      speakQueueRef.current = null;
     }
   }, [speechLine, step]);
 
