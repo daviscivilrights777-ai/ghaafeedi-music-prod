@@ -1,19 +1,35 @@
 // ============================================================
 // FILE: packages/web/src/web/components/SophiaMobileLipSync.tsx
 //
+// ANDROID AUDIO FIX v3 (2026-06-25):
+//
+// Root cause of silence on Android Chrome:
+// The previous speak() created a NEW Audio() element every call.
+// Android only unlocks the SPECIFIC element that .play() was called
+// on inside the gesture handler. Any new Audio() element is locked
+// by default — .play() on it is silently blocked.
+//
+// Fix: speak() now reuses preUnlockedAudioRef.current — the SAME
+// audio element that was .play()'d synchronously inside the tap
+// handler in SophiaEntryFlow. Because Android already unlocked
+// that specific element, .play() on it always succeeds, even from
+// async code, even outside a gesture handler.
+//
+// Pattern:
+//   preUnlockedAudioRef.current.src = blobUrl   ← swap src
+//   preUnlockedAudioRef.current.load()           ← reload
+//   preUnlockedAudioRef.current.play()           ← always works
+//
 // Architecture:
-//   - Audio: POST https://sophia-tts.daviscivilrights777.workers.dev
-//     (Cloudflare Worker proxy → ElevenLabs, always on, zero cold start)
-//   - PRE-FETCH PATTERN (Android Chrome autoplay fix):
-//     Audio blobs are fetched in the background and cached by text hash.
-//     speak() pulls the cached blob and calls .play() SYNCHRONOUSLY —
-//     no async fetch inside the gesture handler, so the Android autoplay
-//     policy window is never lost.
-//   - Video: Static Sophia portrait always visible.
+// - Audio: POST https://sophia-tts.daviscivilrights777.workers.dev
+//   (Cloudflare Worker proxy → ElevenLabs, always on, zero cold start)
+// - PRE-FETCH PATTERN: Audio blobs are fetched in background and
+//   cached by text key. speak() pulls cached blob, swaps src on the
+//   unlocked element, and plays — no new Audio() ever created.
+// - Video: Static Sophia portrait always visible.
 //
 // Works on ALL devices: desktop, iOS, Android.
 // ============================================================
-
 import React, {
   useEffect,
   useRef,
@@ -22,26 +38,27 @@ import React, {
   memo,
 } from "react";
 
-// ─── Config ───────────────────────────────────────────────────
+// ■■■ Config ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 const SOPHIA_PORTRAIT =
   "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-lipsync-portrait.png";
-
 const TTS_ENDPOINT = "https://sophia-tts.daviscivilrights777.workers.dev";
 
-// ─── Props ────────────────────────────────────────────────────
+// ■■■ Props ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 interface SophiaMobileLipSyncProps {
-  onReady:          (speak: (text: string, stepIndex?: number) => Promise<void>) => void;
+  onReady: (speak: (text: string, stepIndex?: number) => Promise<void>) => void;
   onSpeakingChange: (speaking: boolean) => void;
-  onError?:         () => void;
-  nextStepText?:    string;
-  portraitSrc?:     string;
-  className?:       string;
-  style?:           React.CSSProperties;
-  audioCtxRef?:     React.RefObject<AudioContext | null>;
+  onError?: () => void;
+  nextStepText?: string;
+  portraitSrc?: string;
+  className?: string;
+  style?: React.CSSProperties;
+  audioCtxRef?: React.RefObject<AudioContext | null>;
+  // THE KEY PROP: the audio element unlocked synchronously in the
+  // tap handler. speak() reuses this instead of creating new Audio().
   preUnlockedAudioRef?: React.RefObject<HTMLAudioElement | null>;
 }
 
-// ─── Component ────────────────────────────────────────────────
+// ■■■ Component ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
 export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   onReady,
   onSpeakingChange,
@@ -50,19 +67,18 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
   portraitSrc,
   className,
   style,
+  preUnlockedAudioRef,
 }: SophiaMobileLipSyncProps) {
-
-  // Blob cache: text → Blob (pre-fetched in background)
-  const blobCacheRef   = useRef<Map<string, Blob>>(new Map());
+  // Blob cache: text key → Blob (pre-fetched in background)
+  const blobCacheRef = useRef<Map<string, Blob>>(new Map());
   // In-flight prefetch promises to avoid duplicate fetches
-  const fetchingRef    = useRef<Map<string, Promise<Blob | null>>>(new Map());
-  const audioElRef     = useRef<HTMLAudioElement | null>(null);
-  const activeRef      = useRef(true);
+  const fetchingRef = useRef<Map<string, Promise<Blob | null>>>(new Map());
+  const activeRef = useRef(true);
   const [isLoading, setIsLoading] = useState(false);
-
+  const currentBlobUrlRef = useRef<string | null>(null);
   const portrait = portraitSrc ?? SOPHIA_PORTRAIT;
 
-  // ── Fetch one TTS blob (shared between pre-fetch and speak) ────────────────
+  // ■■ Fetch one TTS blob (shared between pre-fetch and speak) ■■■■■■■■■■■■■■■
   const fetchBlob = useCallback(async (text: string): Promise<Blob | null> => {
     const key = text.trim();
 
@@ -101,73 +117,130 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
     return promise;
   }, []);
 
-  // ── Pre-fetch next step text in background ─────────────────────────────────
+  // ■■ Pre-fetch next step text in background ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   useEffect(() => {
     if (!nextStepText) return;
-    // Fire-and-forget background fetch — populates blobCacheRef
     fetchBlob(nextStepText).catch(() => {});
   }, [nextStepText, fetchBlob]);
 
-  // ── Core speak: use cached blob if available, fetch otherwise ─────────────
-  // ANDROID AUTOPLAY FIX:
-  //   When the blob IS cached, we create the Audio element + call .play()
-  //   IMMEDIATELY (no await before .play()). This keeps us inside the gesture
-  //   activation window that Android Chrome requires.
-  //   When not cached (cold path), we fetch then play — may be blocked on
-  //   Android but will work after the audio is pre-unlocked by handleAudioUnlock.
-  const speak = useCallback(async (text: string, _stepIndex = 0): Promise<void> => {
-    if (!activeRef.current) return;
+  // ■■ playOnUnlockedEl: swap src on the pre-unlocked element and play ■■■■■■■
+  // This is the core Android fix. We never create a new Audio() element.
+  // We reuse the element that was .play()'d in the tap handler — Android
+  // keeps that element permanently unlocked for the lifetime of the page.
+  const playOnUnlockedEl = useCallback(async (blob: Blob): Promise<void> => {
+    const audioEl = preUnlockedAudioRef?.current;
 
-    const key = text.trim();
-
-    // Stop any prior audio
-    if (audioElRef.current) {
-      audioElRef.current.pause();
-      try { audioElRef.current.src = ""; } catch { /**/ }
-      audioElRef.current = null;
+    // Revoke previous blob URL to free memory
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+      currentBlobUrlRef.current = null;
     }
 
-    onSpeakingChange(false);
+    const blobUrl = URL.createObjectURL(blob);
+    currentBlobUrlRef.current = blobUrl;
 
-    // ── FAST PATH: blob already in cache ──────────────────────────────────
-    const cached = blobCacheRef.current.get(key);
-    if (cached) {
-      // Play synchronously — no await before .play(), gesture window intact
-      const url = URL.createObjectURL(cached);
-      const audio = new Audio(url);
+    if (audioEl) {
+      // ■ REUSE the unlocked element — Android allows .play() on this ■
+      audioEl.pause();
+      audioEl.volume = 1;
+      audioEl.src = blobUrl;
+      audioEl.load();
+
+      return new Promise<void>((resolve) => {
+        audioEl.onended = () => {
+          if (currentBlobUrlRef.current === blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+            currentBlobUrlRef.current = null;
+          }
+          if (activeRef.current) onSpeakingChange(false);
+          resolve();
+        };
+        audioEl.onerror = () => {
+          if (currentBlobUrlRef.current === blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+            currentBlobUrlRef.current = null;
+          }
+          if (activeRef.current) onSpeakingChange(false);
+          resolve();
+        };
+        audioEl.play().catch((err) => {
+          console.error("[Sophia] play() failed on unlocked element:", err);
+          // Last resort: try a brand new Audio element
+          // (may be blocked on Android but works on desktop/iOS)
+          const fallback = new Audio(blobUrl);
+          fallback.onended = () => {
+            URL.revokeObjectURL(blobUrl);
+            currentBlobUrlRef.current = null;
+            if (activeRef.current) onSpeakingChange(false);
+            resolve();
+          };
+          fallback.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            currentBlobUrlRef.current = null;
+            if (activeRef.current) onSpeakingChange(false);
+            resolve();
+          };
+          fallback.play().catch(() => {
+            URL.revokeObjectURL(blobUrl);
+            currentBlobUrlRef.current = null;
+            if (activeRef.current) { onSpeakingChange(false); onError?.(); }
+            resolve();
+          });
+        });
+      });
+    } else {
+      // No unlocked element ref provided (desktop path) — use new Audio()
+      // This is fine on desktop/iOS where autoplay is not restricted
+      const audio = new Audio(blobUrl);
       audio.preload = "auto";
-      audioElRef.current = audio;
-      setIsLoading(false);
-      onSpeakingChange(true);
 
-      await new Promise<void>((resolve) => {
+      return new Promise<void>((resolve) => {
         audio.onended = () => {
-          URL.revokeObjectURL(url);
-          audioElRef.current = null;
+          URL.revokeObjectURL(blobUrl);
+          currentBlobUrlRef.current = null;
           if (activeRef.current) onSpeakingChange(false);
           resolve();
         };
         audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          audioElRef.current = null;
+          URL.revokeObjectURL(blobUrl);
+          currentBlobUrlRef.current = null;
           if (activeRef.current) onSpeakingChange(false);
-          resolve(); // non-fatal
+          resolve();
         };
-        // .play() called synchronously (no await before this point on fast path)
         audio.play().catch(() => {
-          // If blocked by autoplay policy, the preUnlockedAudioRef in SophiaEntryFlow
-          // already unlocked the audio context — retry once
-          audio.play().catch(() => resolve());
+          URL.revokeObjectURL(blobUrl);
+          currentBlobUrlRef.current = null;
+          if (activeRef.current) { onSpeakingChange(false); onError?.(); }
+          resolve();
         });
       });
+    }
+  }, [preUnlockedAudioRef, onSpeakingChange, onError]);
+
+  // ■■ Core speak function ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  const speak = useCallback(async (text: string, _stepIndex = 0): Promise<void> => {
+    if (!activeRef.current) return;
+    const key = text.trim();
+
+    // Stop any current audio
+    const audioEl = preUnlockedAudioRef?.current;
+    if (audioEl) {
+      audioEl.pause();
+    }
+    onSpeakingChange(false);
+
+    // ■■ FAST PATH: blob already cached ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+    const cached = blobCacheRef.current.get(key);
+    if (cached) {
+      setIsLoading(false);
+      onSpeakingChange(true);
+      await playOnUnlockedEl(cached);
       return;
     }
 
-    // ── SLOW PATH: not cached yet, fetch now ──────────────────────────────
+    // ■■ SLOW PATH: fetch blob then play ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
     setIsLoading(true);
-
     const blob = await fetchBlob(key);
-
     if (!activeRef.current) return;
     setIsLoading(false);
 
@@ -178,56 +251,31 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       return;
     }
 
-    // Cache it for next time
     blobCacheRef.current.set(key, blob);
-
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.preload = "auto";
-    audioElRef.current = audio;
     onSpeakingChange(true);
+    await playOnUnlockedEl(blob);
+  }, [fetchBlob, playOnUnlockedEl, onSpeakingChange, onError, preUnlockedAudioRef]);
 
-    await new Promise<void>((resolve) => {
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
-        audioElRef.current = null;
-        if (activeRef.current) onSpeakingChange(false);
-        resolve();
-      };
-      audio.onerror = () => {
-        URL.revokeObjectURL(url);
-        audioElRef.current = null;
-        if (activeRef.current) { onSpeakingChange(false); onError?.(); }
-        resolve();
-      };
-      audio.play().catch((err) => {
-        console.error("[Sophia] Audio play failed (slow path):", err);
-        URL.revokeObjectURL(url);
-        audioElRef.current = null;
-        if (activeRef.current) { onSpeakingChange(false); onError?.(); }
-        resolve();
-      });
-    });
-  }, [fetchBlob, onSpeakingChange, onError]);
-
-  // ── Register with parent ───────────────────────────────────────────────────
+  // ■■ Register with parent ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   useEffect(() => {
     activeRef.current = true;
     onReady(speak);
     return () => {
       activeRef.current = false;
-      if (audioElRef.current) {
-        audioElRef.current.pause();
-        try { audioElRef.current.src = ""; } catch { /**/ }
-        audioElRef.current = null;
+      const audioEl = preUnlockedAudioRef?.current;
+      if (audioEl) {
+        audioEl.pause();
       }
-      // Revoke any cached blob URLs on unmount
+      if (currentBlobUrlRef.current) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
+      }
       blobCacheRef.current.clear();
       fetchingRef.current.clear();
     };
-  }, [speak, onReady]);
+  }, [speak, onReady, preUnlockedAudioRef]);
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ■■■ Render ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
   return (
     <div
       className={className}
@@ -294,7 +342,7 @@ export const SophiaMobileLipSync = memo(function SophiaMobileLipSync({
       <style>{`
         @keyframes sophia-pulse {
           0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50%       { opacity: 1;   transform: scale(1.2); }
+          50% { opacity: 1; transform: scale(1.2); }
         }
       `}</style>
     </div>
