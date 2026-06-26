@@ -14,6 +14,7 @@ import { FfmpegModalAdapter } from "./ffmpeg-modal.adapter";
 import { VastAiAdapter } from "./vast-ai.adapter";
 import { LatentSyncAdapter } from "./latentsync.adapter";
 import { MusicRouterAdapter } from "./music-router.adapter";
+import { LtxStudioAdapter } from "./ltx-studio.adapter";
 
 let _bootstrapped = false;
 
@@ -32,6 +33,7 @@ export function bootstrapAdapters(): void {
   ProviderRegistry.register(VastAiAdapter);
   ProviderRegistry.register(LatentSyncAdapter);   // Phase 6 — Sophia Lip Sync
   ProviderRegistry.register(MusicRouterAdapter);  // Music Router — ACE-Step / Suno / YuE / MusicGen / Stable Audio
+  ProviderRegistry.register(LtxStudioAdapter);   // Line 2 — AI Song + Music Video shot retake
 
   console.log(
     "[AdapterRegistry] Bootstrapped providers:",
@@ -49,3 +51,4 @@ export { FfmpegModalAdapter } from "./ffmpeg-modal.adapter";
 export { VastAiAdapter } from "./vast-ai.adapter";
 export { LatentSyncAdapter } from "./latentsync.adapter";
 export { MusicRouterAdapter } from "./music-router.adapter";
+export { LtxStudioAdapter } from "./ltx-studio.adapter";

@@ -413,6 +413,35 @@ export type VoiceAsset = typeof voiceAssets.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 
+// ─── Revision Requests ───────────────────────────────────────
+// Line 2 AI Songs + Music Video revision intake.
+// One row per submitted revision request. Tracks eligibility,
+// payload, admin actions, and dispatched retake job.
+export const revisionRequests = pgTable("revision_requests", {
+  id:               text("id").primaryKey(),          // REV-XXXXXXXXX
+  userId:           text("user_id").notNull().references(() => user.id),
+  orderId:          text("order_id").notNull().references(() => orders.id),
+  productionId:     text("production_id"),            // PROD-XXXXXXXXX
+  productSlug:      text("product_slug").notNull(),
+  tier:             text("tier").notNull(),           // starter|premium|elite
+  revisionRound:    integer("revision_round").notNull().default(1), // 1|2|3
+  maxRevisions:     integer("max_revisions").notNull().default(1),
+  windowClosesAt:   timestamp("window_closes_at", { withTimezone: true }), // 7 days from delivery
+  avatarProvider:   text("avatar_provider"),          // static|simli|did|ltx|heygen
+  status:           text("status").notNull().default("pending"), // pending|approved|in_progress|complete|rejected
+  requestPayload:   jsonb("request_payload").default({}),  // RevisionJobPayload
+  retakeDirective:  jsonb("retake_directive").default({}), // Sophia's structured GPT-4o output
+  adminNotes:       text("admin_notes"),
+  dispatchedJobId:  text("dispatched_job_id"),        // ai_jobs.id once dispatched
+  beforeUrl:        text("before_url"),               // original clip/song URL
+  afterUrl:         text("after_url"),                // retake output URL
+  createdAt:        timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type RevisionRequest = typeof revisionRequests.$inferSelect;
+export type InsertRevisionRequest = typeof revisionRequests.$inferInsert;
+
 export type InsertAiJob = typeof aiJobs.$inferInsert;
 export type InsertOrder = typeof orders.$inferInsert;
 export type InsertProduction = typeof productions.$inferInsert;

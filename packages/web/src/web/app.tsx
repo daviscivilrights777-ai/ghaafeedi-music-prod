@@ -28,7 +28,9 @@ const AdminAiJobs      = lazy(() => import("./pages/admin/ai-jobs"));
 const AdminRevenue     = lazy(() => import("./pages/admin/revenue"));
 const AdminSupport     = lazy(() => import("./pages/admin/support"));
 const AdminAuditLogs   = lazy(() => import("./pages/admin/audit-logs"));
-const AdminLipSync     = lazy(() => import("./pages/admin/lipsync"));
+const AdminLipSync       = lazy(() => import("./pages/admin/lipsync"));
+const RevisionIntakePage = lazy(() => import("./pages/revision-intake"));
+const AdminRevisions     = lazy(() => import("./pages/admin/admin-revisions"));
 
 const PageShell = () => (
   <div style={{ background: "#050B1A", minHeight: "100vh" }} />
@@ -67,6 +69,8 @@ function App() {
           <Route path="/admin/support" component={AdminSupport} />
           <Route path="/admin/audit-logs" component={AdminAuditLogs} />
           <Route path="/admin/lipsync" component={AdminLipSync} />
+          <Route path="/admin/revisions" component={AdminRevisions} />
+          <Route path="/revisions/submit" component={RevisionIntakePage} />
         </Switch>
       </Suspense>
 

@@ -85,6 +85,8 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   edit_assemble:    50,  // Modal FFmpeg GPU assembly ~50¢
   qc_check:         5,   // OpenAI vision QC ~5¢
   deliver:          1,   // R2 upload + URL signing ~1¢
+  // Line 2 — AI Song + Music Video
+  ltx_retake:       40,  // LTX Studio ~$0.10/sec × avg 4s clip = ~40¢
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
@@ -109,6 +111,8 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   edit_assemble:    1000, // final assembled video is high value
   qc_check:         50,
   deliver:          200,
+  // Line 2 — AI Song + Music Video
+  ltx_retake:       1500, // revision round value ($15 est. per retake)
 };
 
 let _pgAvailable = true;

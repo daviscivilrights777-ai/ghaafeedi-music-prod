@@ -46,7 +46,9 @@ export type JobType =
   | "clip_batch"     // Phase 8: FAL.ai/Modal → generate individual clips
   | "edit_assemble"  // Phase 9: Modal FFmpeg → assemble clips into final video
   | "qc_check"       // Phase 9: OpenAI vision → quality check final output
-  | "deliver";       // Phase 10: R2 upload + signed URL + n8n notification
+  | "deliver"        // Phase 10: R2 upload + signed URL + n8n notification
+  // ── Line 2: AI Song + Music Video revision retake ────────────
+  | "ltx_retake";    // LTX Studio video-to-video retake: replace a specific shot in a music video
 
 export class JobQueue {
   /**
