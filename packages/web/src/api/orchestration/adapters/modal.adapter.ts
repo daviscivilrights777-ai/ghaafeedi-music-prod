@@ -38,7 +38,7 @@ const COST_PER_CLIP_CENTS = 35;
 export const ModalAdapter: ProviderAdapter = {
   name:        "modal",
   displayName: "Modal GPU — CogVideoX-5B",
-  jobTypes:    ["cinematic_video", "director_notes", "video-generation", "video", "visualization"],
+  jobTypes:    ["cinematic_video", "video", "visualization"],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
     // Estimate: 1 clip per shot, ~$0.35/clip

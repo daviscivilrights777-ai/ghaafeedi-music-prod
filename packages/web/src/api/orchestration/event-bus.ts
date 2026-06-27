@@ -97,7 +97,6 @@ export class EventBus {
     // Write to Redis stream (XADD with MAXLEN trim)
     const streamId = await redis.xadd(
       EVENT_STREAM_KEY,
-      { MAXLEN: MAX_STREAM_LEN } as any,
       "*",
       { event: JSON.stringify(event) }
     ) as string;

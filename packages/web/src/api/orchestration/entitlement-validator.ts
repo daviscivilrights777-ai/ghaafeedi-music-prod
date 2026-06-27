@@ -96,7 +96,7 @@ export class EntitlementValidator {
         return { allowed: false, reason: "No member record found. Please complete registration." };
       }
 
-      const member = memberRows[0];
+      const member = memberRows[0]!;
       const tier = member.tier ?? "free";
       const status = member.status ?? "inactive";
 
@@ -210,7 +210,7 @@ export class EntitlementValidator {
         .limit(1);
 
       if (!orderRows.length) return { allowed: false, reason: "Order not found" };
-      const order = orderRows[0];
+      const order = orderRows[0]!;
 
       if (order.status !== "paid" && order.status !== "processing") {
         return { allowed: false, reason: `Order status is "${order.status}"` };

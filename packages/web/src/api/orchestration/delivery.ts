@@ -173,7 +173,7 @@ export async function saveStyleEmbedding(params: {
 
   const emotionVector = genome.emotionVector ?? buildEmotionVector(
     (genome.audio?.energyLevel !== undefined)
-      ? { joy: genome.audio.energyLevel, sadness: 1 - genome.audio.emotionalValence ?? 0.5, love: 0.5, nostalgia: 0.5, hope: genome.audio.emotionalValence ?? 0.5 }
+      ? { joy: genome.audio.energyLevel, sadness: 1 - genome.audio.emotionalValence, love: 0.5, nostalgia: 0.5, hope: genome.audio.emotionalValence }
       : {}
   );
 
@@ -187,7 +187,7 @@ export async function saveStyleEmbedding(params: {
           genome.visual?.cinematicStyle,
           genome.primaryEmotion,
           genome.audio?.genre,
-          genome.audio?.mood,
+          genome.audio?.genre,
         ].filter(Boolean).join(". ");
 
         const embRes = await fetch("https://api.openai.com/v1/embeddings", {

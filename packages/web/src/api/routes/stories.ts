@@ -3,8 +3,7 @@ import { db } from "../database";
 import * as schema from "../database/schema";
 import { requireAuth } from "../middleware/auth";
 import { eq, desc } from "drizzle-orm";
-import { generateText } from "ai";
-import { gateway } from "../lib/ai";
+import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 export const stories = new Hono()
   .get("/", requireAuth, async (c) => {
@@ -44,9 +43,11 @@ export const stories = new Hono()
         provider: "openai", status: "running", input: JSON.stringify({ storyText: story.storyText }),
       });
 
-      const { text } = await generateText({
-        model: gateway("openai/gpt-5.4-mini"),
-        prompt: `You are an expert emotional storytelling AI for Ghaafeedi Music, a luxury cinematic storytelling platform.
+      const text = await poyoChat({
+        model: POYO_LLM.pipeline,
+        messages: [{
+          role: "user",
+          content: `You are an expert emotional storytelling AI for Ghaafeedi Music, a luxury cinematic storytelling platform.
 
 Analyze this personal story and extract key insights for creating a cinematic song/video:
 
@@ -66,6 +67,9 @@ Respond with a JSON object (no markdown) containing:
   "emotionalArc": "brief emotional journey description",
   "personalizationNotes": "specific details to weave in"
 }`,
+        }],
+        temperature: 0.7,
+        max_tokens: 1000,
       });
 
       let analysis;
@@ -78,7 +82,8 @@ Respond with a JSON object (no markdown) containing:
         updatedAt: new Date(),
       }).where(eq(schema.stories.id, id)).returning();
 
-      await db.update(schema.aiJobs).set({ status: "completed", output: text, updatedAt: new Date() }).where(eq(schema.aiJobs.id, jobId));
+      const textStr = typeof text === "string" ? text : JSON.stringify(text);
+      await db.update(schema.aiJobs).set({ status: "completed", output: textStr, updatedAt: new Date() }).where(eq(schema.aiJobs.id, jobId));
 
       return c.json({ story: updated, analysis }, 200);
     } catch (err: any) {
@@ -94,9 +99,11 @@ Respond with a JSON object (no markdown) containing:
 
     const analysis = story.aiAnalysis ? JSON.parse(story.aiAnalysis) : {};
     try {
-      const { text } = await generateText({
-        model: gateway("openai/gpt-5.4"),
-        prompt: `You are a world-class songwriter for Ghaafeedi Music, a luxury cinematic storytelling platform.
+      const lyrics = await poyoChat({
+        model: POYO_LLM.pipeline,
+        messages: [{
+          role: "user",
+          content: `You are a world-class songwriter for Ghaafeedi Music, a luxury cinematic storytelling platform.
 
 Create deeply personal, cinematic song lyrics based on this story:
 
@@ -114,10 +121,13 @@ Write complete lyrics with:
 - A clear narrative arc
 
 Make it feel like this song was written only for this person.`,
+        }],
+        temperature: 0.85,
+        max_tokens: 1500,
       });
 
-      const [updated] = await db.update(schema.stories).set({ lyrics: text, updatedAt: new Date() }).where(eq(schema.stories.id, id)).returning();
-      return c.json({ story: updated, lyrics: text }, 200);
+      const [updated] = await db.update(schema.stories).set({ lyrics, updatedAt: new Date() }).where(eq(schema.stories.id, id)).returning();
+      return c.json({ story: updated, lyrics }, 200);
     } catch (err: any) {
       return c.json({ message: "Lyrics generation failed", error: err.message }, 500);
     }

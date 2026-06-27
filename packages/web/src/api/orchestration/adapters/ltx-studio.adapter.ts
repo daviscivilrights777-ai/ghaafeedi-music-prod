@@ -42,7 +42,7 @@ export const LtxStudioAdapter: ProviderAdapter = {
   },
 
   // ─── Health Check ─────────────────────────────────────────────────────────
-  async health(): Promise<ProviderHealth> {
+  async healthCheck(): Promise<ProviderHealth> {
     try {
       const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
       if (!apiKey) {
@@ -153,7 +153,7 @@ export const LtxStudioAdapter: ProviderAdapter = {
   },
 
   // ─── Poll ─────────────────────────────────────────────────────────────────
-  async poll(handle: JobHandle): Promise<ProviderJobResult> {
+  async getStatus(handle: JobHandle): Promise<ProviderJobResult> {
     const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
     if (!apiKey) throw new Error("[LTXStudio] FAL_API_KEY not configured");
 
@@ -201,7 +201,7 @@ export const LtxStudioAdapter: ProviderAdapter = {
   },
 
   // ─── Cancel ───────────────────────────────────────────────────────────────
-  async cancel(handle: JobHandle): Promise<void> {
+  async cancelJob(handle: JobHandle): Promise<void> {
     try {
       const apiKey = await getSecret(SECRET_KEYS.FAL_API_KEY);
       if (!apiKey) return;

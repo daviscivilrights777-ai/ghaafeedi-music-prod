@@ -87,6 +87,8 @@ export interface ProviderAdapter {
    */
   cancelJob(handle: JobHandle): Promise<void>;
 
+
+
   /**
    * Health check — called every 60s by monitor.
    */

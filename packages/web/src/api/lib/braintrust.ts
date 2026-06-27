@@ -45,24 +45,23 @@ export function logAICall(opts: LoggedCallOptions): void {
     if (!process.env.BRAINTRUST_API_KEY) return;
 
     traced(
-      () => {
-        // Braintrust captures the span automatically via traced()
-        // We return the output so it shows in the dashboard
+      (span) => {
+        // Log via span for full Braintrust dataset collection
+        span.log({
+          input:  opts.prompt,
+          output: opts.output,
+          metadata: {
+            model: opts.model,
+            project: "Ghaafeedi Music",
+            ...opts.metadata,
+          },
+          ...(opts.score !== undefined ? { scores: { quality: opts.score } } : {}),
+        });
         return opts.output;
       },
       {
         name: opts.name,
         type: "llm",
-        input: opts.prompt,
-        output: opts.output,
-        metadata: {
-          model: opts.model,
-          project: "Ghaafeedi Music",
-          ...opts.metadata,
-        },
-        ...(opts.score !== undefined
-          ? { scores: { quality: opts.score } }
-          : {}),
       }
     );
   } catch {

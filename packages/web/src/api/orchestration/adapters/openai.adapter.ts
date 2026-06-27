@@ -122,34 +122,42 @@ export const OpenAIAdapter: ProviderAdapter = {
       }
     } else if (job.jobType === "qc_check") {
       // Vision-based quality check on assembled video (Phase 9)
+      // Primary: Poyo DeepSeek V3 (text-only QC); fallback: GPT-4o (vision QC if thumbnail available)
       const videoUrl     = (job.inputPayload?.videoUrl as string) || "";
-      const thumbnailUrl = (job.inputPayload?.thumbnailUrl as string) || videoUrl; // use thumbnail for vision
+      const thumbnailUrl = (job.inputPayload?.thumbnailUrl as string) || videoUrl;
       const criteria     = (job.inputPayload?.criteria as string) || "visual quality, emotional resonance, technical correctness";
 
-      const messages: unknown[] = thumbnailUrl ? [
-        { role: "system", content: "You are a quality control specialist for Ghaafeedi Music. Rate the video quality and emotional impact. Respond with JSON: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
-        { role: "user",   content: [
-          { type: "text",      text: `Rate this production for Ghaafeedi Music. Criteria: ${criteria}. The video must be cinematic, emotionally resonant, and technically correct.` },
-          { type: "image_url", image_url: { url: thumbnailUrl, detail: "low" } },
-        ]},
-      ] : [
-        { role: "system", content: "Rate video quality and return JSON: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
-        { role: "user",   content: `QC check for video: ${videoUrl}. Return passed=true if score >= 0.7.` },
-      ];
-
-      const res = await fetch(`${BASE}/chat/completions`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model:           thumbnailUrl ? "gpt-4o" : "gpt-4o-mini",
-          messages,
-          temperature:     0.3,
-          max_tokens:      500,
-          response_format: { type: "json_object" },
-        }),
-      });
-      if (!res.ok) throw new Error(`[OpenAI qc_check] Failed: ${res.status}`);
-      result = await res.json();
+      try {
+        const qcContent = await poyoChat({
+          model: POYO_LLM.pipeline,
+          messages: [
+            { role: "system", content: "You are a quality control specialist for Ghaafeedi Music. Return JSON only: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
+            { role: "user",   content: `QC check for Ghaafeedi Music production. URL: ${videoUrl}. Criteria: ${criteria}. Return passed=true if score >= 0.7.` },
+          ],
+          temperature: 0.3,
+          max_tokens:  500,
+        });
+        result = { choices: [{ message: { content: qcContent } }], _provider: "poyo/deepseek-v3" };
+      } catch (qcErr) {
+        console.warn("[qc_check] Poyo failed, falling back to GPT-4o:", (qcErr as Error).message);
+        const messages: unknown[] = thumbnailUrl ? [
+          { role: "system", content: "You are a quality control specialist for Ghaafeedi Music. Rate the video quality and emotional impact. Respond with JSON: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
+          { role: "user",   content: [
+            { type: "text",      text: `Rate this production for Ghaafeedi Music. Criteria: ${criteria}. The video must be cinematic, emotionally resonant, and technically correct.` },
+            { type: "image_url", image_url: { url: thumbnailUrl, detail: "low" } },
+          ]},
+        ] : [
+          { role: "system", content: "Rate video quality and return JSON: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
+          { role: "user",   content: `QC check for video: ${videoUrl}. Return passed=true if score >= 0.7.` },
+        ];
+        const res = await fetch(`${BASE}/chat/completions`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+          body: JSON.stringify({ model: thumbnailUrl ? "gpt-4o" : "gpt-4o-mini", messages, temperature: 0.3, max_tokens: 500, response_format: { type: "json_object" } }),
+        });
+        if (!res.ok) throw new Error(`[OpenAI qc_check] Failed: ${res.status}`);
+        result = await res.json();
+      }
     } else if (job.jobType === "deliver") {
       // Deliver stage is handled directly by OrchestrationEngine (R2 upload + signed URL)
       // This is a no-op in the adapter — just signal success

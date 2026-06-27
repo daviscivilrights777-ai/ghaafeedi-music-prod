@@ -77,8 +77,8 @@ export class CostOptimizer {
 
     const enabledNames = new Set(enabledProviders.map((p) => p.name));
 
-    const weights = DEFAULT_WEIGHTS[job.jobType] || DEFAULT_WEIGHTS.analysis;
-    const refCost = REFERENCE_COST[job.jobType] || REFERENCE_COST.other;
+    const weights = DEFAULT_WEIGHTS[job.jobType] ?? DEFAULT_WEIGHTS["analysis"]!;
+    const refCost = REFERENCE_COST[job.jobType] ?? REFERENCE_COST["other"]!;
 
     const scores: RouteDecision[] = [];
 
@@ -123,7 +123,7 @@ export class CostOptimizer {
     }
 
     scores.sort((a, b) => b.score - a.score);
-    return scores[0];
+    return scores[0]!;
   }
 
   /**
