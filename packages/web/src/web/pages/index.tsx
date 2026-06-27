@@ -2,16 +2,16 @@
  * GHAAFEEDI MUSIC — Homepage
  * ══════════════════════════════════════════════════════════════════
  * Entry flow (MANDATORY for every visitor — logged-in or not):
- *   1. SophiaEntryFlow — Sophia greets every visitor with a prominent
- *      Skip button so returning users can bypass immediately.
- *   2. onComplete() → stage "home"
+ *   1. SophiaIntroVideo — 1:48 cinematic intro video, autoplay muted,
+ *      🔊 unmute button, "Enter Ghaafeedi Music →" CTA at 100s.
+ *   2. Skip button always visible bottom-right.
+ *   3. onComplete() → stage "home"
  *
- * Error Boundary wraps SophiaEntryFlow — any crash auto-skips to home.
- * Universal D-ID path — REST API only, no WebRTC, works on all devices.
+ * Error Boundary wraps SophiaIntroVideo — any crash auto-skips to home.
  */
 import { useState, useEffect, Suspense, lazy, Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { SophiaEntryFlow } from "../components/SophiaEntryFlow";
+import { SophiaIntroVideo } from "../components/SophiaIntroVideo";
 import { useLocation } from "wouter";
 import { useSession } from "../lib/authClient";
 
@@ -85,7 +85,7 @@ export default function Index() {
       {/* ── Sophia Entry Flow — wrapped in error boundary, safe on all devices ── */}
       {stage === "sophia" && (
         <SophiaErrorBoundary onError={handleSophiaCrash}>
-          <SophiaEntryFlow onComplete={handleComplete} />
+          <SophiaIntroVideo onComplete={() => setStage("home")} />
         </SophiaErrorBoundary>
       )}
 
