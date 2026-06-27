@@ -34,6 +34,13 @@ opencv-python-headless>=4.8.0
 httpx>=0.25.0
 requests>=2.31.0
 
+# ─── Character Consistency + Security ───────────────────────────────────────
+insightface>=0.7.3
+onnxruntime>=1.16.0
+python-magic>=0.4.27
+scikit-image>=0.21.0
+psycopg2-binary>=2.9.0
+
 # ─── Music Engine Dependencies ──────────────────────────────────────────────
 # Installed on Modal GPU containers at startup — NOT bundled in image.
 # Download model weights to /workspace/ on container init.

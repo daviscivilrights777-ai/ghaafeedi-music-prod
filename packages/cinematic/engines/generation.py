@@ -17,6 +17,17 @@ from config import Shot, ShotPlan, GhaafeediSettings
 from engines.camera_injection import CameraInjectionEngine
 from knowledge.camera_moves import get_camera_move
 
+# ── Consistency + Security (lazy — only imported when order_id provided) ──────
+import sys
+import os
+_CONSISTENCY_AVAILABLE = False
+try:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    _CONSISTENCY_AVAILABLE = True
+except Exception:
+    pass
+
+
 logger = logging.getLogger("ghaafeedi.generation")
 
 # ── Poyo.ai constants ────────────────────────────────────────────────────────
@@ -252,7 +263,9 @@ class ShotGenerationEngine:
     """
 
     def __init__(self, settings: GhaafeediSettings,
-                 output_dir: str = "/tmp/ghaafeedi_production"):
+                 output_dir: str = "/tmp/ghaafeedi_production",
+                 order_id: Optional[str] = None,
+                 character_id: Optional[str] = None):
         self.settings   = settings
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -265,6 +278,8 @@ class ShotGenerationEngine:
             logger.warning("[ShotGenerationEngine] POYO_API_KEY not set in environment")
 
         self.poyo = PoyoVideoEngine(api_key=api_key, output_dir=str(self.output_dir))
+        self.order_id     = order_id
+        self.character_id = character_id
 
     def _tier_to_resolution(self) -> str:
         """Map production tier to Seedance 2 resolution."""
@@ -295,6 +310,48 @@ class ShotGenerationEngine:
 
         results: List[GeneratedShot] = []
 
+        # ── Consent gate (async-safe: called synchronously via asyncio.run if needed) ──
+        _consistency_mgr = None
+        if self.order_id and self.character_id and _CONSISTENCY_AVAILABLE:
+            try:
+                import asyncio
+                from consistency.consistency_manager import ConsistencyManager
+                from security.consent.consent_manager import ConsentManager
+
+                consent_mgr = ConsentManager()
+                loop = asyncio.new_event_loop()
+
+                ok, reason = loop.run_until_complete(
+                    consent_mgr.check_gate(
+                        order_id=self.order_id,
+                        character_id=self.character_id,
+                        user_id=getattr(self.settings, "user_id", "unknown"),
+                    )
+                )
+                if not ok:
+                    logger.error(
+                        "[ShotGenerationEngine] Consent gate BLOCKED: %s", reason
+                    )
+                    loop.close()
+                    # Return empty results with error marker
+                    return [
+                        GeneratedShot(
+                            shot=s,
+                            success=False,
+                            error=f"Consent gate: {reason}",
+                        )
+                        for s in shot_plan.shots
+                    ]
+
+                loop.close()
+                _consistency_mgr = ConsistencyManager(
+                    order_id=self.order_id,
+                    character_id=self.character_id,
+                )
+                logger.info("[ShotGenerationEngine] Consent gate PASSED, consistency manager ready")
+            except Exception as cg_err:
+                logger.warning("[ShotGenerationEngine] Consent/consistency init failed (non-blocking): %s", cg_err)
+
         for i, shot in enumerate(shot_plan.shots):
             logger.info(
                 f"\n{'='*50}\n"
@@ -305,6 +362,25 @@ class ShotGenerationEngine:
                 f"{'='*50}"
             )
 
+            # ── Level 1+2: Consistency payload injection ─────────────────────
+            _shot_desc = getattr(shot, 'description', '') or ''
+            _base_payload: dict = {}
+            if _consistency_mgr is not None:
+                try:
+                    import asyncio
+                    _loop2 = asyncio.new_event_loop()
+                    _base_payload = _loop2.run_until_complete(
+                        _consistency_mgr.get_consistent_payload({}, _shot_desc)
+                    )
+                    _loop2.close()
+                    # Merge consistency context into shot description
+                    if _base_payload.get("prompt"):
+                        shot = type(shot)(
+                            **{**shot.__dict__, "description": _base_payload["prompt"]}
+                        )
+                except Exception as _ci_err:
+                    logger.warning("Consistency injection failed (non-blocking): %s", _ci_err)
+
             result = self.poyo.generate_shot(
                 shot=shot,
                 index=i,
@@ -313,6 +389,39 @@ class ShotGenerationEngine:
                 draft=False,
                 download=True,
             )
+
+            # ── Level 3: Post-generation QA ───────────────────────────────────
+            if _consistency_mgr is not None and result.success and result.video_url:
+                try:
+                    import asyncio
+                    _loop3 = asyncio.new_event_loop()
+                    _verify = _loop3.run_until_complete(
+                        _consistency_mgr.verify_shot_with_pause(
+                            generated_frame_url=result.video_url,
+                            shot_index=i,
+                        )
+                    )
+                    _loop3.close()
+                    if _verify.paused:
+                        logger.error(
+                            "Shot %d: double QA fail — job paused. order=%s",
+                            i, self.order_id
+                        )
+                        # Mark remaining shots as not run, return early
+                        results.append(result)
+                        for remaining in shot_plan.shots[i+1:]:
+                            results.append(GeneratedShot(
+                                shot=remaining, success=False,
+                                error="Job paused after double QA fail on shot " + str(i+1)
+                            ))
+                        return results
+                    elif not _verify.passed:
+                        logger.warning(
+                            "Shot %d QA fail (score=%.3f) — continuing.",
+                            i, _verify.qa.score
+                        )
+                except Exception as _qa_err:
+                    logger.warning("Post-gen QA failed (non-blocking): %s", _qa_err)
 
             # Level 3 post-warp if shot is non-static and generation succeeded
             if result.success and shot.camera_movement.value != "STATIC":

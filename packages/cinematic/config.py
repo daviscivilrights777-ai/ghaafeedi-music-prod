@@ -219,16 +219,16 @@ class GhaafeediSettings(BaseModel):
         default_factory=lambda: os.environ.get("OPENAI_MODEL", "gpt-4o")
     )
 
-    # ComfyUI
+    # ComfyUI — DEPRECATED: kept for backward compat only. No new code should use this.
     comfyui_url: str = Field(
         default_factory=lambda: os.environ.get(
-            "COMFYUI_URL", "http://127.0.0.1:8188"
+            "COMFYUI_URL", ""
         )
     )
 
     # GPU Provider
     gpu_provider: str = Field(
-        default_factory=lambda: os.environ.get("GPU_PROVIDER", "comfyui")
+        default_factory=lambda: os.environ.get("GPU_PROVIDER", "poyo")
     )
     fal_key: str = Field(
         default_factory=lambda: os.environ.get("FAL_KEY", "")
@@ -278,6 +278,58 @@ class GhaafeediSettings(BaseModel):
     tier_basic_seconds: int = 60
     tier_standard_seconds: int = 90
     # tier_premium = full song duration (no cap)
+
+
+    # ── Consistency & Security ─────────────────────────────────────────────────
+    face_similarity_threshold: float = Field(
+        default_factory=lambda: float(os.environ.get('FACE_SIMILARITY_THRESHOLD', '0.55'))
+    )
+    ssim_threshold: float = Field(
+        default_factory=lambda: float(os.environ.get('SSIM_THRESHOLD', '0.45'))
+    )
+    audit_chain_secret: str = Field(
+        default_factory=lambda: os.environ.get('AUDIT_CHAIN_SECRET', 'ghaafeedi-audit-chain-v1')
+    )
+    trust_email: str = Field(
+        default_factory=lambda: os.environ.get('TRUST_EMAIL', 'trust@ghaafeedimusic.com')
+    )
+
+    @property
+    def r2_access_key_id(self) -> str:
+        return self.storage_access_key
+
+    @property
+    def r2_secret_access_key(self) -> str:
+        return self.storage_secret_key
+
+    @property
+    def r2_endpoint(self) -> str:
+        return self.storage_endpoint
+
+    @property
+    def r2_bucket(self) -> str:
+        return self.storage_bucket
+
+    @property
+    def r2_public_url(self) -> str:
+        import os as _os
+        return _os.environ.get('R2_PUBLIC_URL', 'https://pub-bc7b203485814e1186102277ad450211.r2.dev')
+
+    @property
+    def upstash_redis_url(self) -> str:
+        import os as _os
+        return _os.environ.get('UPSTASH_REDIS_REST_URL', '')
+
+    @property
+    def database_url(self) -> str:
+        import os as _os
+        return _os.environ.get('DATABASE_URL', '')
+
+    @property
+    def resend_api_key(self) -> str:
+        import os as _os
+        return _os.environ.get('RESEND_API_KEY', '')
+
 
     class Config:
         env_file = ".env"
