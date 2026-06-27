@@ -87,6 +87,18 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   deliver:          1,   // R2 upload + URL signing ~1¢
   // Line 2 — AI Song + Music Video
   ltx_retake:       40,  // LTX Studio ~$0.10/sec × avg 4s clip = ~40¢
+  // ── Poyo.ai full music production stack ─────────────────────────────────
+  music_video:        2,  // Poyo.ai MV @ $0.02/video (Seedance 2 Mini)
+  song_extension:    10,  // Poyo.ai extend track @ $0.10
+  vocal_removal:     10,  // Poyo.ai vocal remover @ $0.10
+  stem_separation:   10,  // Poyo.ai stems @ $0.10 (alias)
+  cover_generation:  10,  // Poyo.ai cover/style transfer @ $0.10
+  vocal_add:         10,  // Poyo.ai add vocals @ $0.10
+  style_boost:       10,  // Poyo.ai style boost @ $0.10
+  section_replace:   10,  // Poyo.ai replace section @ $0.10
+  album_art:         10,  // Poyo.ai album art @ $0.10
+  timestamped_lyrics: 0,  // Poyo.ai timestamped lyrics — free
+  wav_export:         0,  // Poyo.ai WAV conversion — free
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
@@ -113,6 +125,18 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   deliver:          200,
   // Line 2 — AI Song + Music Video
   ltx_retake:       1500, // revision round value ($15 est. per retake)
+  // ── Poyo.ai full music production stack ─────────────────────────────────
+  music_video:        500,  // MV deliverable — Social Ready Clips / Emotional Soundtrack visual
+  song_extension:     400,  // extended track add-on value
+  vocal_removal:      300,  // instrumental stem — karaoke / re-mix add-on value
+  stem_separation:    300,  // stems add-on (alias)
+  cover_generation:   400,  // AI cover deliverable — Relationship Healing product
+  vocal_add:          400,  // vocals layer add-on
+  style_boost:        200,  // quality refinement pass value
+  section_replace:    300,  // surgical revision — replaces full regen retries
+  album_art:          500,  // AI artwork deliverable (included in Signature Masterpiece)
+  timestamped_lyrics: 100,  // sync-ready lyrics for video layers
+  wav_export:         150,  // lossless audio deliverable
 };
 
 let _pgAvailable = true;
@@ -1035,7 +1059,18 @@ print(json.dumps(out))
     const chain = [primary];
     const ALL_FALLBACKS: Partial<Record<JobType, string[]>> = {
       video:        ["fal-ai", "fal-ai-hailuo", "modal", "vast-ai"],
-      song:         ["sunor_cc"],
+      song:         ["poyo"],
+      music_video:  ["poyo"],
+      song_extension:     ["poyo"],
+      vocal_removal:      ["poyo"],
+      stem_separation:    ["poyo"],
+      cover_generation:   ["poyo"],
+      vocal_add:          ["poyo"],
+      style_boost:        ["poyo"],
+      section_replace:    ["poyo"],
+      album_art:          ["poyo"],
+      timestamped_lyrics: ["poyo"],
+      wav_export:         ["poyo"],
       voice_clone:  ["elevenlabs"],
       narration:    ["elevenlabs", "openai"],
       analysis:     ["openai"],

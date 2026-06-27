@@ -6,7 +6,7 @@ import AdminLayout, { AdminTable, StatusBadge, KpiCard, SectionCard, fmtDate } f
 
 const PROVIDER_COLORS: Record<string, string> = {
   openai:  "#10A37F",
-  sunorcc: "#8B5CF6",
+  poyo: "#D4AF37",
   fal:     "#F59E0B",
   modal:   "#3B82F6",
   vastai:  "#EC4899",

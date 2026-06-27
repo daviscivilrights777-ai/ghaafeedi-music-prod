@@ -247,7 +247,7 @@ export class PipelineOrchestrator {
       story_bible:      { jobType: "story_bible",      provider: "openai",     costCents: 3   },
       production_bible: { jobType: "production_bible", provider: "openai",     costCents: 10  },
       shot_list:        { jobType: "shot_list",         provider: "openai",     costCents: 8   },
-      audio:            { jobType: "song",              provider: "sunor_cc",   costCents: 10  },
+      audio:            { jobType: "song",              provider: "poyo",      costCents: 10  },
       clip_batch:       { jobType: "clip_batch",        provider: "fal-ai",     costCents: 800 },
       edit_assemble:    { jobType: "edit_assemble",     provider: "modal_ffmpeg", costCents: 50  },
       qc_check:         { jobType: "qc_check",          provider: "openai",     costCents: 5   },

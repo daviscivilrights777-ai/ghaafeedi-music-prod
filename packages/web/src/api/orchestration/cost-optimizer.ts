@@ -156,7 +156,7 @@ export class CostOptimizer {
       fal_ai_hailuo: 0.78,
       modal:         0.72,
       vast_ai:       0.65,
-      suno:          0.88,
+      poyo:          0.90,  // Poyo.ai (Suno V5.5 + full pipeline)
       elevenlabs:    0.90,
       openai:        0.95,
     };
@@ -170,7 +170,7 @@ export class CostOptimizer {
       fal_ai_hailuo: 0.85,
       modal:         0.60,
       vast_ai:       0.40,
-      suno:          0.75,
+      poyo:          0.80,  // Poyo.ai (async, typical 30-90s turnaround)
       elevenlabs:    0.95,
       openai:        0.90,
     };

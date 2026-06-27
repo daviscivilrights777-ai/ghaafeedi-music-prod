@@ -6,7 +6,7 @@
 
 import { ProviderRegistry } from "./provider-adapter";
 import { FalAiAdapter, FalAiHailuoAdapter } from "./fal-ai.adapter";
-import { SunoAdapter } from "./suno.adapter";
+import { PoyoAdapter } from "./poyo.adapter";
 import { ElevenLabsAdapter } from "./elevenlabs.adapter";
 import { OpenAIAdapter } from "./openai.adapter";
 import { ModalAdapter } from "./modal.adapter";
@@ -25,14 +25,14 @@ export function bootstrapAdapters(): void {
   // Adapters are plain objects (not classes), register directly
   ProviderRegistry.register(FalAiAdapter);
   ProviderRegistry.register(FalAiHailuoAdapter);
-  ProviderRegistry.register(SunoAdapter);
+  ProviderRegistry.register(PoyoAdapter);
   ProviderRegistry.register(ElevenLabsAdapter);
   ProviderRegistry.register(OpenAIAdapter);
   ProviderRegistry.register(ModalAdapter);
   ProviderRegistry.register(FfmpegModalAdapter);
   ProviderRegistry.register(VastAiAdapter);
   ProviderRegistry.register(LatentSyncAdapter);   // Phase 6 — Sophia Lip Sync
-  ProviderRegistry.register(MusicRouterAdapter);  // Music Router — ACE-Step / Suno / YuE / MusicGen / Stable Audio
+  ProviderRegistry.register(MusicRouterAdapter);  // Music Router — ACE-Step / Poyo.ai / YuE / MusicGen / Stable Audio
   ProviderRegistry.register(LtxStudioAdapter);   // Line 2 — AI Song + Music Video shot retake
 
   console.log(
@@ -43,7 +43,7 @@ export function bootstrapAdapters(): void {
 
 export { ProviderRegistry } from "./provider-adapter";
 export { FalAiAdapter, FalAiHailuoAdapter } from "./fal-ai.adapter";
-export { SunoAdapter } from "./suno.adapter";
+export { PoyoAdapter } from "./poyo.adapter";
 export { ElevenLabsAdapter } from "./elevenlabs.adapter";
 export { OpenAIAdapter } from "./openai.adapter";
 export { ModalAdapter } from "./modal.adapter";

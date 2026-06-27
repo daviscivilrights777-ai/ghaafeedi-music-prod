@@ -144,7 +144,7 @@ export const aiJobs = sqliteTable("ai_jobs", {
   productionId: text("production_id"),
   storyId: text("story_id"),
   type: text("type").notNull(), // emotion_analysis | lyrics | script | storyboard | music_gen | video_gen | image_gen
-  provider: text("provider"),   // openai | sunorcc | fal | modal | vastai
+  provider: text("provider"),   // openai | poyo | fal | modal | vastai
   externalJobId: text("external_job_id"),
   status: text("status").notNull().default("queued"), // queued | running | completed | failed
   input: text("input"),   // JSON

@@ -48,7 +48,19 @@ export type JobType =
   | "qc_check"       // Phase 9: OpenAI vision → quality check final output
   | "deliver"        // Phase 10: R2 upload + signed URL + n8n notification
   // ── Line 2: AI Song + Music Video revision retake ────────────
-  | "ltx_retake";    // LTX Studio video-to-video retake: replace a specific shot in a music video
+  | "ltx_retake"    // LTX Studio video-to-video retake: replace a specific shot in a music video
+  // ── Poyo.ai full music production stack ─────────────────────────────────
+  | "music_video"        // Poyo.ai MV generation at $0.02 (Seedance 2 Mini)
+  | "song_extension"     // Poyo.ai extend a track beyond 8 min
+  | "vocal_removal"      // Poyo.ai vocal remover — produces instrumental stem
+  | "stem_separation"    // Poyo.ai stem separation (alias for vocal_removal)
+  | "cover_generation"   // Poyo.ai audio cover / style transfer
+  | "vocal_add"          // Poyo.ai add vocals to an instrumental track
+  | "style_boost"        // Poyo.ai style reinforcement pass (no full regen)
+  | "section_replace"    // Poyo.ai surgical inpainting — replace segment of a song
+  | "album_art"          // Poyo.ai AI-generated album artwork
+  | "timestamped_lyrics" // Poyo.ai sync-ready lyric timestamps
+  | "wav_export";        // Poyo.ai MP3 → WAV lossless conversion
 
 export class JobQueue {
   /**

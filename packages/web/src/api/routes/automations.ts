@@ -78,7 +78,7 @@ automations.post("/test/:name", requireAdmin, async (c) => {
           jobId:       "job_test_001",
           userId:      "user_test_001",
           jobType:     "song",
-          provider:    "sunor_cc",
+          provider:    "poyo",
           attempt:     2,
           maxAttempts: 3,
           error:       "Timeout after 30s — test trigger",

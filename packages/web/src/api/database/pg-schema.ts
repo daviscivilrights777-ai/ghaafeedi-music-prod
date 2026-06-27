@@ -158,7 +158,7 @@ export const aiJobs = pgTable("ai_jobs", {
   status:           text("status").notNull().default("queued"),
   // queued | dispatched | processing | complete | failed | cancelled
   // | retry | failover_dispatch | quality_review | delivery
-  provider:         text("provider"),               // fal_ai | modal | vast_ai | suno | elevenlabs | openai
+  provider:         text("provider"),               // fal_ai | modal | vast_ai | poyo | elevenlabs | openai
   providerJobId:    text("provider_job_id"),
   inputPayload:     jsonb("input_payload"),
   outputPayload:    jsonb("output_payload"),
@@ -251,7 +251,7 @@ export const assets = pgTable("assets", {
 export const providers = pgTable("providers", {
   id:              text("id").primaryKey(),
   name:            text("name").unique().notNull(),
-  // fal_ai_kling | fal_ai_hailuo | modal | vast_ai | suno_payg | suno_bulk | elevenlabs | openai
+  // fal_ai_kling | fal_ai_hailuo | modal | vast_ai | poyo | elevenlabs | openai
   displayName:     text("display_name"),
   enabled:         boolean("enabled").default(true),
   jobTypes:        jsonb("job_types").default([]),  // string array

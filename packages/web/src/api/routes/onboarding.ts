@@ -26,24 +26,30 @@ const GM_CATALOG = [
   { id: "emotional-soundtrack",  name: "Emotional Soundtrack",     category: "Music",         price: 19,   priceStr: "$19/mo",   icon: "🎶", accent: "#F472B6", tags: ["music","emotion","soundtrack","mood"] },
 ];
 
-// ─── Sunor.cc polling helper ─────────────────────────────────
-const SUNOR_API = "https://sunor.cc/api/v1";
+// ─── Poyo.ai polling helper (replaces Sunor.cc) ─────────────
+const POYO_API = "https://poyo.ai/api/v1";
 
-async function sunorPoll(taskId: string, apiKey: string, timeoutMs = 90_000): Promise<string | null> {
+async function poyoPoll(taskId: string, apiKey: string, timeoutMs = 90_000): Promise<string | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 6_000));
     try {
-      const res = await fetch(`${SUNOR_API}/task/${taskId}`, {
-        headers: { "x-api-key": apiKey },
+      const res = await fetch(`${POYO_API}/music/task/${taskId}`, {
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) continue;
-      const data = await res.json() as { status: string; audio_url?: string; output?: { audio_url?: string }[] };
-      if (data.status === "complete" || data.status === "success" || data.status === "SUCCESS") {
-        return data.audio_url ?? data.output?.[0]?.audio_url ?? null;
+      const data = await res.json() as {
+        status: string;
+        audio_url?: string;
+        output?: { audio_url?: string }[];
+        metadata?: { audio_url?: string };
+      };
+      const s = (data.status ?? "").toLowerCase();
+      if (s === "complete" || s === "completed" || s === "success" || s === "done") {
+        return data.audio_url ?? data.output?.[0]?.audio_url ?? data.metadata?.audio_url ?? null;
       }
-      if (data.status === "error" || data.status === "failed") return null;
+      if (s === "error" || s === "failed" || s === "failure") return null;
     } catch { /* retry */ }
   }
   return null;
@@ -282,12 +288,12 @@ RULES:
         };
       }
 
-      // ── Step 2: Sunor.cc → generate audio preview ──
+      // ── Step 2: Poyo.ai → generate audio preview ──
       let audioUrl: string | null = null;
       try {
-        const apiKey = await getSecret(SECRET_KEYS.SUNO_API_KEY);
+        const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
 
-        // Format lyrics as a single block for Suno
+        // Format lyrics as a single block for Suno V5 (same engine under Poyo.ai)
         const fullLyrics = [
           "[Verse 1]", songMeta.lyrics.verse1,
           "[Chorus]", songMeta.lyrics.chorus,
@@ -296,19 +302,16 @@ RULES:
           "[Outro Chorus]", songMeta.lyrics.outroChorus,
         ].join("\n");
 
-        const dispatchRes = await fetch(`${SUNOR_API}/task`, {
+        const dispatchRes = await fetch(`${POYO_API}/music/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": apiKey },
           body: JSON.stringify({
-            model: "suno",
-            task_type: "music",
-            input: {
-              gpt_description_prompt: songMeta.sunoPrompt,
-              prompt: fullLyrics,
-              title: songMeta.title,
-              tags: `${songMeta.genre} ${songMeta.mood?.join(" ")}`,
-              make_instrumental: false,
-            },
+            model:                     "V5",
+            title:                     songMeta.title,
+            style:                     `${songMeta.genre} ${songMeta.mood?.join(" ")}`,
+            gpt_description_prompt:    songMeta.sunoPrompt,
+            lyrics:                    fullLyrics,
+            make_instrumental:         false,
           }),
           signal: AbortSignal.timeout(15_000),
         });
@@ -317,11 +320,11 @@ RULES:
           const dispatchData = await dispatchRes.json() as { task_id?: string; id?: string; taskId?: string };
           const taskId = dispatchData.task_id ?? dispatchData.taskId ?? dispatchData.id;
           if (taskId) {
-            audioUrl = await sunorPoll(String(taskId), apiKey, 90_000);
+            audioUrl = await poyoPoll(String(taskId), apiKey, 90_000);
           }
         }
-      } catch (sunoErr: any) {
-        console.warn("[generate-song] Sunor.cc error:", sunoErr?.message);
+      } catch (poyoErr: any) {
+        console.warn("[generate-song] Poyo.ai error:", poyoErr?.message);
         // audioUrl stays null — frontend will show "preview generating" state
       }
 

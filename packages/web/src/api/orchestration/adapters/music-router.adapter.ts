@@ -2,14 +2,14 @@
 // Ghaafeedi Music — Music Router Adapter
 // Wraps the Python cinematic microservice /api/music/route
 // endpoint. Provides intelligent model routing:
-//   Suno → standard English
-//   ACE-Step → restricted/explicit content
-//   MusicGen → non-English (17 languages)
-//   Stable Audio → instrumental / ultra-quality
-//   YuE → Suno-quality fallback
+//   Poyo.ai → standard English (primary, replaces Suno/Sunor.cc)
+//   ACE-Step → restricted/explicit content (self-hosted fallback)
+//   MusicGen → non-English (17 languages, self-hosted fallback)
+//   Stable Audio → instrumental / ultra-quality (self-hosted fallback)
+//   YuE → lyric-heavy fallback (self-hosted fallback)
 //
 // Toggle: set MUSIC_ROUTER_ENABLED=true in env to activate.
-// Default: SunoAdapter remains primary when flag is absent.
+// Default: PoyoAdapter is primary when flag is absent.
 // ============================================================
 import type {
   ProviderAdapter,
@@ -29,11 +29,11 @@ const ROUTER_ENABLED =
 
 // Cost estimates per model (cents)
 const MODEL_COSTS: Record<string, number> = {
-  suno:          10,   // Sunor.cc PAYG
-  "ace-step":     5,   // GPU compute estimate
-  "stable-audio": 4,   // A10G compute
-  musicgen:       3,   // A10G compute (medium model)
-  yue:            8,   // A100 compute (heavier model)
+  poyo:          10,   // Poyo.ai (primary — Suno V5/V5.5 underneath)
+  "ace-step":     5,   // GPU compute estimate (self-hosted fallback)
+  "stable-audio": 4,   // A10G compute (self-hosted fallback)
+  musicgen:       3,   // A10G compute — medium model (self-hosted fallback)
+  yue:            8,   // A100 compute — heavier model (self-hosted fallback)
 };
 
 interface MusicRouteResponse {
@@ -53,7 +53,7 @@ interface MusicRouteResponse {
 
 export const MusicRouterAdapter: ProviderAdapter = {
   name:        "music_router",
-  displayName: "Music Router (ACE-Step / Suno / YuE / MusicGen / Stable Audio)",
+  displayName: "Music Router (Poyo.ai / ACE-Step / YuE / MusicGen / Stable Audio)",
   jobTypes:    ["song"],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
@@ -61,11 +61,11 @@ export const MusicRouterAdapter: ProviderAdapter = {
     // so we return the range across all models
     return {
       minCents:      MODEL_COSTS["stable-audio"]!, // 4¢ cheapest
-      maxCents:      MODEL_COSTS["suno"]!,          // 10¢ most expensive
-      estimateCents: MODEL_COSTS["ace-step"]!,      // 5¢ typical self-hosted
+      maxCents:      MODEL_COSTS["poyo"]!,          // 10¢ most expensive (Poyo.ai primary)
+      estimateCents: MODEL_COSTS["ace-step"]!,      // 5¢ typical self-hosted fallback
       unit:          "per_song",
       breakdown:
-        "Music Router: 3–10¢ depending on model selected (Suno=10¢, ACE-Step=5¢, MusicGen=3¢)",
+        "Music Router: 3–10¢ depending on model selected (Poyo.ai=10¢, ACE-Step=5¢, MusicGen=3¢)",
     };
   },
 
@@ -73,7 +73,7 @@ export const MusicRouterAdapter: ProviderAdapter = {
     if (!ROUTER_ENABLED) {
       throw new Error(
         "[MusicRouter] MUSIC_ROUTER_ENABLED is not set. " +
-        "Use SunoAdapter for standard routing."
+        "Use PoyoAdapter for standard routing."
       );
     }
 
@@ -147,8 +147,11 @@ export const MusicRouterAdapter: ProviderAdapter = {
       };
 
       if (data.completed) {
-        const modelCost =
-          MODEL_COSTS[data.model ?? "ace-step"] ?? MODEL_COSTS["ace-step"]!;
+        // Map legacy "suno" model name to "poyo" for cost lookup
+        const modelKey = (data.model === "suno" || data.model === "sunor_cc")
+          ? "poyo"
+          : (data.model ?? "ace-step");
+        const modelCost = MODEL_COSTS[modelKey] ?? MODEL_COSTS["ace-step"]!;
 
         return {
           status:    "complete",

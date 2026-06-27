@@ -176,13 +176,14 @@ providers.post("/:name/test", requireAdmin, async (c) => {
       };
       break;
 
-    case "sunor_cc":
+    case "poyo":
       baseJob.jobType = "song";
       baseJob.inputPayload = {
-        lyrics:    "This is a test song for Ghaafeedi Music. Just a silent probe.",
-        title:     "Orchestration Test Track",
-        genre:     "ambient",
-        instrumental: true,
+        lyrics:         "This is a test song for Ghaafeedi Music. Just a silent probe.",
+        title:          "Orchestration Test Track",
+        genre:          "ambient",
+        instrumental:   true,
+        model:          "V5",
       };
       break;
 

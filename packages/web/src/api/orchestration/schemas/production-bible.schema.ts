@@ -23,7 +23,7 @@ export interface AudioBrief {
   lyrics?: string;         // pre-written lyrics if product includes them
   vocalStyle?: string;     // "soulful female" | "deep male" | etc.
   duration: number;        // target duration in seconds
-  sunoPrompt: string;      // fully formatted Sunor.cc generation prompt
+  sunoPrompt: string;      // fully formatted Poyo.ai / Suno V5 generation prompt
 }
 
 export interface NarrationBrief {
