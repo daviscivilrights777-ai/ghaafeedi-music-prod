@@ -22,6 +22,7 @@ import { lipsync } from "./routes/lipsync";
 import { sophiaMobileRoutes } from "./routes/sophia-mobile";
 import { didRoutes } from "./routes/did";
 import { revisionsIntake, adminRevisions } from "./routes/revisions-intake";
+import { characters } from "./routes/characters";
 
 const app = new Hono<HonoEnv>()
   .basePath('api')
@@ -53,7 +54,8 @@ const app = new Hono<HonoEnv>()
   .route("/sophia-mobile", sophiaMobileRoutes)
   .route("/did", didRoutes)
   .route("/revisions", revisionsIntake)
-  .route("/admin/revisions", adminRevisions);
+  .route("/admin/revisions", adminRevisions)
+  .route("/characters", characters);
 
 export type AppType = typeof app;
 export default app;

@@ -7608,6 +7608,8 @@ const GM_ADDON_CATALOG: AddonProduct[] = [
   { id:"cinematic-story-film", name:"Cinematic Story Film",   sub:"Your Life. The Movie.",       price:79,   priceStr:"$79",     category:"Video",   icon:"🎞️", accent:"#FB923C" },
   // ── Upgrades ──────────────────────────────────────────────────────────────
   { id:"sophia-lipsync",       name:"Sophia Lip Sync Narration", sub:"Sophia narrates your film with full lip sync — Elite members free", price:29, priceStr:"$29", category:"Upgrades", icon:"💋", accent:"#D4AF37" },
+  // ── Character Creator ──────────────────────────────────────────────────────
+  { id:"generic-character-creator", name:"Custom Character Creator", sub:"Can't get a photo? Build a synthetic stand-in — your story won't halt", price:39, priceStr:"$39", category:"Upgrades", icon:"🎭", accent:"#A78BFA" },
 ];
 
 const GM_ADDON_CATEGORIES = ["Membership","Songs","Short Films","Feature Films","Masterpiece","AI","Studio","Music","Video","NFT","Legacy","Premium","Upgrades"];
@@ -7631,15 +7633,19 @@ function S8AddOnPanel({
   addons,
   onAddAddon,
   onRemoveAddon,
+  productType,
 }: {
   primaryPkgId: string;
   addons: CartAddonItem[];
   onAddAddon: (item: CartAddonItem) => void;
   onRemoveAddon: (productId: string) => void;
+  productType?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [activeCategory, setActiveCategory] = React.useState<string>("All");
   const [search, setSearch] = React.useState("");
+  const [charBuilderOpen, setCharBuilderOpen] = React.useState(false);
+  const [pendingCharProduct, setPendingCharProduct] = React.useState<CartAddonItem | null>(null);
 
   // Exclude already-in-cart items + the primary membership if it matches
   const primaryMembershipId =
@@ -7796,15 +7802,23 @@ function S8AddOnPanel({
             {filtered.map(product => (
               <button
                 key={product.id}
-                onClick={() => onAddAddon({
-                  productId: product.id,
-                  name:      product.name,
-                  priceStr:  product.priceStr,
-                  price:     product.price,
-                  category:  product.category,
-                  icon:      product.icon,
-                  accent:    product.accent,
-                })}
+                onClick={() => {
+                  const item: CartAddonItem = {
+                    productId: product.id,
+                    name:      product.name,
+                    priceStr:  product.priceStr,
+                    price:     product.price,
+                    category:  product.category,
+                    icon:      product.icon,
+                    accent:    product.accent,
+                  };
+                  if (product.id === "generic-character-creator") {
+                    setPendingCharProduct(item);
+                    setCharBuilderOpen(true);
+                  } else {
+                    onAddAddon(item);
+                  }
+                }}
                 style={{
                   background:"rgba(5,11,26,0.7)",
                   border:`1px solid rgba(${hexToRgb(product.accent)},0.22)`,
@@ -7885,6 +7899,24 @@ function S8AddOnPanel({
           </div>
         </div>
       )}
+
+      {/* Character Builder Modal — triggered when customer adds generic-character-creator */}
+      <CharacterBuilderModal
+        open={charBuilderOpen}
+        onClose={() => { setCharBuilderOpen(false); setPendingCharProduct(null); }}
+        productType={productType}
+        onCharacterCreated={(result) => {
+          if (pendingCharProduct) {
+            // Add the add-on to cart, enhanced with synthetic character data
+            onAddAddon({
+              ...pendingCharProduct,
+              name: `Custom Character Creator — ${result.label}`,
+            });
+          }
+          setCharBuilderOpen(false);
+          setPendingCharProduct(null);
+        }}
+      />
     </div>
   );
 }
@@ -7894,6 +7926,383 @@ function hexToRgb(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!result) return "212,175,55";
   return `${parseInt(result[1]!,16)},${parseInt(result[2]!,16)},${parseInt(result[3]!,16)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── CharacterBuilderModal ────────────────────────────────────────────────────
+// Lets customers synthesise a stand-in character when they can't supply a
+// real photo/consent. Launched from the "Custom Character Creator" add-on card.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CharacterQuestionnaire {
+  label:      string;
+  gender:     string;
+  ageRange:   string;
+  ethnicity:  string;
+  skinTone:   string;
+  hairColor:  string;
+  hairStyle:  string;
+  build:      string;
+  eyeColor:   string;
+  style:      string;
+  mood:       string;
+  extraNotes: string;
+}
+
+const EMPTY_QUESTIONNAIRE: CharacterQuestionnaire = {
+  label: "", gender: "", ageRange: "", ethnicity: "",
+  skinTone: "", hairColor: "", hairStyle: "", build: "",
+  eyeColor: "", style: "", mood: "", extraNotes: "",
+};
+
+interface SyntheticCharacterResult {
+  characterId: string;
+  imageUrl:    string | null;
+  prompt:      string;
+  label:       string;
+  questionnaire: CharacterQuestionnaire;
+}
+
+function CharacterBuilderModal({
+  open,
+  onClose,
+  onCharacterCreated,
+  productType,
+}: {
+  open:               boolean;
+  onClose:            () => void;
+  onCharacterCreated: (result: SyntheticCharacterResult) => void;
+  productType?:       string;
+}) {
+  const [step, setStep]     = React.useState<"form" | "generating" | "result">("form");
+  const [q, setQ]           = React.useState<CharacterQuestionnaire>(EMPTY_QUESTIONNAIRE);
+  const [result, setResult] = React.useState<SyntheticCharacterResult | null>(null);
+  const [error, setError]   = React.useState<string | null>(null);
+
+  // Reset on open
+  React.useEffect(() => {
+    if (open) { setStep("form"); setQ(EMPTY_QUESTIONNAIRE); setResult(null); setError(null); }
+  }, [open]);
+
+  if (!open) return null;
+
+  const set = (k: keyof CharacterQuestionnaire, v: string) => setQ(prev => ({ ...prev, [k]: v }));
+
+  const isFormValid =
+    q.gender && q.ageRange && q.skinTone && q.hairColor &&
+    q.hairStyle && q.build && q.eyeColor && q.style && q.mood;
+
+  async function handleGenerate() {
+    if (!isFormValid) return;
+    setStep("generating");
+    setError(null);
+    try {
+      const res = await fetch("/api/characters/generate-synthetic", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionnaire: { ...q, productType } }),
+      });
+      const data = await res.json() as any;
+      if (!res.ok || !data.characterId) throw new Error(data.error || "Generation failed");
+      const r: SyntheticCharacterResult = {
+        characterId:   data.characterId,
+        imageUrl:      data.imageUrl ?? null,
+        prompt:        data.prompt,
+        label:         q.label || "Character",
+        questionnaire: q,
+      };
+      setResult(r);
+      setStep("result");
+    } catch (e: any) {
+      setError(e.message || "Something went wrong. Please try again.");
+      setStep("form");
+    }
+  }
+
+  // ── Shared styles ───────────────────────────────────────────────────────────
+  const overlay: React.CSSProperties = {
+    position: "fixed", inset: 0, zIndex: 9999,
+    background: "rgba(5,7,13,0.92)",
+    backdropFilter: "blur(16px)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    padding: "20px",
+  };
+  const panel: React.CSSProperties = {
+    background: "linear-gradient(145deg,#0D1526 0%,#060D1E 100%)",
+    border: "1px solid rgba(212,175,55,0.25)",
+    borderRadius: "20px",
+    width: "100%", maxWidth: "580px",
+    maxHeight: "90vh", overflowY: "auto",
+    padding: "32px",
+    boxShadow: "0 0 80px rgba(212,175,55,0.12), 0 24px 64px rgba(0,0,0,0.8)",
+  };
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: "11px", fontWeight: 600,
+    letterSpacing: "0.08em", textTransform: "uppercase",
+    color: "#D4AF37", marginBottom: "6px",
+  };
+  const inputStyle: React.CSSProperties = {
+    width: "100%", background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "10px", padding: "10px 14px",
+    color: "#fff", fontSize: "14px", outline: "none",
+    boxSizing: "border-box" as const,
+  };
+
+  function Select({ label, field, options }: { label: string; field: keyof CharacterQuestionnaire; options: string[] }) {
+    return (
+      <div style={{ marginBottom: "16px" }}>
+        <label style={labelStyle}>{label}</label>
+        <select
+          value={q[field]}
+          onChange={e => set(field, e.target.value)}
+          style={{ ...inputStyle, cursor: "pointer" }}
+        >
+          <option value="">— Select —</option>
+          {options.map(o => <option key={o} value={o.toLowerCase().replace(/\s+/g, "-")}>{o}</option>)}
+        </select>
+      </div>
+    );
+  }
+
+  // ── FORM STEP ───────────────────────────────────────────────────────────────
+  if (step === "form") return (
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={panel}>
+        {/* Header */}
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "24px" }}>🎭</span>
+              <span style={{ fontSize: "20px", fontFamily: "'Playfair Display',serif", fontWeight: 700, color: "#D4AF37" }}>
+                Custom Character Creator
+              </span>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "#888", fontSize: "20px", cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
+          <p style={{ fontSize: "13px", color: "#94A3B8", lineHeight: 1.6, margin: 0 }}>
+            Can't get a photo or consent from the other person? No problem. Answer these questions and we'll generate a cinematic stand-in character — your production won't be halted.
+          </p>
+          <div style={{ marginTop: "10px", padding: "10px 14px", background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", borderRadius: "8px", fontSize: "12px", color: "#C4B5FD" }}>
+            ⚠️ This generates a <strong>100% synthetic, fictional character</strong> — not based on any real person. Used only for visual storytelling in your film.
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ padding: "10px 14px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "8px", fontSize: "13px", color: "#FCA5A5", marginBottom: "16px" }}>
+            {error}
+          </div>
+        )}
+
+        {/* Row 1 */}
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>What do you call this person in your story?</label>
+          <input
+            type="text"
+            placeholder='e.g. "My partner", "My sister", "My best friend"'
+            value={q.label}
+            onChange={e => set("label", e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Select label="Gender" field="gender" options={["Male","Female","Non-Binary","Prefer not to say"]} />
+          <Select label="Age Range" field="ageRange" options={["18-25","26-35","36-45","46-55","56-65","65+"]} />
+        </div>
+
+        <div style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>Ethnicity / Background <span style={{ color: "#64748B" }}>(optional)</span></label>
+          <input
+            type="text"
+            placeholder='e.g. "African American", "Latino", "South Asian", "Mixed"'
+            value={q.ethnicity}
+            onChange={e => set("ethnicity", e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Select label="Skin Tone" field="skinTone" options={["Fair","Light","Medium","Olive","Tan","Deep"]} />
+          <Select label="Eye Color" field="eyeColor" options={["Brown","Dark Brown","Blue","Green","Hazel","Gray"]} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={labelStyle}>Hair Color</label>
+            <input
+              type="text"
+              placeholder='e.g. "Black", "Blonde", "Auburn"'
+              value={q.hairColor}
+              onChange={e => set("hairColor", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <Select label="Hair Style" field="hairStyle" options={["Short","Medium","Long","Curly","Straight","Wavy","Locs","Braids","Bald"]} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Select label="Build" field="build" options={["Slim","Athletic","Average","Plus"]} />
+          <Select label="Wardrobe Style" field="style" options={["Casual","Business","Streetwear","Elegant","Artistic","Athletic"]} />
+        </div>
+
+        <Select label="Mood / Energy" field="mood" options={["Warm","Serious","Playful","Mysterious","Confident","Gentle"]} />
+
+        <div style={{ marginBottom: "24px" }}>
+          <label style={labelStyle}>Anything else? <span style={{ color: "#64748B" }}>(optional)</span></label>
+          <textarea
+            rows={2}
+            placeholder='e.g. "Dimples when smiling", "Usually wears glasses", "Tall and elegant"'
+            value={q.extraNotes}
+            onChange={e => set("extraNotes", e.target.value)}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+          />
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={handleGenerate}
+          disabled={!isFormValid}
+          style={{
+            width: "100%", padding: "14px",
+            background: isFormValid
+              ? "linear-gradient(135deg,#D4AF37 0%,#F4D06F 50%,#D4AF37 100%)"
+              : "rgba(255,255,255,0.05)",
+            border: "none", borderRadius: "12px",
+            color: isFormValid ? "#050B1A" : "#64748B",
+            fontSize: "15px", fontWeight: 700,
+            cursor: isFormValid ? "pointer" : "not-allowed",
+            transition: "all 0.2s",
+            letterSpacing: "0.04em",
+          }}
+        >
+          🎭 Generate My Character — $39
+        </button>
+
+        <p style={{ textAlign: "center", fontSize: "11px", color: "#475569", marginTop: "12px" }}>
+          Generation takes ~30 seconds • You can regenerate once for free if you're not happy
+        </p>
+      </div>
+    </div>
+  );
+
+  // ── GENERATING STEP ─────────────────────────────────────────────────────────
+  if (step === "generating") return (
+    <div style={overlay}>
+      <div style={{ ...panel, display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", textAlign: "center" }}>
+        <div style={{
+          width: "80px", height: "80px", borderRadius: "50%",
+          border: "3px solid rgba(212,175,55,0.2)",
+          borderTop: "3px solid #D4AF37",
+          animation: "spin 1.2s linear infinite",
+        }} />
+        <div>
+          <div style={{ fontSize: "20px", fontFamily: "'Playfair Display',serif", fontWeight: 700, color: "#D4AF37", marginBottom: "8px" }}>
+            Creating Your Character...
+          </div>
+          <p style={{ fontSize: "13px", color: "#94A3B8", margin: 0, lineHeight: 1.6 }}>
+            Our AI is crafting a cinematic portrait based on your description.<br />This takes about 30 seconds.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          {["Analyzing...", "Rendering...", "Finalizing..."].map((s, i) => (
+            <div key={s} style={{
+              padding: "6px 14px", borderRadius: "20px", fontSize: "11px",
+              background: i === 0 ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.04)",
+              border: `1px solid ${i === 0 ? "rgba(212,175,55,0.3)" : "rgba(255,255,255,0.08)"}`,
+              color: i === 0 ? "#D4AF37" : "#475569",
+            }}>{s}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── RESULT STEP ─────────────────────────────────────────────────────────────
+  if (step === "result" && result) return (
+    <div style={overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={panel}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}>
+          <span style={{ fontSize: "20px", fontFamily: "'Playfair Display',serif", fontWeight: 700, color: "#D4AF37" }}>
+            ✓ Character Created
+          </span>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "#888", fontSize: "20px", cursor: "pointer" }}>✕</button>
+        </div>
+
+        {/* Portrait */}
+        <div style={{ display: "flex", gap: "20px", marginBottom: "24px", alignItems: "flex-start" }}>
+          <div style={{
+            width: "140px", flexShrink: 0, height: "185px", borderRadius: "12px",
+            overflow: "hidden", border: "2px solid rgba(212,175,55,0.4)",
+            background: "linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)",
+            boxShadow: "0 0 30px rgba(212,175,55,0.2)",
+          }}>
+            {result.imageUrl ? (
+              <img src={result.imageUrl} alt={result.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                <span style={{ fontSize: "40px" }}>🎭</span>
+                <span style={{ fontSize: "11px", color: "#64748B", textAlign: "center", padding: "0 8px" }}>Portrait preview<br/>unavailable</span>
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
+              {result.label || "Character"}
+            </div>
+            <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "12px" }}>Synthetic · Fictional · Story-only</div>
+            <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "6px" }}>
+              {[
+                result.questionnaire.gender,
+                result.questionnaire.ageRange,
+                result.questionnaire.skinTone,
+                result.questionnaire.hairStyle,
+                result.questionnaire.build,
+                result.questionnaire.style,
+                result.questionnaire.mood,
+              ].filter(Boolean).map((tag, i) => (
+                <span key={i} style={{
+                  padding: "3px 10px", borderRadius: "12px", fontSize: "11px",
+                  background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.2)",
+                  color: "#D4AF37", textTransform: "capitalize",
+                }}>{tag}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "12px 16px", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "10px", fontSize: "13px", color: "#86EFAC", marginBottom: "20px" }}>
+          ✓ This character has been added to your production. Our team will use it to represent this person in your film.
+        </div>
+
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => { setStep("form"); setResult(null); }}
+            style={{
+              flex: 1, padding: "12px",
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: "10px", color: "#94A3B8", fontSize: "13px", cursor: "pointer",
+            }}
+          >
+            ↺ Regenerate
+          </button>
+          <button
+            onClick={() => { onCharacterCreated(result); onClose(); }}
+            style={{
+              flex: 2, padding: "12px",
+              background: "linear-gradient(135deg,#D4AF37 0%,#F4D06F 50%,#D4AF37 100%)",
+              border: "none", borderRadius: "10px",
+              color: "#050B1A", fontSize: "14px", fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            ✓ Use This Character
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
