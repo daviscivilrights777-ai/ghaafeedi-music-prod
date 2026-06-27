@@ -13,8 +13,8 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { SophiaAvatarRenderer, AvatarHandle } from "./SophiaAvatarRenderer";
-import type { RevisionJobPayload } from "../../types/revision";
+import { SophiaAvatarRenderer } from "./SophiaAvatarRenderer";
+import type { AvatarHandle } from "./SophiaAvatarRenderer";
 import { getToken } from "../../lib/authClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ function buildSophiaScript(
   switch (phase) {
     case 0: {
       if (isRound2Plus && ctx?.priorRevisionDirectives?.length) {
-        return `Welcome back${greeting ? `, ${greeting}` : ""}. I remember what we tried last time — ${ctx.priorRevisionDirectives[ctx.priorRevisionDirectives.length - 1].slice(0, 80)}... Let's go deeper this round. What are we revisiting — the song, the video, or both?`;
+        return `Welcome back${greeting ? `, ${greeting}` : ""}. I remember what we tried last time — ${(ctx.priorRevisionDirectives[ctx.priorRevisionDirectives.length - 1] ?? "").slice(0, 80)}... Let's go deeper this round. What are we revisiting — the song, the video, or both?`;
       }
       if (ctx?.storyTitle) {
         return `Welcome back${greeting ? `, ${greeting}` : ""}. I've been thinking about "${title}" since we finished it. Something's not sitting right for you — I can feel it. Tell me: are we revisiting the song, the video, or both?`;
@@ -599,7 +599,7 @@ const Phase3Director: React.FC<{
             What Sophia directed last time
           </div>
           <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.6)", lineHeight: 1.6, margin: 0, fontFamily: "Inter,sans-serif", fontStyle: "italic" }}>
-            "{ctx.priorRevisionDirectives[ctx.priorRevisionDirectives.length - 1].slice(0, 200)}"
+            "{(ctx.priorRevisionDirectives[ctx.priorRevisionDirectives.length - 1] ?? "").slice(0, 200)}"
           </p>
         </div>
       )}

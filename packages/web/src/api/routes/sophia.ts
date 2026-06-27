@@ -1,11 +1,12 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { auth } from "../auth";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 import { SophiaIntroGenerator, type SophiaIntroRequest } from "../orchestration/sophia-intro-generator";
 import { logAICall } from "../lib/braintrust";
 import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
-const app = new Hono();
+const app = new Hono<HonoEnv>();
 
 // In-memory free tier tracker: key = ip+date, value = message count
 // This resets naturally when server restarts; Redis would be better for scale
@@ -95,21 +96,21 @@ app.post("/chat", async (c) => {
           .select({
             id: aiJobs.id,
             status: aiJobs.status,
-            outputUrl: aiJobs.outputUrl,
+            outputPayload: aiJobs.outputPayload,
             errorMessage: aiJobs.errorMessage,
-            createdAt: aiJobs.createdAt,
+            queuedAt: aiJobs.queuedAt,
             completedAt: aiJobs.completedAt,
           })
           .from(aiJobs)
           .where(and(eq(aiJobs.userId, userId), eq(aiJobs.jobType, "lip_sync")))
-          .orderBy(desc(aiJobs.createdAt))
+          .orderBy(desc(aiJobs.queuedAt))
           .limit(5);
 
         if (lsJobs.length > 0) {
           const jobLines = lsJobs.map((j, i) => {
             const status = j.status;
-            const created = j.createdAt ? new Date(j.createdAt).toLocaleDateString() : "unknown date";
-            const out = (j.outputUrl as string | null) ? `Output ready: ${j.outputUrl}` : "";
+            const created = j.queuedAt ? new Date(j.queuedAt).toLocaleDateString() : "unknown date";
+            const out = (j.outputPayload as any)?.r2Url || (j.outputPayload as any)?.outputUrl ? `Output ready: ${(j.outputPayload as any)?.r2Url || (j.outputPayload as any)?.outputUrl}` : "";
             const err = (j.errorMessage as string | null) ? `Error: ${(j.errorMessage as string).slice(0, 80)}` : "";
             return `  Job ${i + 1}: status=${status}, created=${created}${out ? ", " + out : ""}${err ? ", " + err : ""}`;
           }).join("\n");
@@ -148,7 +149,7 @@ Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}`
     ];
 
     let reply = "I'm here to help. Could you tell me more?";
-    let usedModel = POYO_LLM.sophia;
+    let usedModel: string = POYO_LLM.sophia;
 
     try {
       const data = await poyoChat({

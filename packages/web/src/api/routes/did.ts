@@ -14,8 +14,9 @@
 // ============================================================
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 
-export const didRoutes = new Hono();
+export const didRoutes = new Hono<HonoEnv>();
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

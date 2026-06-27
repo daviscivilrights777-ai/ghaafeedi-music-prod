@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq, and } from "drizzle-orm";
@@ -28,12 +29,12 @@ async function writeAuditLog(payload: {
   });
 }
 
-export const acknowledgements = new Hono()
+export const acknowledgements = new Hono<HonoEnv>()
   .use("*", authMiddleware)
 
   // ─── POST /api/acknowledgements — record acceptance of product terms ──────
   .post("/", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json<{ productSlug: string }>();
     if (!body.productSlug) return c.json({ error: "productSlug required" }, 400);
 
@@ -88,7 +89,7 @@ export const acknowledgements = new Hono()
 
   // ─── GET /api/acknowledgements/:productSlug — check if user acknowledged ──
   .get("/:productSlug", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const { productSlug } = c.req.param();
 
     const [ack] = await db
@@ -107,7 +108,7 @@ export const acknowledgements = new Hono()
 
   // ─── GET /api/acknowledgements — list all user's acknowledgements ─────────
   .get("/", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const acks = await db
       .select()
       .from(schema.acknowledgements)

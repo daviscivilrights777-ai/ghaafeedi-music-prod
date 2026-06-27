@@ -15,7 +15,7 @@ const TEXT   = "#FFFFFF";
 // ─── Reusable animation variant ───────────────────────────────────────────────
 const fadeUp = {
   hidden: { opacity: 0, y: 32 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] as any } },
 };
 const stagger = { visible: { transition: { staggerChildren: 0.10 } } };
 
@@ -196,7 +196,7 @@ function HeroSection() {
         <motion.h1
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] as any }}
           style={{
             fontFamily: "'Playfair Display', serif",
             fontSize: "clamp(34px, 5.5vw, 64px)",

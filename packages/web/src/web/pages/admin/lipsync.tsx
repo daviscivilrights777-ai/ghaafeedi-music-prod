@@ -219,7 +219,12 @@ export default function AdminLipSync() {
           </div>
         ) : (
           <AdminTable
-            columns={["ID", "Member", "Title", "Status", "Provider", "Duration", "Cost", "Retries", "Output", "Error", "Created", "Actions"]}
+            columns={[
+              {key:"id",label:"ID"},{key:"member",label:"Member"},{key:"title",label:"Title"},
+              {key:"status",label:"Status"},{key:"provider",label:"Provider"},{key:"duration",label:"Duration"},
+              {key:"cost",label:"Cost"},{key:"retries",label:"Retries"},{key:"output",label:"Output"},
+              {key:"error",label:"Error"},{key:"created",label:"Created"},{key:"actions",label:"Actions"},
+            ]}
             rows={rows}
           />
         )}

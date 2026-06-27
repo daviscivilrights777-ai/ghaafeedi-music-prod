@@ -6,7 +6,7 @@ import { useState, useRef, useEffect } from "react";
 
 const FADE_UP = {
   hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] as any } },
 };
 const STAGGER = { show: { transition: { staggerChildren: 0.09 } } };
 
@@ -64,13 +64,13 @@ const SOPHIA_RESPONSES: Record<string, string> = {
 
 function getSophiaResponse(input: string): string {
   const lower = input.toLowerCase();
-  if (lower.includes("refund")) return SOPHIA_RESPONSES.refund;
-  if (lower.includes("cancel")) return SOPHIA_RESPONSES.cancel;
-  if (lower.includes("order") || lower.includes("track")) return SOPHIA_RESPONSES.order;
-  if (lower.includes("price") || lower.includes("cost") || lower.includes("plan") || lower.includes("subscription")) return SOPHIA_RESPONSES.price;
-  if (lower.includes("human") || lower.includes("person") || lower.includes("agent") || lower.includes("escalate")) return SOPHIA_RESPONSES.human;
-  if (lower.includes("voice") || lower.includes("clone")) return SOPHIA_RESPONSES.voice;
-  return SOPHIA_RESPONSES.default;
+  if (lower.includes("refund")) return SOPHIA_RESPONSES.refund ?? "";
+  if (lower.includes("cancel")) return SOPHIA_RESPONSES.cancel ?? "";
+  if (lower.includes("order") || lower.includes("track")) return SOPHIA_RESPONSES.order ?? "";
+  if (lower.includes("price") || lower.includes("cost") || lower.includes("plan") || lower.includes("subscription")) return SOPHIA_RESPONSES.price ?? "";
+  if (lower.includes("human") || lower.includes("person") || lower.includes("agent") || lower.includes("escalate")) return SOPHIA_RESPONSES.human ?? "";
+  if (lower.includes("voice") || lower.includes("clone")) return SOPHIA_RESPONSES.voice ?? "";
+  return SOPHIA_RESPONSES.default ?? "";
 }
 
 function SophiaChat() {

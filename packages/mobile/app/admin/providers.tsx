@@ -22,7 +22,7 @@ function BalanceBadge({ status, dashUrl }: { status: string | null; dashUrl: str
     unknown:   { color: C.grey,   label: "UNKNOWN" },
   };
 
-  const entry = map[status] ?? map.unknown;
+  const entry = (map[status] ?? map.unknown)!;
 
   return (
     <TouchableOpacity

@@ -10,7 +10,7 @@ const NAVY = "#0B1736";
 
 const FADE_UP = {
   hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] as any } },
 };
 const STAGGER = { show: { transition: { staggerChildren: 0.07 } } };
 
@@ -193,7 +193,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] as any }}
             style={{ overflow: "hidden" }}
           >
             <p style={{
@@ -292,7 +292,7 @@ export default function FaqPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] as any }}
             >
               <div style={{
                 background: "rgba(11,23,54,0.4)", border: "1px solid rgba(212,175,55,0.12)",
@@ -304,18 +304,18 @@ export default function FaqPage() {
                   padding: "24px 0 16px", borderBottom: "1px solid rgba(212,175,55,0.12)",
                   marginBottom: 8,
                 }}>
-                  <span style={{ fontSize: 18, color: GOLD }}>{FAQ_CATEGORIES[activeTab].icon}</span>
+                  <span style={{ fontSize: 18, color: GOLD }}>{FAQ_CATEGORIES[activeTab]!.icon}</span>
                   <h2 style={{
                     fontFamily: "Playfair Display, serif", fontSize: 22,
                     fontWeight: 700, color: "#FFF", margin: 0,
-                  }}>{FAQ_CATEGORIES[activeTab].label}</h2>
+                  }}>{FAQ_CATEGORIES[activeTab]!.label}</h2>
                   <span style={{
                     fontSize: 11, color: GOLD, fontWeight: 700, fontFamily: "Inter, sans-serif",
                     background: "rgba(212,175,55,0.10)", border: "1px solid rgba(212,175,55,0.25)",
                     borderRadius: 20, padding: "3px 10px", marginLeft: "auto",
-                  }}>{FAQ_CATEGORIES[activeTab].items.length} questions</span>
+                  }}>{FAQ_CATEGORIES[activeTab]!.items.length} questions</span>
                 </div>
-                {FAQ_CATEGORIES[activeTab].items.map((item, i) => (
+                {FAQ_CATEGORIES[activeTab]!.items.map((item, i) => (
                   <FaqItem key={i} q={item.q} a={item.a} />
                 ))}
               </div>

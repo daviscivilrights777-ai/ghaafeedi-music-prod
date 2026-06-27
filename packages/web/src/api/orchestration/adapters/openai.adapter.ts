@@ -6,7 +6,7 @@
 import type { ProviderAdapter, CostEstimate, JobHandle, ProviderJobResult, ProviderHealth } from "./provider-adapter";
 import type { JobSpec } from "../job-queue";
 import { getSecret, SECRET_KEYS } from "../secrets";
-import { poyoChat, POYO_LLM } from "./poyo.adapter";
+import { poyoChatText, POYO_LLM } from "./poyo.adapter";
 
 const BASE = "https://api.openai.com/v1";
 
@@ -56,7 +56,7 @@ export const OpenAIAdapter: ProviderAdapter = {
       const usrMsg = `Extract the story bible from this personal story for product "${productSlug}" (tier: ${tier}):\n\n${storyText}\n\nReturn JSON with: version="1.0", title, logline, emotionalArc{opening,inciting,climax,resolution}, characters[], thematicPillars[], primaryEmotion, emotionScores{joy,sadness,love,nostalgia,hope}, tone, pacing, colorPalette[], musicalMood, keyPhrases[], suggestedTitle. Make it cinematic and emotionally resonant.`;
 
       try {
-        const content = await poyoChat({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: sysMsg }, { role: "user", content: usrMsg }], temperature: 0.7, max_tokens: 1500 });
+        const content = await poyoChatText({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: sysMsg }, { role: "user", content: usrMsg }], temperature: 0.7, max_tokens: 1500 });
         result = { choices: [{ message: { content } }], _provider: "poyo/deepseek-v3" };
       } catch (poyoErr) {
         console.warn("[story_bible] Poyo failed, falling back to GPT-4o-mini:", (poyoErr as Error).message);
@@ -78,7 +78,7 @@ export const OpenAIAdapter: ProviderAdapter = {
       const pbUserMsg   = `You are a cinematic director and music supervisor for Ghaafeedi Music. Create a detailed production bible from this story bible for product "${productSlug}" (tier: ${tier}). Story Bible: ${JSON.stringify(storyBible)}. Return JSON matching ProductionBible schema with: version="1.0", audio{genre,tempo,mood,instruments,lyrics,vocalStyle,duration,sunoPrompt}, narration{script,voice,style,pacing,emotionalBeat,durationTarget}, visual{cinematicStyle,colorGrading,aspectRatio:"16:9",resolution:"1280x720",renderQuality:"premium",transitionStyle}, scenes[] (max ${maxScenes} scenes), deliveryFormat, watermark:false, deliveryDeadlineHours.`;
 
       try {
-        const content = await poyoChat({ model: POYO_LLM.sophia, messages: [{ role: "user", content: pbUserMsg }], temperature: 0.8, max_tokens: 2500 });
+        const content = await poyoChatText({ model: POYO_LLM.sophia, messages: [{ role: "user", content: pbUserMsg }], temperature: 0.8, max_tokens: 2500 });
         result = { choices: [{ message: { content } }], _provider: "poyo/claude-opus-4-8" };
       } catch (poyoErr) {
         console.warn("[production_bible] Poyo failed, falling back to GPT-4o:", (poyoErr as Error).message);
@@ -108,7 +108,7 @@ export const OpenAIAdapter: ProviderAdapter = {
       const slUsrMsg = `Create a shot list from this production bible. Max ${maxShots} shots for tier "${tier}". Production Bible: ${JSON.stringify(productionBible)}. Return JSON matching ShotList schema: version="1.0", totalShots (≤${maxShots}), shots[]{shotIndex,sceneIndex,type,durationSeconds(3-7),cameraMotion,subject,setting,lighting,colorGrading,falPrompt(detailed for Seedance 2),negativePrompt,audioStartSeconds,audioEndSeconds,hasNarration}, assemblyOrder[], crossfadeDurationMs:500, creditsDurationSeconds:3.`;
 
       try {
-        const content = await poyoChat({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: slSysMsg }, { role: "user", content: slUsrMsg }], temperature: 0.7, max_tokens: 2000 });
+        const content = await poyoChatText({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: slSysMsg }, { role: "user", content: slUsrMsg }], temperature: 0.7, max_tokens: 2000 });
         result = { choices: [{ message: { content } }], _provider: "poyo/deepseek-v3" };
       } catch (poyoErr) {
         console.warn("[shot_list] Poyo failed, falling back to GPT-4o:", (poyoErr as Error).message);
@@ -128,7 +128,7 @@ export const OpenAIAdapter: ProviderAdapter = {
       const criteria     = (job.inputPayload?.criteria as string) || "visual quality, emotional resonance, technical correctness";
 
       try {
-        const qcContent = await poyoChat({
+        const qcContent = await poyoChatText({
           model: POYO_LLM.pipeline,
           messages: [
             { role: "system", content: "You are a quality control specialist for Ghaafeedi Music. Return JSON only: {passed:bool, score:number(0-1), issues:string[], recommendation:string}." },
@@ -188,7 +188,7 @@ export const OpenAIAdapter: ProviderAdapter = {
 
       let outputText: string;
       try {
-        outputText = await poyoChat({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature, max_tokens: maxTokens });
+        outputText = await poyoChatText({ model: POYO_LLM.pipeline, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature, max_tokens: maxTokens });
         result = { choices: [{ message: { content: outputText } }], _provider: "poyo/deepseek-v3" };
       } catch (poyoErr) {
         console.warn(`[${job.jobType}] Poyo failed, falling back to GPT-4o:`, (poyoErr as Error).message);

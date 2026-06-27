@@ -13,6 +13,7 @@
 // ============================================================
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { auth } from "../auth";
 import { db } from "../database/pg-client";
 import {
@@ -22,7 +23,7 @@ import {
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
-import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import { poyoChatText, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 // ─── Customer Context Builder ──────────────────────────────────────────────────
 // Pulls everything Sophia needs to know about this customer + production
@@ -245,7 +246,7 @@ function revisionId(): string {
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
-export const revisionsIntake = new Hono();
+export const revisionsIntake = new Hono<HonoEnv>();
 
 // ── GET /context?orderId=ORD-xxx ─────────────────────────────────────────────
 // Called on mount by SophiaRevisionGuide — returns everything Sophia knows
@@ -269,13 +270,14 @@ revisionsIntake.get("/context", async (c) => {
     const maxRevisions = MAX_REVISIONS[tier] ?? 1;
 
     // Count existing revisions
-    const [{ usedCount }] = await db.select({ usedCount: count(revisionRequests.id) })
+    const [usedRow] = await db.select({ usedCount: count(revisionRequests.id) })
       .from(revisionRequests)
       .where(and(
         eq(revisionRequests.orderId, orderId),
         sql`${revisionRequests.status} NOT IN ('rejected')`,
       ));
 
+    const usedCount = usedRow?.usedCount ?? 0;
     const revisionRound = Number(usedCount) + 1;
 
     const ctx = await buildCustomerContext(
@@ -316,11 +318,11 @@ revisionsIntake.post("/submit", async (c) => {
 
     if (!order) return c.json({ error: "Order not found or access denied" }, 404);
 
-    const tier = (body.tier || order.metadata?.tier || "starter") as string;
+    const tier = (body.tier || (order as any).tier || (order.metadata as any)?.tier || "starter") as string;
     const maxRevisions = MAX_REVISIONS[tier] ?? 1;
 
     // Count existing revisions for this order
-    const [{ usedCount }] = await db.select({
+    const [usedRow] = await db.select({
       usedCount: count(revisionRequests.id),
     })
     .from(revisionRequests)
@@ -329,6 +331,7 @@ revisionsIntake.post("/submit", async (c) => {
       sql`${revisionRequests.status} NOT IN ('rejected')`,
     ));
 
+    const usedCount = usedRow?.usedCount ?? 0;
     if (Number(usedCount) >= maxRevisions) {
       return c.json({
         error: `Revision limit reached. Your ${tier} tier includes ${maxRevisions} revision round(s).`,
@@ -338,7 +341,7 @@ revisionsIntake.post("/submit", async (c) => {
     }
 
     // Check revision window (7 days from order creation)
-    const orderDate = new Date(order.createdAt);
+    const orderDate = new Date(order.createdAt ?? Date.now());
     const windowClose = new Date(orderDate.getTime() + REVISION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     if (new Date() > windowClose) {
       return c.json({
@@ -458,13 +461,14 @@ revisionsIntake.post("/sophia-analysis", async (c) => {
 
     const tier = (order.metadata as any)?.tier || order.tier || "starter";
     const maxRevisions = MAX_REVISIONS[tier] ?? 1;
-    const [{ usedCount }] = await db.select({ usedCount: count(revisionRequests.id) })
+    const [usedRow] = await db.select({ usedCount: count(revisionRequests.id) })
       .from(revisionRequests)
       .where(and(
         eq(revisionRequests.orderId, body.orderId),
         sql`${revisionRequests.status} NOT IN ('rejected')`,
       ));
 
+    const usedCount = usedRow?.usedCount ?? 0;
     // Build full customer context — everything Sophia knows
     const ctx = await buildCustomerContext(
       session.user.id,
@@ -594,7 +598,7 @@ Analyze everything you know about this customer and write the retake directive n
     // ── Sophia analysis via Poyo.ai (Claude Opus 4.8) — GPT-4o fallback ──────
     let directive: any;
     try {
-      const poyoContent = await poyoChat({
+      const poyoContent = await poyoChatText({
         model:       POYO_LLM.sophia,   // Claude Opus 4.8 — Sophia's creative surgical work
         messages:    [
           { role: "system", content: systemPrompt },
@@ -627,7 +631,7 @@ Analyze everything you know about this customer and write the retake directive n
         return c.json({ error: "AI analysis failed" }, 502);
       }
       const fallbackData = await fallbackRes.json() as { choices: Array<{ message: { content: string } }> };
-      directive = JSON.parse(fallbackData.choices[0].message.content);
+      directive = JSON.parse(fallbackData.choices?.[0]?.message?.content ?? "{}");
     }
 
     // Return directive + the customer context so the frontend can
@@ -653,7 +657,7 @@ Analyze everything you know about this customer and write the retake directive n
 });
 
 // ─── Admin sub-router ─────────────────────────────────────────────────────────
-export const adminRevisions = new Hono();
+export const adminRevisions = new Hono<HonoEnv>();
 
 // Helper: verify admin
 async function verifyAdmin(c: any): Promise<{ userId: string } | null> {
@@ -771,9 +775,10 @@ adminRevisions.post("/:id/approve", async (c) => {
       userId:       rev.userId,
       orderId:      rev.orderId,
       productionId: rev.productionId ?? undefined,
-      jobType:      "ltx_retake",
+      productType:  "ltx_retake" as any,
+      jobType:      "ltx_retake" as any,
       inputPayload: jobInput,
-      tier:         "standard",
+      tier:         "starter",
     });
 
     if (!result.success || !result.jobId) {

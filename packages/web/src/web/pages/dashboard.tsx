@@ -242,7 +242,7 @@ export default function Dashboard() {
         {/* Sidebar */}
         <Sidebar
           tab={tab}
-          setTab={(t) => { setTab(t); setSidebarOpen(false); }}
+          setTab={(t: Tab) => { setTab(t); setSidebarOpen(false); }}
           member={data?.member}
           productions={data?.productions ?? []}
           open={sidebarOpen}
@@ -262,7 +262,7 @@ export default function Dashboard() {
 
               {tab === "overview"     && <OverviewTab data={data} setTab={setTab} setLocation={setLocation} copyMemberId={copyMemberId} copiedId={copiedId} />}
               {tab === "productions"  && <ProductionsTab productions={data?.productions ?? []} setLocation={setLocation} />}
-              {tab === "deliverables" && <DeliverablesTab assets={data?.assets ?? []} productions={data?.productions ?? []} lipsyncJobs={data?.lipsyncJobs ?? []} member={data?.member} authHeaders={authHeaders} onRefresh={loadAll} />}
+              {tab === "deliverables" && <DeliverablesTab assets={data?.assets ?? []} productions={data?.productions ?? []} lipsyncJobs={data?.lipsyncJobs ?? []} member={data?.member ?? null} authHeaders={authHeaders} onRefresh={loadAll} />}
               {tab === "memberships"  && <MembershipsTab member={data?.member} subscriptions={data?.subscriptions ?? []} setLocation={setLocation} session={session} />}
               {tab === "billing"      && <BillingTab billing={data?.billing ?? []} orders={data?.orders ?? []} subscriptions={data?.subscriptions ?? []} />}
               {tab === "revisions"    && <RevisionsTab productions={data?.productions ?? []} authHeaders={authHeaders} onRefresh={loadAll} />}

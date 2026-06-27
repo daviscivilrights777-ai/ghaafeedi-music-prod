@@ -3,7 +3,7 @@ import type { AppType } from "../../api";
 import { getToken } from "./authClient";
 
 const client = hc<AppType>("/", {
-  headers: () => {
+  headers: (): Record<string, string> => {
     const token = getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   },

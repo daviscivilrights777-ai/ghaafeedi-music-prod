@@ -464,7 +464,7 @@ function GalaxyCanvas({ isMobile, isTablet }: { isMobile: boolean; isTablet: boo
         sparks.push({x:scx+(Math.random()-0.5)*W*0.28,y:scy+(Math.random()-0.5)*H*0.055,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd*0.4,life:0,max:Math.random()*90+55});
       }
       for(let i=sparks.length-1;i>=0;i--){
-        const sp=sparks[i]; sp.x+=sp.vx; sp.y+=sp.vy; sp.life++;
+        const sp=sparks[i]!; sp.x+=sp.vx; sp.y+=sp.vy; sp.life++;
         if(sp.life>=sp.max){sparks.splice(i,1);continue;}
         const pr=sp.life/sp.max, al=pr<0.25?pr/0.25:(1-pr)/0.75;
         ctx!.beginPath(); ctx!.arc(sp.x,sp.y,1.4,0,Math.PI*2);
@@ -883,13 +883,13 @@ function DesktopHoneycomb({ vw }: { vw: number }) {
   return (
     <div style={{position:"relative",width:gridW,height:gridH,margin:"0 auto",overflow:"visible"}}>
       {s.slice(0,4).map((p,i)=><HexCard key={p.id} product={p} size={hexSize} left={row0X+i*(hexSize+gap)} top={row0Y}/>)}
-      <HexCard key={s[4].id} product={s[4]} size={hexSize} left={fl2X} top={flankerY}/>
-      <HexCard key={s[5].id} product={s[5]} size={hexSize} left={fl1X} top={flankerY}/>
+      <HexCard key={s[4]!.id} product={s[4]!} size={hexSize} left={fl2X} top={flankerY}/>
+      <HexCard key={s[5]!.id} product={s[5]!} size={hexSize} left={fl1X} top={flankerY}/>
       <SophiaHex size={sophiaSize} left={sophiaX} top={sophiaY}/>
-      <HexCard key={s[6].id} product={s[6]} size={hexSize} left={fr1X} top={flankerY}/>
-      <HexCard key={s[7].id} product={s[7]} size={hexSize} left={fr2X} top={flankerY}/>
+      <HexCard key={s[6]!.id} product={s[6]!} size={hexSize} left={fr1X} top={flankerY}/>
+      <HexCard key={s[7]!.id} product={s[7]!} size={hexSize} left={fr2X} top={flankerY}/>
       {s.slice(8,12).map((p,i)=><HexCard key={p.id} product={p} size={hexSize} left={row2X+i*(hexSize+gap)} top={row2Y}/>)}
-      <HexCard key={s[12].id} product={s[12]} size={hexSize} left={row3X} top={row3Y}/>
+      <HexCard key={s[12]!.id} product={s[12]!} size={hexSize} left={row3X} top={row3Y}/>
     </div>
   );
 }
@@ -911,13 +911,13 @@ function TabletHoneycomb() {
   return (
     <div style={{position:"relative",width:gridW,height:gridH,margin:"0 auto",overflow:"visible"}}>
       {s.slice(0,3).map((p,i)=><HexCard key={p.id} product={p} size={hexSize} left={rowX+i*(hexSize+gap)} top={row0Y}/>)}
-      <HexCard key={s[3].id} product={s[3]} size={hexSize} left={fl1X} top={flankerY}/>
+      <HexCard key={s[3]!.id} product={s[3]!} size={hexSize} left={fl1X} top={flankerY}/>
       <SophiaHex size={sophiaSize} left={sophiaX} top={sophiaY} reduced/>
-      <HexCard key={s[4].id} product={s[4]} size={hexSize} left={fr1X} top={flankerY}/>
+      <HexCard key={s[4]!.id} product={s[4]!} size={hexSize} left={fr1X} top={flankerY}/>
       {s.slice(5,8).map((p,i)=><HexCard key={p.id} product={p} size={hexSize} left={rowX+i*(hexSize+gap)} top={row2Y}/>)}
       {s.slice(8,11).map((p,i)=><HexCard key={p.id} product={p} size={hexSize} left={rowX+i*(hexSize+gap)} top={row3Y}/>)}
-      <HexCard key={s[11].id} product={s[11]} size={hexSize} left={row4X} top={row4Y}/>
-      <HexCard key={s[12].id} product={s[12]} size={hexSize} left={row4X+hexSize+gap} top={row4Y}/>
+      <HexCard key={s[11]!.id} product={s[11]!} size={hexSize} left={row4X} top={row4Y}/>
+      <HexCard key={s[12]!.id} product={s[12]!} size={hexSize} left={row4X+hexSize+gap} top={row4Y}/>
     </div>
   );
 }

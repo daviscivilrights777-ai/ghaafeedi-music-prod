@@ -5,7 +5,8 @@
 // ============================================================
 
 import React, { useState, useEffect } from "react";
-import { SophiaRevisionGuide, OrderContext } from "./SophiaRevisionGuide";
+import { SophiaRevisionGuide } from "./SophiaRevisionGuide";
+import type { OrderContext } from "./SophiaRevisionGuide";
 import type { RevisionData } from "../../types/revision";
 
 // ─── Step types ────────────────────────────────────────────────────────────────

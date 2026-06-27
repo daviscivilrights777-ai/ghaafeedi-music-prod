@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { logAICall } from "../lib/braintrust";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
-import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import { poyoChatText, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 // All 14 Ghaafeedi Music products + memberships for recommendation engine
 const GM_CATALOG = [
@@ -54,7 +55,7 @@ async function poyoPoll(taskId: string, apiKey: string, timeoutMs = 90_000): Pro
   return null;
 }
 
-export const onboardingRoutes = new Hono()
+export const onboardingRoutes = new Hono<HonoEnv>()
   .post("/analyze", async (c) => {
     try {
       const body = await c.req.json() as {
@@ -156,7 +157,7 @@ RULES:
 - profileSummary should feel emotionally resonant and personal
 - If no story text: base everything on whoFor + experienceType context only`;
 
-      const text = await poyoChat({
+      const text = await poyoChatText({
         model:      POYO_LLM.pipeline,  // DeepSeek V3 — emotion analysis pipeline
         messages:   [{ role: "user", content: prompt }],
         max_tokens: 900,
@@ -256,7 +257,7 @@ RULES:
 - BPM: ballad 65-80, mid-tempo 80-95, upbeat 95-110
 - Match the dominant emotion: grief=slower, love=mid-tempo warm, joy=upbeat`;
 
-      const lyricsRaw = await poyoChat({
+      const lyricsRaw = await poyoChatText({
         model:      POYO_LLM.pipeline,  // DeepSeek V3 — song metadata generation
         messages:   [{ role: "user", content: lyricsPrompt }],
         max_tokens: 1200,
@@ -445,10 +446,10 @@ RULES:
       // Ensure exactly 4 emotions — pad/trim as needed
       const BASE_EMOTIONS = ["Longing", "Resilience", "Hope", "Peace"];
       const emotionSlots: string[] = [
-        emotions[0] ?? BASE_EMOTIONS[0],
-        emotions[1] ?? BASE_EMOTIONS[1],
-        emotions[2] ?? BASE_EMOTIONS[2],
-        emotions[3] ?? BASE_EMOTIONS[3],
+        emotions[0] ?? BASE_EMOTIONS[0]!,
+        emotions[1] ?? BASE_EMOTIONS[1]!,
+        emotions[2] ?? BASE_EMOTIONS[2]!,
+        emotions[3] ?? BASE_EMOTIONS[3]!,
       ];
 
       const FAL_API_KEY = await getSecret(SECRET_KEYS.FAL_API_KEY);
@@ -572,11 +573,11 @@ function buildFallback(whoFor: string, experienceType: string, products: typeof 
 
   return {
     categories: [
-      { key: "emotional",  label: "Emotional Tone",      score: base[0] + offsets[0], insight: insights[0],                                               reason: "Your story carries a depth of feeling that resonates strongly. The emotional investment you've put into this experience is clear and authentic." },
-      { key: "arc",        label: "Story Arc",            score: base[1] + offsets[1], insight: "A journey with clear emotional turning points",            reason: "There is a discernible narrative shape — a beginning rooted in memory, a middle shaped by feeling, and a resolution that points toward meaning." },
-      { key: "memories",   label: "Key Memories",         score: base[2] + offsets[2], insight: insights[1] ?? "Vivid emotional anchors identified",        reason: "The specific details and emotional anchors in your story provide rich material for cinematic memory sequences and lyrical imagery." },
-      { key: "mood",       label: "Mood Profile",         score: base[3] + offsets[3], insight: "Complex emotional signature — rare and powerful",          reason: "Your emotional coloring is multidimensional — not a single note, but a chord. This complexity makes for richer, more resonant music and film." },
-      { key: "resonance",  label: "Cinematic Resonance",  score: base[4] + offsets[4], insight: insights[2] ?? "Strong visual storytelling potential",      reason: "The imagery and emotion in your story translate naturally to cinematic form. This is the kind of story that moves people on screen and in sound." },
+      { key: "emotional",  label: "Emotional Tone",      score: (base[0] ?? 0) + (offsets[0] ?? 0), insight: insights?.[0] ?? "Emotional depth confirmed",                                               reason: "Your story carries a depth of feeling that resonates strongly. The emotional investment you've put into this experience is clear and authentic." },
+      { key: "arc",        label: "Story Arc",            score: (base[1] ?? 0) + (offsets[1] ?? 0), insight: "A journey with clear emotional turning points",            reason: "There is a discernible narrative shape — a beginning rooted in memory, a middle shaped by feeling, and a resolution that points toward meaning." },
+      { key: "memories",   label: "Key Memories",         score: (base[2] ?? 0) + (offsets[2] ?? 0), insight: insights?.[1] ?? "Vivid emotional anchors identified",        reason: "The specific details and emotional anchors in your story provide rich material for cinematic memory sequences and lyrical imagery." },
+      { key: "mood",       label: "Mood Profile",         score: (base[3] ?? 0) + (offsets[3] ?? 0), insight: "Complex emotional signature — rare and powerful",          reason: "Your emotional coloring is multidimensional — not a single note, but a chord. This complexity makes for richer, more resonant music and film." },
+      { key: "resonance",  label: "Cinematic Resonance",  score: (base[4] ?? 0) + (offsets[4] ?? 0), insight: insights?.[2] ?? "Strong visual storytelling potential",      reason: "The imagery and emotion in your story translate naturally to cinematic form. This is the kind of story that moves people on screen and in sound." },
     ],
     dominantEmotion: emotionMap[key] ?? "Deep Emotion",
     emotionalArc: "A story of transformation, memory, and connection.",

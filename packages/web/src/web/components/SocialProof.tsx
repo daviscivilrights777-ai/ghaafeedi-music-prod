@@ -246,8 +246,8 @@ export function SocialProof() {
 
               {/* Stars + verified + recency row */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-                <Stars count={TESTIMONIALS[active].rating} />
-                {TESTIMONIALS[active].verified && (
+                <Stars count={TESTIMONIALS[active]!.rating} />
+                {TESTIMONIALS[active]!.verified && (
                   <div style={{
                     display: "inline-flex", alignItems: "center", gap: 5,
                     background: "rgba(34,197,94,0.10)",
@@ -267,7 +267,7 @@ export function SocialProof() {
                   fontSize: 11.5, fontFamily: "Inter, sans-serif",
                   color: "rgba(255,255,255,0.32)", marginLeft: "auto",
                 }}>
-                  {TESTIMONIALS[active].recency}
+                  {TESTIMONIALS[active]!.recency}
                 </span>
               </div>
 
@@ -280,7 +280,7 @@ export function SocialProof() {
                 fontStyle: "italic",
                 position: "relative", zIndex: 1,
               }}>
-                "{TESTIMONIALS[active].text}"
+                "{TESTIMONIALS[active]!.text}"
               </p>
 
               {/* Author + helpful */}
@@ -288,21 +288,21 @@ export function SocialProof() {
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <div style={{
                     width: 48, height: 48, borderRadius: "50%",
-                    background: `linear-gradient(135deg, ${TESTIMONIALS[active].color}60, ${TESTIMONIALS[active].color}30)`,
-                    border: `2px solid ${TESTIMONIALS[active].color}50`,
+                    background: `linear-gradient(135deg, ${TESTIMONIALS[active]!.color}60, ${TESTIMONIALS[active]!.color}30)`,
+                    border: `2px solid ${TESTIMONIALS[active]!.color}50`,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontFamily: "'Playfair Display', serif",
-                    fontSize: 20, fontWeight: 700, color: TESTIMONIALS[active].color,
+                    fontSize: 20, fontWeight: 700, color: TESTIMONIALS[active]!.color,
                     flexShrink: 0,
                   }}>
-                    {TESTIMONIALS[active].avatar}
+                    {TESTIMONIALS[active]!.avatar}
                   </div>
                   <div>
                     <div style={{ fontFamily: "Inter, sans-serif", fontWeight: 700, fontSize: 15, color: "#fff" }}>
-                      {TESTIMONIALS[active].name}
+                      {TESTIMONIALS[active]!.name}
                     </div>
                     <div style={{ fontFamily: "Inter, sans-serif", fontSize: 12.5, color: "rgba(255,255,255,0.42)", marginTop: 2 }}>
-                      {TESTIMONIALS[active].location} · {TESTIMONIALS[active].product}
+                      {TESTIMONIALS[active]!.location} · {TESTIMONIALS[active]!.product}
                     </div>
                   </div>
                 </div>
@@ -318,7 +318,7 @@ export function SocialProof() {
                     <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
                   </svg>
                   <span style={{ fontSize: 12, fontFamily: "Inter, sans-serif", color: "rgba(255,255,255,0.40)" }}>
-                    {TESTIMONIALS[active].helpful} found helpful
+                    {TESTIMONIALS[active]!.helpful} found helpful
                   </span>
                 </div>
               </div>

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 
 const DODO_API_KEY  = process.env.DODO_API_KEY  ?? "";
 const DODO_MODE     = (process.env.DODO_MODE ?? "live") as "live" | "test";
@@ -20,7 +21,7 @@ const PACKAGE_PRICES: Record<string, number> = {
   elite:   12500,  // $125.00
 };
 
-export const dodo = new Hono()
+export const dodo = new Hono<HonoEnv>()
 
   // ── POST /api/dodo/checkout-session ───────────────────────────────────────
   // Creates a Dodo checkout session and returns the checkout URL

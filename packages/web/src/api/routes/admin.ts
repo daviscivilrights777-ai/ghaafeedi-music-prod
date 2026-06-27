@@ -1,10 +1,11 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { authMiddleware, requireAdmin } from "../middleware/auth";
 import { desc, eq, count, sql } from "drizzle-orm";
 
-export const admin = new Hono()
+export const admin = new Hono<HonoEnv>()
   .use("*", authMiddleware)
   .use("*", requireAdmin)
 
@@ -50,15 +51,15 @@ export const admin = new Hono()
 
     return c.json({
       kpis: {
-        totalMembers:      totalMembers.count,
-        activeMembers:     activeMembers.count,
-        totalOrders:       totalOrders.count,
-        pendingOrders:     pendingOrders.count,
-        completedOrders:   completedOrders.count,
-        totalRevenueCents: totalRevenue.sum ?? 0,
-        activeProductions: activeProductions.count,
-        aiJobsRunning:     aiJobsRunning.count,
-        openTickets:       openTickets.count,
+        totalMembers:      totalMembers?.count ?? 0,
+        activeMembers:     activeMembers?.count ?? 0,
+        totalOrders:       totalOrders?.count ?? 0,
+        pendingOrders:     pendingOrders?.count ?? 0,
+        completedOrders:   completedOrders?.count ?? 0,
+        totalRevenueCents: (totalRevenue as any)?.sum ?? 0,
+        activeProductions: activeProductions?.count ?? 0,
+        aiJobsRunning:     aiJobsRunning?.count ?? 0,
+        openTickets:       openTickets?.count ?? 0,
       },
       tierBreakdown: tierRows,
       recentOrders,
@@ -206,7 +207,7 @@ export const admin = new Hono()
     let rows = await db
       .select()
       .from(schema.aiJobs)
-      .orderBy(desc(schema.aiJobs.createdAt))
+      .orderBy(desc(schema.aiJobs.queuedAt))
       .limit(limit);
 
     if (status) rows = rows.filter(r => r.status === status);
@@ -265,7 +266,7 @@ export const admin = new Hono()
       .orderBy(sql`to_char(created_at, 'YYYY-MM')`);
 
     return c.json({
-      totalRevenueCents: total.sum ?? 0,
+      totalRevenueCents: (total as any)?.sum ?? 0,
       byProvider,
       byProduct,
       byTier,
@@ -401,13 +402,13 @@ export const admin = new Hono()
 
     // Stats
     const total         = jobs.length;
-    const queued        = jobs.filter(j => j.status === "queued").length;
-    const running       = jobs.filter(j => j.status === "running" || j.status === "dispatched").length;
-    const completed     = jobs.filter(j => j.status === "completed" || j.status === "complete").length;
-    const failed        = jobs.filter(j => j.status === "failed").length;
-    const totalCostCents = jobs.reduce((s, j) => s + (j.costCents ?? 0), 0);
-    const durations     = jobs.filter(j => j.durationMs != null).map(j => j.durationMs as number);
-    const avgDurationMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    const queued        = jobs.filter((j: any) => j.status === "queued").length;
+    const running       = jobs.filter((j: any) => j.status === "running" || j.status === "dispatched").length;
+    const completed     = jobs.filter((j: any) => j.status === "completed" || j.status === "complete").length;
+    const failed        = jobs.filter((j: any) => j.status === "failed").length;
+    const totalCostCents = jobs.reduce((s: number, j: any) => s + (j.costCents ?? 0), 0);
+    const durations     = jobs.filter((j: any) => j.durationMs != null).map((j: any) => j.durationMs as number);
+    const avgDurationMs = durations.length ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length) : 0;
 
     return c.json({
       jobs,

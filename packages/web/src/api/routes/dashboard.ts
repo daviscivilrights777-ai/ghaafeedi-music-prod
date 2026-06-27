@@ -5,6 +5,7 @@
 // Phase 7: Lip Sync delivery integration
 // ============================================================
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
@@ -12,13 +13,13 @@ import { authMiddleware, requireAuth } from "../middleware/auth";
 import { nanoid } from "nanoid";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 
-export const dashboard = new Hono()
+export const dashboard = new Hono<HonoEnv>()
   .use("*", authMiddleware)
 
   // ─── GET /api/dashboard/me ────────────────────────────────────────────────
   // Returns current user's role — used by signin to redirect admin → /admin
   .get("/me", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const [profile] = await db
       .select({ role: schema.profiles.role, fullName: schema.profiles.fullName })
       .from(schema.profiles)
@@ -35,7 +36,7 @@ export const dashboard = new Hono()
   // ─── GET /api/dashboard/summary ──────────────────────────────────────────
   // Returns everything the dashboard overview needs in one shot
   .get("/summary", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     try {
       const [memberRows, ordersRows, prodsRows, subsRows, jobsRows, ticketsRows, convoRows, lipsyncRows] =
         await Promise.all([
@@ -114,7 +115,7 @@ export const dashboard = new Hono()
 
   // ─── GET /api/dashboard/notifications ────────────────────────────────────
   .get("/notifications", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     // Generate smart notifications from system events
     const [prods, orders, tickets, lipsyncJobs] = await Promise.all([
       db.select().from(schema.productions).where(eq(schema.productions.userId, user.id)).orderBy(desc(schema.productions.createdAt)).limit(10),
@@ -205,7 +206,7 @@ export const dashboard = new Hono()
 
   // ─── GET /api/dashboard/deliverables ─────────────────────────────────────
   .get("/deliverables", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const assets = await db
       .select()
       .from(schema.assets)
@@ -223,7 +224,7 @@ export const dashboard = new Hono()
 
   // ─── POST /api/dashboard/revisions ───────────────────────────────────────
   .post("/revisions", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json().catch(() => ({}));
     const { productionId, notes } = body as { productionId?: string; notes?: string };
 
@@ -238,7 +239,7 @@ export const dashboard = new Hono()
       .limit(1);
 
     if (!prod) return c.json({ error: "Production not found" }, 404);
-    if (prod.revisionCount >= prod.maxRevisions) {
+    if ((prod.revisionCount ?? 0) >= (prod.maxRevisions ?? 1)) {
       return c.json({ error: `Revision limit reached (${prod.maxRevisions} max)` }, 422);
     }
 
@@ -265,7 +266,7 @@ export const dashboard = new Hono()
 
   // ─── GET /api/dashboard/billing ──────────────────────────────────────────
   .get("/billing", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const [billing, subscriptions, orders] = await Promise.all([
       db.select().from(schema.billingEvents).where(eq(schema.billingEvents.userId, user.id)).orderBy(desc(schema.billingEvents.createdAt)).limit(50),
       db.select().from(schema.subscriptions).where(eq(schema.subscriptions.userId, user.id)).orderBy(desc(schema.subscriptions.createdAt)),
@@ -276,7 +277,7 @@ export const dashboard = new Hono()
 
   // ─── PATCH /api/dashboard/profile ────────────────────────────────────────
   .patch("/profile", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json().catch(() => ({}));
     const { name, displayName, timezone, preferredGenre, preferredMood } = body as Record<string, string>;
 
@@ -285,12 +286,10 @@ export const dashboard = new Hono()
     if (existing.length > 0) {
       await db.update(schema.profiles)
         .set({
-          displayName: displayName ?? existing[0].displayName,
-          timezone: timezone ?? existing[0].timezone,
-          preferredGenre: preferredGenre ?? existing[0].preferredGenre,
-          preferredMood: preferredMood ?? existing[0].preferredMood,
+          displayName: displayName ?? (existing[0] as any)?.displayName,
+          timezone: timezone ?? (existing[0] as any)?.timezone,
           updatedAt: new Date(),
-        })
+        } as any)
         .where(eq(schema.profiles.userId, user.id));
     }
 
@@ -324,7 +323,7 @@ export const dashboard = new Hono()
 
   // ─── POST /api/dashboard/support/ticket ──────────────────────────────────
   .post("/support/ticket", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json().catch(() => ({}));
     const { subject, body: msgBody, priority } = body as { subject?: string; body?: string; priority?: string };
 
@@ -348,7 +347,7 @@ export const dashboard = new Hono()
   // ─── GET /api/dashboard/lipsync ────────────────────────────────────────
   // Phase 7: Return all lip sync jobs for this member (with output URLs)
   .get("/lipsync", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const jobs = await db
       .select()
       .from(schema.aiJobs)
@@ -374,7 +373,7 @@ export const dashboard = new Hono()
   // Phase 7: Member requests lip sync add-on for a production
   // Elite = free, others = $29 billing event
   .post("/lipsync/request", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json().catch(() => ({}));
     const { productionId, videoUrl, audioUrl, durationSeconds } =
       body as { productionId?: string; videoUrl?: string; audioUrl?: string; durationSeconds?: number };
@@ -420,6 +419,7 @@ export const dashboard = new Hono()
     const jobId = nanoid();
     await engine.submitJob({
       userId: user.id,
+      productType: "song" as any,
       orderId: prod.orderId ?? undefined,
       jobType: "lip_sync",
       inputPayload: {
@@ -444,7 +444,7 @@ export const dashboard = new Hono()
       resourceType: "production",
       resourceId: productionId,
       metadata: { isElite, jobId, productSlug: prod.productSlug },
-    });
+    } as any);
 
     return c.json({
       ok: true,

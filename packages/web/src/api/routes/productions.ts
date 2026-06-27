@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { eq, desc } from "drizzle-orm";
@@ -33,12 +34,12 @@ async function writeAuditLog(payload: {
   });
 }
 
-export const productions = new Hono()
+export const productions = new Hono<HonoEnv>()
   .use("*", authMiddleware)
 
   // ─── GET /api/productions — list user's productions ──────────────────────
   .get("/", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const prods = await db
       .select()
       .from(schema.productions)
@@ -50,7 +51,7 @@ export const productions = new Hono()
 
   // ─── GET /api/productions/:id ─────────────────────────────────────────────
   .get("/:id", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const { id } = c.req.param();
 
     const [prod] = await db
@@ -92,7 +93,7 @@ export const productions = new Hono()
 
   // ─── POST /api/productions — create a new production from an order ────────
   .post("/", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const body = await c.req.json<{ orderId: string; maxRevisions?: number }>();
     if (!body.orderId) return c.json({ error: "orderId required" }, 400);
 
@@ -147,7 +148,7 @@ export const productions = new Hono()
 
   // ─── PATCH /api/productions/:id/stage — advance production stage ──────────
   .patch("/:id/stage", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const { id } = c.req.param();
     const body = await c.req.json<{ stage: string; notes?: string }>();
 

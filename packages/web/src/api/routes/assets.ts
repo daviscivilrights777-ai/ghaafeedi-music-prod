@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { requireAuth } from "../middleware/auth";
@@ -7,7 +8,7 @@ import { s3, S3_BUCKET } from "../lib/s3";
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const assets = new Hono()
+export const assets = new Hono<HonoEnv>()
   .post("/presign", requireAuth, async (c) => {
     const user = c.get("user") as any;
     const { filename, contentType, storyId, orderId, type } = await c.req.json();
@@ -32,7 +33,7 @@ export const assets = new Hono()
     const user = c.get("user") as any;
     const rows = await db.select().from(schema.assets).where(eq(schema.assets.userId, user.id)).orderBy(desc(schema.assets.createdAt));
     // Generate presigned URLs
-    const withUrls = await Promise.all(rows.map(async (a) => {
+    const withUrls = await Promise.all(rows.map(async (a: any) => {
       try {
         const url = await getSignedUrl(s3, new GetObjectCommand({ Bucket: S3_BUCKET, Key: a.key }), { expiresIn: 3600 });
         return { ...a, url };

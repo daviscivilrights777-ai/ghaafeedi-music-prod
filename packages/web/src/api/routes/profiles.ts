@@ -1,10 +1,11 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { requireAuth } from "../middleware/auth";
 import { eq } from "drizzle-orm";
 
-export const profiles = new Hono()
+export const profiles = new Hono<HonoEnv>()
   // GET /api/profile/me
   .get("/me", requireAuth, async (c) => {
     const user = c.get("user") as any;

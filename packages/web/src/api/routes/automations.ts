@@ -8,6 +8,7 @@
  */
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { Resend } from "resend";
 import { n8nDispatcher, N8N_WEBHOOKS } from "../orchestration/n8n-dispatcher";
 import { db } from "../database/pg-client";
@@ -29,7 +30,7 @@ function requireN8nSecret(c: any): boolean {
   return secret === N8N_SECRET;
 }
 
-export const automations = new Hono();
+export const automations = new Hono<HonoEnv>();
 
 // ── GET /api/automations/status ───────────────────────────────────────────────
 automations.get("/status", requireAdmin, async (c) => {

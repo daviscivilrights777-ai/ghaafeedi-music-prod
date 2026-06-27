@@ -31,9 +31,9 @@ const GLOWS_HOVER: Record<string, string> = {
  * a text eyebrow in HeroSection. DO NOT use this component inside HeroSection.
  */
 export function GhaafeediLogo({ height, variant = "navbar", style }: GhaafeediLogoProps) {
-  const h         = height ?? SIZES[variant];
-  const filterBase  = GLOWS[variant];
-  const filterHover = GLOWS_HOVER[variant];
+  const h         = height ?? SIZES[variant] ?? 44;
+  const filterBase  = GLOWS[variant] ?? GLOWS.navbar!;
+  const filterHover = GLOWS_HOVER[variant] ?? GLOWS_HOVER.navbar!;
 
   return (
     <img

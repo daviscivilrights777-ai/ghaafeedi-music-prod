@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { eq, desc } from "drizzle-orm";
@@ -47,15 +48,15 @@ async function writeAuditLog(payload: {
     metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
     ip: payload.ip,
     userAgent: payload.userAgent,
-  });
+  } as any);
 }
 
-export const members = new Hono()
+export const members = new Hono<HonoEnv>()
   .use("*", authMiddleware)
 
   // ─── POST /api/members/create — called server-side after signup ───────────
   .post("/create", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     // Idempotent — return existing if already created
     const existing = await db
       .select()
@@ -78,7 +79,7 @@ export const members = new Hono()
       memberId,
       action: "member.created",
       entity: "member",
-      entityId: member.id,
+      entityId: member!.id,
       ip: c.req.header("x-forwarded-for") ?? c.req.header("cf-connecting-ip"),
       userAgent: c.req.header("user-agent"),
     });
@@ -88,7 +89,7 @@ export const members = new Hono()
 
   // ─── GET /api/members/me ─────────────────────────────────────────────────
   .get("/me", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const [member] = await db
       .select()
       .from(schema.members)
@@ -126,7 +127,7 @@ export const members = new Hono()
 
   // ─── GET /api/members/orders ─────────────────────────────────────────────
   .get("/orders", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const userOrders = await db
       .select()
       .from(schema.orders)
@@ -138,7 +139,7 @@ export const members = new Hono()
 
   // ─── GET /api/members/productions ────────────────────────────────────────
   .get("/productions", requireAuth, async (c) => {
-    const user = c.get("user")!;
+    const user = c.get("user") as any;
     const prods = await db
       .select()
       .from(schema.productions)

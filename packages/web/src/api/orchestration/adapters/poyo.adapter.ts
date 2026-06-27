@@ -823,3 +823,11 @@ export async function poyoChat(opts: PoyoChatOptions): Promise<PoyoChatResponse>
 
   return json as PoyoChatResponse;
 }
+
+// ── Convenience helper ───────────────────────────────────────
+// Returns the text content string directly, avoiding PoyoChatResponse
+// type mismatch when callers need a plain string.
+export async function poyoChatText(opts: PoyoChatOptions): Promise<string> {
+  const r = await poyoChat(opts);
+  return r.choices[0]?.message?.content ?? "";
+}

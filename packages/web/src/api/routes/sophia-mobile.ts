@@ -15,10 +15,11 @@
 // ============================================================
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
 import crypto from "node:crypto";
 
-export const sophiaMobileRoutes = new Hono();
+export const sophiaMobileRoutes = new Hono<HonoEnv>();
 
 // ─── Environment ──────────────────────────────────────────────────────────────
 

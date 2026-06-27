@@ -3,6 +3,7 @@
 // /api/pipeline/*
 // ============================================================
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { PipelineOrchestrator } from "../orchestration/pipeline-orchestrator";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import { db } from "../database/pg-client";
@@ -12,7 +13,7 @@ import { up as migration007 } from "../database/migrations/007_pipeline_columns"
 import { up as migration008 } from "../database/migrations/008_style_embeddings";
 import { findSimilarProductions, generateSignedUrl } from "../orchestration/delivery";
 
-const pipeline = new Hono();
+const pipeline = new Hono<HonoEnv>();
 const orchestrator = PipelineOrchestrator.getInstance();
 
 // ─── POST /api/pipeline/start ─────────────────────────────────

@@ -1,11 +1,12 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database";
 import * as schema from "../database/schema";
 import { requireAuth } from "../middleware/auth";
 import { eq, desc } from "drizzle-orm";
-import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import { poyoChat, poyoChatText, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
-export const stories = new Hono()
+export const stories = new Hono<HonoEnv>()
   .get("/", requireAuth, async (c) => {
     const user = c.get("user") as any;
     const rows = await db.select().from(schema.stories).where(eq(schema.stories.userId, user.id)).orderBy(desc(schema.stories.createdAt));
@@ -43,7 +44,7 @@ export const stories = new Hono()
         provider: "openai", status: "running", input: JSON.stringify({ storyText: story.storyText }),
       });
 
-      const text = await poyoChat({
+      const text = await poyoChatText({
         model: POYO_LLM.pipeline,
         messages: [{
           role: "user",
@@ -99,7 +100,7 @@ Respond with a JSON object (no markdown) containing:
 
     const analysis = story.aiAnalysis ? JSON.parse(story.aiAnalysis) : {};
     try {
-      const lyrics = await poyoChat({
+      const lyrics = await poyoChatText({
         model: POYO_LLM.pipeline,
         messages: [{
           role: "user",

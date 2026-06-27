@@ -553,7 +553,7 @@ export function TierBadge({ tier }: { tier: string }) {
     starter:    { bg: "rgba(59,130,246,0.13)",  color: "#60A5FA" },
     free:       { bg: "rgba(255,255,255,0.05)", color: TEXT_DIM },
   };
-  const style = map[tier?.toLowerCase()] ?? map["free"];
+  const style = map[tier?.toLowerCase()] ?? map["free"]!;
   return (
     <span style={{
       background: style.bg, color: style.color,

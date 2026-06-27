@@ -5,9 +5,10 @@
 // GET  /api/lipsync/:jobId → poll status
 // ============================================================
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 
-export const lipsync = new Hono();
+export const lipsync = new Hono<HonoEnv>();
 
 const CINEMATIC_BASE = process.env.CINEMATIC_API_URL ?? "http://localhost:8001";
 
@@ -71,7 +72,8 @@ lipsync.post("/", async (c) => {
         await engine.submitJob({
           userId:       (body.userId as string) || "system",
           orderId:      (body.orderId as string) || undefined,
-          jobType:      "lip_sync",
+          productType:  "lip_sync" as any,
+          jobType:      "lip_sync" as any,
           inputPayload: {
             videoUrl:        body.videoUrl,
             audioUrl:        body.audioUrl,

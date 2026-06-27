@@ -8,6 +8,7 @@
  */
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import type { JobSubmissionRequest } from "../orchestration/orchestration-engine";
 import type { ProductType } from "../orchestration/entitlement-validator";
@@ -20,7 +21,7 @@ async function rawQuery(query: string, params: unknown[] = []): Promise<any[]> {
   return result.rows;
 }
 
-const jobs = new Hono();
+const jobs = new Hono<HonoEnv>();
 const engine = OrchestrationEngine.getInstance();
 
 let _pgAvailable = true;
@@ -74,7 +75,7 @@ async function requireAdmin(c: any, next: () => Promise<void>) {
 // --- POST /api/jobs ---------------------------------------------------------
 
 jobs.post("/", requireAuth, async (c) => {
-  const userId: string = c.get("userId");
+  const userId: string = (c.get("user") as any)?.id ?? "";
 
   if (!checkRateLimit(userId)) {
     return c.json({ error: "Rate limit exceeded. Max 10 job submissions per minute." }, 429);
@@ -90,7 +91,7 @@ jobs.post("/", requireAuth, async (c) => {
   // Validate required fields
   if (!body.jobType) return c.json({ error: "jobType is required" }, 400);
   if (!body.productType) return c.json({ error: "productType is required" }, 400);
-  if (!body.payload) return c.json({ error: "payload is required" }, 400);
+  if (!body.inputPayload) return c.json({ error: "inputPayload is required" }, 400);
 
   const VALID_JOB_TYPES = [
     "video-generation", "video-generation-hailuo",
@@ -110,10 +111,9 @@ jobs.post("/", requireAuth, async (c) => {
   const result = await engine.submitJob({
     userId,
     productType: body.productType as ProductType,
-    jobType: body.jobType,
+    jobType: body.jobType as any,
     orderId: body.orderId,
-    priority: body.priority,
-    payload: body.payload as Record<string, unknown>,
+    inputPayload: (body.inputPayload ?? {}) as Record<string, unknown>,
     webhookUrl: body.webhookUrl,
     metadata: body.metadata,
   });
@@ -125,7 +125,7 @@ jobs.post("/", requireAuth, async (c) => {
   return c.json({
     jobId: result.jobId,
     status: "queued",
-    position: result.position,
+    position: (result as any).position ?? 0,
     quotaRemaining: result.quotaRemaining,
     message: "Job submitted successfully",
   }, 201);
@@ -142,7 +142,7 @@ jobs.get("/admin/queue", requireAdmin, async (c) => {
 });
 
 jobs.get("/:id", requireAuth, async (c) => {
-  const userId: string = c.get("userId");
+  const userId: string = (c.get("user") as any)?.id ?? "";
   const jobId = c.req.param("id");
 
   const status = await engine.getJobStatus(jobId);
@@ -171,7 +171,7 @@ jobs.get("/:id", requireAuth, async (c) => {
 // --- GET /api/jobs ----------------------------------------------------------
 
 jobs.get("/", requireAuth, async (c) => {
-  const userId: string = c.get("userId");
+  const userId: string = (c.get("user") as any)?.id ?? "";
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 100);
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
   const status = c.req.query("status");
@@ -213,7 +213,7 @@ jobs.get("/", requireAuth, async (c) => {
 // --- DELETE /api/jobs/:id ---------------------------------------------------
 
 jobs.delete("/:id", requireAuth, async (c) => {
-  const userId: string = c.get("userId");
+  const userId: string = (c.get("user") as any)?.id ?? "";
   const jobId = c.req.param("id");
 
   // Ownership check
@@ -326,7 +326,7 @@ jobs.post("/director", requireAuth, async (c) => {
     return c.json({ error: "primary_emotion is required" }, 400);
   }
 
-  const cinemaPath = path.resolve(process.cwd(), "../../packages/cinematic");
+  const cinemaPath = path.resolve((process as any).cwd?.(), "../../packages/cinematic");
 
   // Build a temp Python runner that serialises the payload and calls AIDirector
   const runnerScript = `

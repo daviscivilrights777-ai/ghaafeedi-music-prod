@@ -381,7 +381,7 @@ export default function DemoPage() {
   const [hoverPlay,  setHoverPlay]  = useState(false);
   const [hoverCTA1,  setHoverCTA1]  = useState(false);
   const [hoverCTA2,  setHoverCTA2]  = useState(false);
-  const ctrlTimer = useRef<ReturnType<typeof setTimeout>>();
+  const ctrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
 
   // Lazy-load video: only fetch when player enters viewport
@@ -390,7 +390,7 @@ export default function DemoPage() {
     if (!el) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry?.isIntersecting) {
           setVideoSrc(HERO_VIDEO);
           obs.disconnect();
         }
@@ -414,7 +414,7 @@ export default function DemoPage() {
 
   const onPlayerMove = () => {
     setShowCtrl(true);
-    clearTimeout(ctrlTimer.current);
+    clearTimeout(ctrlTimer.current as number | undefined);
     if (playing) ctrlTimer.current = setTimeout(() => setShowCtrl(false), 2800);
   };
 
@@ -1088,7 +1088,7 @@ export default function DemoPage() {
             {[["Home","/"],["Products","/products"],["Get Started","/onboarding"]].map(([label,path]) => (
               <span key={label}
                 style={{ fontSize:11, color:"rgba(243,211,122,0.28)", fontFamily:"Inter,sans-serif", cursor:"pointer", letterSpacing:"0.04em", transition:"color 0.2s" }}
-                onClick={() => setLocation(path)}
+                onClick={() => setLocation(path ?? "/")}
                 onMouseEnter={e => (e.currentTarget.style.color = "rgba(243,211,122,0.65)")}
                 onMouseLeave={e => (e.currentTarget.style.color = "rgba(243,211,122,0.28)")}
               >{label}</span>

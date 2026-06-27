@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { HonoEnv } from './hono-env';
 import { cors } from "hono/cors"
 import { auth } from "./auth";
 import { profiles } from "./routes/profiles";
@@ -22,7 +23,7 @@ import { sophiaMobileRoutes } from "./routes/sophia-mobile";
 import { didRoutes } from "./routes/did";
 import { revisionsIntake, adminRevisions } from "./routes/revisions-intake";
 
-const app = new Hono()
+const app = new Hono<HonoEnv>()
   .basePath('api')
   .use(cors({ origin: (origin) => origin ?? "*", credentials: true, exposeHeaders: ["set-auth-token"] }))
   .get('/ping', (c) => c.json({ message: `Pong! ${Date.now()}` }, 200))

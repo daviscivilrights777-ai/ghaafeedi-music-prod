@@ -3267,11 +3267,11 @@ function Step5AIAnalysis({
     const key = Object.keys(emotionMap).find(k => (who ?? "").includes(k)) ?? "self";
     return {
       categories: [
-        { key:"emotional", label:"Emotional Tone",     score: bases[0]+variance[0], insight: "Emotional depth that resonates through every word" },
-        { key:"arc",       label:"Story Arc",          score: bases[1]+variance[1], insight: "A clear journey — beginning, turning point, meaning" },
-        { key:"memories",  label:"Key Memories",       score: bases[2]+variance[2], insight: "Vivid anchors that hold the story together" },
-        { key:"mood",      label:"Mood Profile",       score: bases[3]+variance[3], insight: "Complex emotional signature — rare and powerful" },
-        { key:"resonance", label:"Cinematic Resonance",score: bases[4]+variance[4], insight: "Strong visual storytelling potential detected" },
+        { key:"emotional", label:"Emotional Tone",     score: bases[0]!+variance[0]!, insight: "Emotional depth that resonates through every word" },
+        { key:"arc",       label:"Story Arc",          score: bases[1]!+variance[1]!, insight: "A clear journey — beginning, turning point, meaning" },
+        { key:"memories",  label:"Key Memories",       score: bases[2]!+variance[2]!, insight: "Vivid anchors that hold the story together" },
+        { key:"mood",      label:"Mood Profile",       score: bases[3]!+variance[3]!, insight: "Complex emotional signature — rare and powerful" },
+        { key:"resonance", label:"Cinematic Resonance",score: bases[4]!+variance[4]!, insight: "Strong visual storytelling potential detected" },
       ],
       dominantEmotion: emotionMap[key] ?? "Deep Emotion",
       emotionalArc: arcMap[xp ?? ""] ?? "A journey from memory into meaning.",
@@ -4591,10 +4591,10 @@ function Step6PreviewCreation({ whoFor, experienceType, storyText: _st, analysis
   const BASE_MOODS = ["Longing", "Resilience", "Hope", "Peace"];
   const fp = analysisData?.emotionalFingerprint ?? [];
   const emotionSlots: string[] = [
-    fp[0] ?? BASE_MOODS[0],
-    fp[1] ?? BASE_MOODS[1],
-    fp[2] ?? BASE_MOODS[2],
-    fp[3] ?? BASE_MOODS[3],
+    fp[0] ?? BASE_MOODS[0]!,
+    fp[1] ?? BASE_MOODS[1]!,
+    fp[2] ?? BASE_MOODS[2]!,
+    fp[3] ?? BASE_MOODS[3]!,
   ];
 
   /* ── Real audio playback (song gen on mount) ── */
@@ -5608,7 +5608,7 @@ function Step7ProductionPortal({ whoFor, experienceType, onBack, onNext }: Step7
   const [progress,    setProgress]    = React.useState(78);
   const [pipeline,    setPipeline]    = React.useState<PipelineStep[]>(PIPELINE_INIT);
   const [feedIdx,     setFeedIdx]     = React.useState(2);
-  const [feed,        setFeed]        = React.useState<StatusFeed>({ ...FEED_SEQUENCE[2], ts: nowTs() });
+  const [feed,        setFeed]        = React.useState<StatusFeed>({ ...FEED_SEQUENCE[2]!, ts: nowTs() });
   const [refreshing,  setRefreshing]  = React.useState(false);
   const [refreshCount,setRefreshCount]= React.useState(0);
   const [navigating,  setNavigating]  = React.useState(false);
@@ -5658,8 +5658,8 @@ function Step7ProductionPortal({ whoFor, experienceType, onBack, onNext }: Step7
     setRefreshing(true);
     const nextIdx = (feedIdx + 1) % FEED_SEQUENCE.length;
     setTimeout(() => {
-      const nextFeed = { ...FEED_SEQUENCE[nextIdx], ts: nowTs() };
-      const nextPct  = PROGRESS_SEQUENCE[nextIdx];
+      const nextFeed: StatusFeed = { ...FEED_SEQUENCE[nextIdx]!, ts: nowTs() };
+      const nextPct: number  = PROGRESS_SEQUENCE[nextIdx] ?? 0;
       setFeedIdx(nextIdx);
       setFeed(nextFeed);
       setProgress(nextPct);
@@ -7893,7 +7893,7 @@ function S8AddOnPanel({
 function hexToRgb(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!result) return "212,175,55";
-  return `${parseInt(result[1],16)},${parseInt(result[2],16)},${parseInt(result[3],16)}`;
+  return `${parseInt(result[1]!,16)},${parseInt(result[2]!,16)},${parseInt(result[3]!,16)}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7986,7 +7986,7 @@ function Step8Checkout({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pkg = S8_PACKAGES.find(p => p.id === selectedPkgId) ?? S8_PACKAGES[1];
+  const pkg = S8_PACKAGES.find(p => p.id === selectedPkgId) ?? S8_PACKAGES[1]!;
 
   // ── Dodo overlay checkout state ────────────────────────────────────────────
   const [dodoCheckoutUrl,  setDodoCheckoutUrl]  = React.useState<string | null>(null);
@@ -9054,12 +9054,12 @@ function Step9OrderConfirmation({ onViewOrder, onDashboard }: Step9Props) {
                 animation:"s9FadeUp 0.25s ease both",
               }}>
                 <div style={{ fontFamily:"Inter,sans-serif", fontSize:14, color:"rgba(255,255,255,0.85)", fontStyle:"italic", marginBottom:8 }}>
-                  "{S9_TESTIMONIALS[selAvatar].text}"
+                  "{S9_TESTIMONIALS[selAvatar]!.text}"
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <img src={S9_TESTIMONIALS[selAvatar].avatar} alt="" style={{ width:24, height:24, borderRadius:"50%", objectFit:"cover" }} />
+                  <img src={S9_TESTIMONIALS[selAvatar]!.avatar} alt="" style={{ width:24, height:24, borderRadius:"50%", objectFit:"cover" }} />
                   <span style={{ fontFamily:"Inter,sans-serif", fontSize:13, fontWeight:600, color:GOLD }}>
-                    {S9_TESTIMONIALS[selAvatar].name}
+                    {S9_TESTIMONIALS[selAvatar]!.name}
                   </span>
                   <span style={{ marginLeft:4 }}>{"★".repeat(5)}</span>
                 </div>
@@ -9453,7 +9453,11 @@ export default function Onboarding() {
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
-  const [obData, setObData] = useState<OnboardingData>({
+  const [obData, setObData] = useState<{
+    whoFor: string | null; experienceType: string | null; storyText: string;
+    recordedAudio: string | null; uploadedPhotos: UploadedFile[]; uploadedVideos: UploadedFile[];
+    uploadedVoiceNotes: UploadedFile[]; uploadedDocuments: UploadedFile[];
+  }>({
     whoFor: null, experienceType: null, storyText: "",
     recordedAudio: null, uploadedPhotos: [], uploadedVideos: [],
     uploadedVoiceNotes: [], uploadedDocuments: [],
@@ -9998,8 +10002,8 @@ export default function Onboarding() {
             style={{ height:"100%", overflowY:"auto", overflowX:"hidden" }}
           >
             <Step8Checkout
-              whoFor={obData.whoFor}
-              experienceType={obData.experienceType}
+              whoFor={obData.whoFor ?? undefined}
+              experienceType={obData.experienceType ?? undefined}
               onBack={back}
               onNext={next}
             />

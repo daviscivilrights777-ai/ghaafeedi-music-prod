@@ -170,14 +170,14 @@ export function HeroSection() {
               <div style={{ position: "absolute", inset: "1.5px", borderRadius: "50%", background: "#22C55E" }} />
             </div>
             <span style={{ fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 700, color: "#D4AF37" }}>
-              {URGENCY_MSGS[urgencyIdx].icon} {URGENCY_MSGS[urgencyIdx].text}
+              {URGENCY_MSGS[urgencyIdx]!.icon} {URGENCY_MSGS[urgencyIdx]!.text}
             </span>
             <span style={{
               fontSize: 11.5, fontFamily: "Inter, sans-serif", fontWeight: 500,
               color: "rgba(255,255,255,0.44)",
               borderLeft: "1px solid rgba(255,255,255,0.12)", paddingLeft: 10,
             }}>
-              {URGENCY_MSGS[urgencyIdx].accent}
+              {URGENCY_MSGS[urgencyIdx]!.accent}
             </span>
           </div>
         </motion.div>

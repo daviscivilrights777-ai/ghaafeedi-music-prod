@@ -1,11 +1,12 @@
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { requireAuth } from "../middleware/auth";
 import { eq, desc } from "drizzle-orm";
 import { n8nDispatcher } from "../orchestration/n8n-dispatcher";
 
-export const orders = new Hono()
+export const orders = new Hono<HonoEnv>()
   // GET /api/orders — list user's orders
   .get("/", requireAuth, async (c) => {
     const user = c.get("user") as any;
@@ -48,7 +49,7 @@ export const orders = new Hono()
     // Automation 1: fire n8n on order created (treat create as paid for now;
     // swap to PATCH status→paid hook when payment webhook is live)
     n8nDispatcher.orderPaid({
-      orderId:       order.id,
+      orderId:       order!.id,
       userId:        user.id,
       productSlug,
       productName,

@@ -48,7 +48,7 @@ export const db = new Proxy({} as ReturnType<typeof drizzle>, {
 export type DB = typeof db;
 
 // Graceful shutdown
-process.on("SIGTERM", async () => {
+(process as any).on("SIGTERM", async () => {
   if (pool) {
     await pool.end();
     console.log("[DB] Pool closed on SIGTERM");

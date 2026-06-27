@@ -7,8 +7,9 @@
 // ============================================================
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 
-export const sophiaTtsRoutes = new Hono();
+export const sophiaTtsRoutes = new Hono<HonoEnv>();
 
 const EL_BASE = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily Velvety Actress

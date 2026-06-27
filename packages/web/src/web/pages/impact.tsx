@@ -5,7 +5,7 @@ import { Link } from "wouter";
 
 const FADE_UP = {
   hidden: { opacity: 0, y: 32 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] as any } },
 };
 const STAGGER = { show: { transition: { staggerChildren: 0.1 } } };
 
@@ -154,7 +154,7 @@ export default function ImpactPage() {
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.65, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.65, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] as any }}
                 style={{
                   background: p.gradient,
                   border: `1px solid ${p.border}`,

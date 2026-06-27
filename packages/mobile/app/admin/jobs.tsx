@@ -94,13 +94,13 @@ const MOCK_QUEUE: QueueStats = {
 };
 
 const MOCK_JOBS: AiJob[] = [
-  { id: "job_abc123def456", jobType: "song-generation",  status: "processing", provider: "sunor.cc",   attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 2 * 60e3).toISOString() },
-  { id: "job_xyz789uvw012", jobType: "video-generation", status: "queued",     provider: "fal.ai",     attempts: 0, maxAttempts: 3, createdAt: new Date(Date.now() - 5 * 60e3).toISOString() },
-  { id: "job_lmn345opq678", jobType: "voice-clone",      status: "dispatched", provider: "elevenlabs", attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 8 * 60e3).toISOString() },
-  { id: "job_rst901uvw234", jobType: "song-generation",  status: "processing", provider: "sunor.cc",   attempts: 2, maxAttempts: 3, createdAt: new Date(Date.now() - 15 * 60e3).toISOString() },
-  { id: "job_cde567fgh890", jobType: "video-generation", status: "complete",   provider: "fal.ai",     attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 30 * 60e3).toISOString() },
-  { id: "job_ijk123lmn456", jobType: "song-generation",  status: "delivered",  provider: "sunor.cc",   attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 60 * 60e3).toISOString() },
-  { id: "job_opq789rst012", jobType: "voice-clone",      status: "failed",     provider: "elevenlabs", attempts: 3, maxAttempts: 3, createdAt: new Date(Date.now() - 2 * 3600e3).toISOString() },
+  { id: "job_abc123def456", userId: "qa", jobType: "song-generation",  status: "processing", provider: "sunor.cc",   attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 2 * 60e3).toISOString(),   updatedAt: new Date().toISOString() },
+  { id: "job_xyz789uvw012", userId: "qa", jobType: "video-generation", status: "queued",     provider: "fal.ai",     attempts: 0, maxAttempts: 3, createdAt: new Date(Date.now() - 5 * 60e3).toISOString(),   updatedAt: new Date().toISOString() },
+  { id: "job_lmn345opq678", userId: "qa", jobType: "voice-clone",      status: "dispatched", provider: "elevenlabs", attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 8 * 60e3).toISOString(),   updatedAt: new Date().toISOString() },
+  { id: "job_rst901uvw234", userId: "qa", jobType: "song-generation",  status: "processing", provider: "sunor.cc",   attempts: 2, maxAttempts: 3, createdAt: new Date(Date.now() - 15 * 60e3).toISOString(),  updatedAt: new Date().toISOString() },
+  { id: "job_cde567fgh890", userId: "qa", jobType: "video-generation", status: "complete",   provider: "fal.ai",     attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 30 * 60e3).toISOString(),  updatedAt: new Date().toISOString() },
+  { id: "job_ijk123lmn456", userId: "qa", jobType: "song-generation",  status: "delivered",  provider: "sunor.cc",   attempts: 1, maxAttempts: 3, createdAt: new Date(Date.now() - 60 * 60e3).toISOString(),  updatedAt: new Date().toISOString() },
+  { id: "job_opq789rst012", userId: "qa", jobType: "voice-clone",      status: "failed",     provider: "elevenlabs", attempts: 3, maxAttempts: 3, createdAt: new Date(Date.now() - 2 * 3600e3).toISOString(), updatedAt: new Date().toISOString() },
 ];
 
 const IS_QA_PREVIEW = typeof window !== "undefined";

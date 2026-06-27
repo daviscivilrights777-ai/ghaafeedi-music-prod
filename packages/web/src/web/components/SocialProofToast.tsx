@@ -27,7 +27,7 @@ export function SocialProofToast() {
   function showNext() {
     const entry = ACTIVITY_FEED[idxRef.current % ACTIVITY_FEED.length];
     idxRef.current++;
-    setCurrent(entry);
+    setCurrent(entry ?? null);
     setShown(true);
 
     // Auto-hide after 5s

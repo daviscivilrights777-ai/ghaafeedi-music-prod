@@ -7,6 +7,7 @@
  */
 
 import { Hono } from "hono";
+import type { HonoEnv } from "../hono-env";
 import { ProviderRegistry, bootstrapAdapters } from "../orchestration/adapters";
 import { db } from "../database/pg-client";
 import type { ProviderHealth } from "../orchestration/adapters/provider-adapter";
@@ -29,7 +30,7 @@ async function requireAdmin(c: any, next: () => Promise<void>) {
   await next();
 }
 
-export const providers = new Hono();
+export const providers = new Hono<HonoEnv>();
 
 // ─── GET /api/providers/health ──────────────────────────────────────────────
 providers.get("/health", async (c) => {
@@ -152,18 +153,19 @@ providers.post("/:name/test", requireAdmin, async (c) => {
   }
 
   // Build a minimal test JobSpec per provider
-  const baseJob = {
+  const baseJob: any = {
     id:           `test-${Date.now()}`,
     userId:       "admin-test",
-    productType:  "analysis" as any,
+    productType:  "analysis",
     jobType:      adapter.jobTypes[0],
+    tier:         "free",
     priority:     5,
     inputPayload: {} as Record<string, unknown>,
     createdAt:    new Date(),
     updatedAt:    new Date(),
     attempts:     0,
     maxAttempts:  1,
-    status:       "pending" as const,
+    status:       "pending",
   };
 
   // Per-provider test payloads

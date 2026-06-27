@@ -522,7 +522,7 @@ export class OrchestrationEngine {
       const path = await import("node:path");
       const execFileAsync = promisify(execFile);
 
-      const cinemaPath = path.resolve(process.cwd(), "../../packages/cinematic");
+      const cinemaPath = path.resolve((process as any).cwd?.() ?? __dirname, "../../packages/cinematic");
 
       const runnerScript = `
 import sys, os, json

@@ -52,7 +52,7 @@ export function StorytellingShowcase() {
     if (!el) return;
     const obs = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry?.isIntersecting) {
           setVideoSrc(VIDEO_SRC);
           obs.disconnect();
         }
