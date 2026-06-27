@@ -99,6 +99,7 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   album_art:         10,  // Poyo.ai album art @ $0.10
   timestamped_lyrics: 0,  // Poyo.ai timestamped lyrics — free
   wav_export:         0,  // Poyo.ai WAV conversion — free
+  add_instrumental:   10,  // Poyo.ai add instrumental @ $0.10
 };
 
 // Subscription value per job type (what the job is worth to the customer in cents)
@@ -137,6 +138,7 @@ const JOB_VALUE_CENTS: Record<JobType, number> = {
   album_art:          500,  // AI artwork deliverable (included in Signature Masterpiece)
   timestamped_lyrics: 100,  // sync-ready lyrics for video layers
   wav_export:         150,  // lossless audio deliverable
+  add_instrumental:   300,  // instrumental add-on layer deliverable
 };
 
 let _pgAvailable = true;
@@ -514,7 +516,7 @@ export class OrchestrationEngine {
     // ── cinematic_video short-circuit ────────────────────────────────────────
     // Calls the Python AIDirector via execFile to produce a full shot plan.
     // The shot plan is stored as outputPayload and the job completes.
-    if (job.jobType === "cinematic_video" || job.jobType === "director_notes") {
+    if (job.jobType === "cinematic_video") {
       const { execFile } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const path = await import("node:path");
@@ -876,8 +878,8 @@ print(json.dumps(out))
         jobId:         job.jobId,
         userId:        job.userId,
         jobType:       job.jobType,
-        productName:   job.productType ?? job.jobType,
-        deliveryUrl:   outputPayload?.url ?? outputPayload?.audioUrl ?? outputPayload?.videoUrl ?? undefined,
+        productName:   (job as any).productType ?? job.jobType,
+        deliveryUrl:   (outputPayload?.url ?? outputPayload?.audioUrl ?? outputPayload?.videoUrl) as string | undefined,
         customerEmail: job.inputPayload?.customerEmail as string ?? "",
         customerName:  job.inputPayload?.customerName as string ?? "",
       }).catch(() => {});
@@ -942,9 +944,9 @@ print(json.dumps(out))
         jobType:     job.jobType,
         provider:    actualProvider,
         attempt,
-        maxAttempts: job.maxAttempts,
+        maxAttempts: job.maxAttempts ?? 3,
         error:       lastError,
-        willRetry:   attempt < job.maxAttempts,
+        willRetry:   attempt < (job.maxAttempts ?? 3),
         customerEmail: job.inputPayload?.customerEmail as string ?? "",
       }).catch(() => {});
 
@@ -1071,6 +1073,7 @@ print(json.dumps(out))
       album_art:          ["poyo"],
       timestamped_lyrics: ["poyo"],
       wav_export:         ["poyo"],
+      add_instrumental:   ["poyo"],
       voice_clone:  ["elevenlabs"],
       narration:    ["elevenlabs", "openai"],
       analysis:     ["openai"],

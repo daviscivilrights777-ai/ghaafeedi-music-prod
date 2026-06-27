@@ -2,23 +2,29 @@
 // Ghaafeedi Music — Poyo.ai Music Adapter
 // PRIMARY music infrastructure provider. Replaces Sunor.cc.
 //
-// Poyo.ai covers the FULL music production stack:
-//   - Song generation (Suno V4/V4.5/V5/V5.5)
-//   - Song extend (>8 min long-form)
-//   - Music Video (AI MV at $0.02/video — killer feature)
-//   - Vocal remover / stem separation
-//   - Cover / style transfer
-//   - Add vocals / add instrumental
-//   - Boost music style
-//   - Replace section (surgical inpainting)
-//   - Timestamped lyrics
-//   - WAV export (lossless)
-//   - Album art generation
-//   - Lyrics generation (free)
+// Poyo.ai is an AI gateway (like FAL.ai) that proxies Suno V4/V5/V5.5
+// and MiniMax music models under a single Bearer-auth API.
 //
-// API Pattern: Async task_id + polling (same as Sunor.cc — seamless swap)
-// Auth: x-api-key header
-// Base: https://poyo.ai/api/v1
+// API:
+//   Base:   https://api.poyo.ai
+//   Auth:   Authorization: Bearer <key>
+//   Submit: POST /api/generate/submit  { model, input, callback_url? }
+//   Poll:   GET  /api/generate/detail/music?task_id=<id>
+//
+// Model strings (exact, from docs):
+//   generate-music          — Suno song generation
+//   generate-lyrics         — Suno lyrics engine (free)
+//   create-music-video      — Visualised MP4 from audio_id
+//   extend-music            — Suno continuation / long-form
+//   separate-vocals         — 2-stem split (Suno-based, no upload)
+//   upload-and-cover-audio  — Style transfer with uploaded audio
+//   add-vocals              — Instrumental → full song with AI vocals
+//   add-instrumental        — Vocals → full song with AI backing
+//   boost-music-style       — AI style description enhancer
+//   replace-section         — Surgical inpainting of a time range
+//   generate-music-cover    — AI album art from song_id
+//   get-timestamped-lyrics  — Sync-ready lyric timestamps
+//   convert-to-wav          — MP3 → WAV lossless export
 // ============================================================
 
 import type {
@@ -34,28 +40,28 @@ import { getRedis } from "../redis-client";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const POYO_API = "https://poyo.ai/api/v1";
+const POYO_BASE = "https://api.poyo.ai";
+const POYO_SUBMIT = `${POYO_BASE}/api/generate/submit`;
+const POYO_DETAIL = `${POYO_BASE}/api/generate/detail/music`;
 
 /** Default Suno model version for Ghaafeedi productions */
-const DEFAULT_MODEL = "V5";
+const DEFAULT_MV = "V5";
 
-/** Cost in cents per operation type */
+/** Cost in credits (cents equivalent) per operation */
 const OPERATION_COSTS: Record<string, number> = {
-  generate:          10,  // $0.10 — song gen
-  extend:            10,  // $0.10 — extend beyond 8 min
-  cover_audio:       10,  // $0.10 — style transfer (your audio → new cover)
-  extend_audio:      10,  // $0.10 — extend an uploaded track
-  add_instrumental:  10,  // $0.10 — vocal track → full instrumental
-  add_vocals:        10,  // $0.10 — instrumental → add vocal layer
-  boost:             10,  // $0.10 — style reinforcement pass
-  album_art:         10,  // $0.10 — AI-generated album artwork
-  replace_section:   10,  // $0.10 — surgical inpainting for specific segment
-  vocal_remover:     10,  // $0.10 — stem separation / instrumental output
-  music_video:        2,  // $0.02 — audio → cinematic MV (Seedance 2 Mini)
-  lyrics:             0,  // Free  — Suno lyrics engine
-  timestamped_lyrics: 0,  // Free  — sync-ready lyric data
-  wav_convert:        0,  // Free  — MP3 → WAV lossless export
-  persona:           10,  // TBD   — artist voice/style persona (estimate)
+  "generate-music":         10,  // $0.10 — song gen
+  "generate-lyrics":         0,  // Free  — Suno lyrics engine
+  "create-music-video":      2,  // $0.02 — audio → MP4 (Seedance 2 Mini)
+  "extend-music":           10,  // $0.10 — extend beyond 8 min
+  "separate-vocals":         2,  // $0.02 — 2-stem split
+  "upload-and-cover-audio": 10,  // $0.10 — style transfer
+  "add-vocals":             10,  // $0.10 — instrumental → full song
+  "add-instrumental":       10,  // $0.10 — vocals → full song
+  "boost-music-style":       0,  // Free  — style description enhancer
+  "replace-section":        10,  // $0.10 — surgical inpainting
+  "generate-music-cover":    2,  // $0.02 — album art
+  "get-timestamped-lyrics":  1,  // $0.01 — sync lyrics
+  "convert-to-wav":          0,  // Free  — lossless export
 };
 
 const MONTHLY_COUNTER_KEY = (ym: string) => `poyo:monthly:${ym}`;
@@ -72,45 +78,46 @@ async function incrementMonthlyCounter(): Promise<void> {
   const redis = getRedis();
   const ym = new Date().toISOString().slice(0, 7);
   await redis.incr(MONTHLY_COUNTER_KEY(ym));
-  await redis.expire(MONTHLY_COUNTER_KEY(ym), 32 * 24 * 60 * 60); // 32 days safe
+  await redis.expire(MONTHLY_COUNTER_KEY(ym), 32 * 24 * 60 * 60);
 }
 
-async function poyoHeaders(): Promise<Record<string, string>> {
+async function bearerHeaders(): Promise<Record<string, string>> {
   const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
   return {
-    "Content-Type": "application/json",
-    "x-api-key":    apiKey,
+    "Content-Type":  "application/json",
+    "Authorization": `Bearer ${apiKey}`,
   };
 }
 
-/** Maps jobType → Poyo.ai operation + endpoint */
+/** Maps jobType → Poyo model string + input payload */
 function resolveOperation(job: JobSpec): {
-  operation: string;
-  endpoint: string;
-  payload: Record<string, unknown>;
+  model:   string;
+  input:   Record<string, unknown>;
 } {
   const p = job.inputPayload ?? {};
 
   switch (job.jobType) {
+
     // ── Song generation ──────────────────────────────────────────────────────
     case "song": {
+      const customMode = !!(p.style || p.title || p.lyrics);
       return {
-        operation: "generate",
-        endpoint:  `${POYO_API}/music/generate`,
-        payload: {
-          model:              p.model        ?? DEFAULT_MODEL,
-          title:              p.title        ?? undefined,
-          prompt:             p.prompt       ?? p.description ?? "",
-          // Custom mode fields
-          style:              p.genre        ?? p.style ?? "cinematic emotional",
-          negative_tags:      p.negative_tags ?? undefined,
-          style_weight:       p.style_weight  ?? undefined,
-          weirdness_constraint: p.weirdness_constraint ?? undefined,
-          vocal_gender:       p.vocal_gender  ?? undefined,
-          make_instrumental:  p.instrumental  ?? false,
-          // Lyric mode
-          lyrics:             p.lyrics        ?? undefined,
-          gpt_description_prompt: p.gpt_description_prompt ?? p.lyrics ?? p.prompt ?? undefined,
+        model: "generate-music",
+        input: {
+          prompt:       p.prompt ?? p.lyrics ?? p.description ?? "",
+          custom_mode:  customMode,
+          instrumental: p.instrumental ?? false,
+          mv:           p.model ?? DEFAULT_MV,
+          ...(customMode ? {
+            style:  p.genre ?? p.style ?? "cinematic emotional",
+            title:  p.title ?? "Ghaafeedi Original",
+          } : {}),
+          ...(p.negative_tags  ? { negative_tags:         p.negative_tags }  : {}),
+          ...(p.vocal_gender   ? { vocal_gender:          p.vocal_gender }   : {}),
+          ...(p.style_weight   ? { style_weight:          p.style_weight }   : {}),
+          ...(p.weirdness_constraint ? { weirdness_constraint: p.weirdness_constraint } : {}),
+          ...(p.audio_weight   ? { audio_weight:          p.audio_weight }   : {}),
+          ...(p.persona_id     ? { persona_id:            p.persona_id }     : {}),
         },
       };
     }
@@ -118,66 +125,84 @@ function resolveOperation(job: JobSpec): {
     // ── Lyrics generation ────────────────────────────────────────────────────
     case "lyrics": {
       return {
-        operation: "lyrics",
-        endpoint:  `${POYO_API}/music/lyrics`,
-        payload: {
+        model: "generate-lyrics",
+        input: {
           prompt: p.prompt ?? p.story ?? p.description ?? "",
-          model:  p.model ?? DEFAULT_MODEL,
         },
       };
     }
 
-    // ── Music Video generation ───────────────────────────────────────────────
+    // ── Music Video ──────────────────────────────────────────────────────────
     case "music_video": {
       return {
-        operation: "music_video",
-        endpoint:  `${POYO_API}/music/video`,
-        payload: {
-          song_id:   p.song_id ?? undefined,
-          audio_url: p.audio_url ?? undefined,
-          model:     p.mv_model ?? "Seedance_mini", // Seedance 2 Mini — $0.02
-          title:     p.title ?? undefined,
+        model: "create-music-video",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id,
+          ...(p.author      ? { author:      p.author }      : {}),
+          ...(p.domain_name ? { domain_name: p.domain_name } : {}),
         },
       };
     }
 
     // ── Song extension ───────────────────────────────────────────────────────
     case "song_extension": {
+      const customMode = !!(p.continuation_prompt || p.style || p.title);
       return {
-        operation: "extend",
-        endpoint:  `${POYO_API}/music/extend`,
-        payload: {
-          song_id:  p.song_id,
-          model:    p.model ?? DEFAULT_MODEL,
-          prompt:   p.continuation_prompt ?? undefined,
-          duration: p.extend_seconds ?? 120,
+        model: "extend-music",
+        input: {
+          default_param_flag: customMode,
+          audio_id:           p.audio_id ?? p.song_id,
+          mv:                 p.model ?? DEFAULT_MV,
+          ...(customMode ? {
+            prompt:      p.continuation_prompt ?? p.prompt ?? "",
+            style:       p.genre ?? p.style ?? "cinematic emotional",
+            title:       p.title ?? "Extended",
+            continue_at: p.continue_at ?? p.extend_at_seconds ?? 120,
+          } : {}),
+          ...(p.negative_tags  ? { negative_tags:         p.negative_tags }  : {}),
+          ...(p.vocal_gender   ? { vocal_gender:          p.vocal_gender }   : {}),
+          ...(p.style_weight   ? { style_weight:          p.style_weight }   : {}),
+          ...(p.weirdness_constraint ? { weirdness_constraint: p.weirdness_constraint } : {}),
+          ...(p.audio_weight   ? { audio_weight:          p.audio_weight }   : {}),
+          ...(p.persona_id     ? { persona_id:            p.persona_id }     : {}),
         },
       };
     }
 
-    // ── Vocal removal / stems ────────────────────────────────────────────────
+    // ── Vocal removal / stems (Suno-based, no upload) ────────────────────────
     case "vocal_removal":
     case "stem_separation": {
       return {
-        operation: "vocal_remover",
-        endpoint:  `${POYO_API}/music/vocal-remover`,
-        payload: {
-          song_id:   p.song_id   ?? undefined,
-          audio_url: p.audio_url ?? undefined,
+        model: "separate-vocals",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id ?? p.song_id,
         },
       };
     }
 
-    // ── Cover / style transfer ───────────────────────────────────────────────
+    // ── Cover / style transfer (uploaded audio → new style) ──────────────────
     case "cover_generation": {
+      const customMode = !!(p.style || p.title);
       return {
-        operation: "cover_audio",
-        endpoint:  `${POYO_API}/music/cover-audio`,
-        payload: {
-          audio_url: p.audio_url,
-          style:     p.genre ?? p.style ?? "cinematic emotional",
-          model:     p.model ?? DEFAULT_MODEL,
-          style_weight: p.style_weight ?? 0.7,
+        model: "upload-and-cover-audio",
+        input: {
+          upload_url:   p.audio_url ?? p.upload_url,
+          prompt:       p.prompt ?? p.description ?? "",
+          custom_mode:  customMode,
+          instrumental: p.instrumental ?? false,
+          mv:           p.model ?? DEFAULT_MV,
+          ...(customMode ? {
+            style: p.genre ?? p.style ?? "cinematic emotional",
+            title: p.title ?? "Cover",
+          } : {}),
+          ...(p.negative_tags  ? { negative_tags:         p.negative_tags }  : {}),
+          ...(p.vocal_gender   ? { vocal_gender:          p.vocal_gender }   : {}),
+          ...(p.style_weight   ? { style_weight:          p.style_weight }   : {}),
+          ...(p.weirdness_constraint ? { weirdness_constraint: p.weirdness_constraint } : {}),
+          ...(p.audio_weight   ? { audio_weight:          p.audio_weight }   : {}),
+          ...(p.persona_id     ? { persona_id:            p.persona_id }     : {}),
         },
       };
     }
@@ -185,52 +210,76 @@ function resolveOperation(job: JobSpec): {
     // ── Add vocals to instrumental ───────────────────────────────────────────
     case "vocal_add": {
       return {
-        operation: "add_vocals",
-        endpoint:  `${POYO_API}/music/add-vocals`,
-        payload: {
-          audio_url:    p.audio_url,
-          vocal_gender: p.vocal_gender ?? "female",
-          model:        p.model ?? DEFAULT_MODEL,
-          style:        p.genre ?? p.style ?? undefined,
+        model: "add-vocals",
+        input: {
+          upload_url:    p.audio_url ?? p.upload_url,
+          prompt:        p.lyrics ?? p.prompt ?? "",
+          title:         p.title ?? "Ghaafeedi Original",
+          style:         p.genre ?? p.style ?? "cinematic emotional",
+          negative_tags: p.negative_tags ?? "",
+          mv:            p.model ?? "V4_5PLUS",
+          ...(p.vocal_gender ? { vocal_gender: p.vocal_gender } : {}),
+          ...(p.style_weight ? { style_weight: p.style_weight } : {}),
+          ...(p.weirdness_constraint ? { weirdness_constraint: p.weirdness_constraint } : {}),
+          ...(p.audio_weight ? { audio_weight: p.audio_weight } : {}),
         },
       };
     }
 
-    // ── Style boost ──────────────────────────────────────────────────────────
+    // ── Add instrumental backing to vocals ───────────────────────────────────
+    case "add_instrumental": {
+      return {
+        model: "add-instrumental",
+        input: {
+          upload_url:    p.audio_url ?? p.upload_url,
+          title:         p.title ?? "Ghaafeedi Original",
+          tags:          p.genre ?? p.style ?? "cinematic, emotional",
+          negative_tags: p.negative_tags ?? "",
+          mv:            p.model ?? "V4_5PLUS",
+          ...(p.vocal_gender ? { vocal_gender: p.vocal_gender } : {}),
+          ...(p.style_weight ? { style_weight: p.style_weight } : {}),
+          ...(p.weirdness_constraint ? { weirdness_constraint: p.weirdness_constraint } : {}),
+          ...(p.audio_weight ? { audio_weight: p.audio_weight } : {}),
+        },
+      };
+    }
+
+    // ── Style boost (AI description enhancer) ────────────────────────────────
     case "style_boost": {
       return {
-        operation: "boost",
-        endpoint:  `${POYO_API}/music/boost`,
-        payload: {
-          song_id: p.song_id,
-          model:   p.model ?? DEFAULT_MODEL,
+        model: "boost-music-style",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id ?? p.song_id,
         },
       };
     }
 
-    // ── Section replacement ──────────────────────────────────────────────────
+    // ── Section replacement (surgical inpainting) ────────────────────────────
     case "section_replace": {
       return {
-        operation: "replace_section",
-        endpoint:  `${POYO_API}/music/replace-section`,
-        payload: {
-          song_id:       p.song_id,
-          start_seconds: p.start_seconds,
-          end_seconds:   p.end_seconds,
-          prompt:        p.replacement_prompt ?? "",
-          model:         p.model ?? DEFAULT_MODEL,
+        model: "replace-section",
+        input: {
+          task_id:       p.task_id,
+          audio_id:      p.audio_id ?? p.song_id,
+          prompt:        p.replacement_prompt ?? p.prompt ?? "",
+          tags:          p.genre ?? p.style ?? "cinematic emotional",
+          title:         p.title ?? "Ghaafeedi Edit",
+          infill_start_s: p.start_seconds ?? p.infill_start_s ?? 0,
+          infill_end_s:   p.end_seconds   ?? p.infill_end_s   ?? 30,
+          ...(p.negative_tags ? { negative_tags: p.negative_tags } : {}),
+          ...(p.full_lyrics   ? { full_lyrics:   p.full_lyrics }   : {}),
         },
       };
     }
 
-    // ── Album art ────────────────────────────────────────────────────────────
+    // ── Album art generation ─────────────────────────────────────────────────
     case "album_art": {
       return {
-        operation: "album_art",
-        endpoint:  `${POYO_API}/music/album-art`,
-        payload: {
-          song_id: p.song_id,
-          prompt:  p.prompt ?? p.description ?? "",
+        model: "generate-music-cover",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id ?? p.song_id,
         },
       };
     }
@@ -238,10 +287,10 @@ function resolveOperation(job: JobSpec): {
     // ── Timestamped lyrics ───────────────────────────────────────────────────
     case "timestamped_lyrics": {
       return {
-        operation: "timestamped_lyrics",
-        endpoint:  `${POYO_API}/music/timestamped-lyrics`,
-        payload: {
-          song_id: p.song_id,
+        model: "get-timestamped-lyrics",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id ?? p.song_id,
         },
       };
     }
@@ -249,27 +298,23 @@ function resolveOperation(job: JobSpec): {
     // ── WAV export ───────────────────────────────────────────────────────────
     case "wav_export": {
       return {
-        operation: "wav_convert",
-        endpoint:  `${POYO_API}/music/wav`,
-        payload: {
-          song_id:   p.song_id   ?? undefined,
-          audio_url: p.audio_url ?? undefined,
+        model: "convert-to-wav",
+        input: {
+          task_id:  p.task_id,
+          audio_id: p.audio_id ?? p.song_id,
         },
       };
     }
 
-    // ── Fallback ─────────────────────────────────────────────────────────────
+    // ── Fallback → song gen ──────────────────────────────────────────────────
     default: {
-      // Treat any unknown type as song gen with whatever payload was passed
       return {
-        operation: "generate",
-        endpoint:  `${POYO_API}/music/generate`,
-        payload: {
-          model:   p.model ?? DEFAULT_MODEL,
-          prompt:  p.prompt ?? p.description ?? p.lyrics ?? "",
-          style:   p.genre ?? p.style ?? "cinematic emotional",
-          lyrics:  p.lyrics ?? undefined,
-          make_instrumental: p.instrumental ?? false,
+        model: "generate-music",
+        input: {
+          prompt:       p.prompt ?? p.description ?? p.lyrics ?? "",
+          custom_mode:  false,
+          instrumental: p.instrumental ?? false,
+          mv:           p.model ?? DEFAULT_MV,
         },
       };
     }
@@ -278,38 +323,57 @@ function resolveOperation(job: JobSpec): {
 
 // ─── Response Shapes ─────────────────────────────────────────────────────────
 
-interface PoyoTaskResponse {
-  task_id?:  string;
-  id?:       string;
-  taskId?:   string;
-  status?:   string;
-  error?:    string;
+interface PoyoSubmitResponse {
+  code: number;
+  data?: {
+    task_id:      string;
+    status:       string;
+    created_time: string;
+  };
+  error?: {
+    message: string;
+    type:    string;
+  };
 }
 
-interface PoyoStatusResponse {
-  status:         string;             // "pending" | "processing" | "complete" | "error" | "failed"
-  audio_url?:     string;
-  video_url?:     string;
-  cover_url?:     string;             // album art or cover generation
-  instrumental_url?: string;          // vocal removal result
-  vocals_url?:    string;             // vocals-only track (stems)
-  wav_url?:       string;             // WAV export
-  lyrics?:        string;             // lyrics text result
-  timestamped_lyrics?: Array<{
-    text:  string;
-    start: number;
-    end:   number;
-  }>;
-  metadata?: {
-    duration_seconds?: number;
-    bpm?:              number;
-    model?:            string;
-    title?:            string;
-    tags?:             string[];
-    credits_used?:     number;
+interface PoyoFile {
+  // Music generation outputs
+  audio_id?:   string;
+  audio_url?:  string;
+  image_url?:  string;
+  title?:      string;
+  tags?:        string;
+  duration?:   number;
+  prompt?:     string;
+  // Lyrics
+  text?:                string;
+  timestampe_lyrics?:   string;   // note: Poyo typos "timestamp"
+  // Boost
+  style?: string;
+  // WAV
+  wav_url?: string;
+  // Vocal separation
+  separate_vocals?: string;    // JSON: { vocal_url, instrumental_url }
+  vocal_removal?:  string;    // JSON: { bass, drums, piano, guitar, vocals, other }
+  stem_split?:     string;    // JSON: full 12-stem map
+  // Album art
+  generate_cover?: string;    // JSON array: [{ file_url, file_type }]
+  // Music video
+  video_url?: string;
+  // Persona
+  persona_id?: string;
+}
+
+interface PoyoDetailResponse {
+  code: number;
+  data?: {
+    task_id:        string;
+    status:         string;    // not_started | running | finished | failed
+    credits_amount: number;
+    files:          PoyoFile[];
+    created_time:   string;
+    error_message:  string | null;
   };
-  error_message?: string;
-  error?:         string;
 }
 
 // ─── Adapter ─────────────────────────────────────────────────────────────────
@@ -318,7 +382,6 @@ export const PoyoAdapter: ProviderAdapter = {
   name:        "poyo",
   displayName: "Poyo.ai",
 
-  // All job types this adapter handles
   jobTypes: [
     "song",
     "lyrics",
@@ -328,6 +391,7 @@ export const PoyoAdapter: ProviderAdapter = {
     "stem_separation",
     "cover_generation",
     "vocal_add",
+    "add_instrumental",
     "style_boost",
     "section_replace",
     "album_art",
@@ -336,73 +400,71 @@ export const PoyoAdapter: ProviderAdapter = {
   ] as any[],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
-    const { operation } = resolveOperation(job);
-    const cpc = OPERATION_COSTS[operation] ?? 10;
-
+    const { model } = resolveOperation(job);
+    const cpc = OPERATION_COSTS[model] ?? 10;
     return {
       minCents:      cpc,
       maxCents:      cpc,
       estimateCents: cpc,
-      unit:          `per_${operation}`,
-      breakdown:     `1 ${operation} × $${(cpc / 100).toFixed(2)} (Poyo.ai)`,
+      unit:          `per_${model}`,
+      breakdown:     `1 ${model} × $${(cpc / 100).toFixed(2)} (Poyo.ai)`,
     };
   },
 
   async dispatch(job: JobSpec): Promise<JobHandle> {
-    const headers = await poyoHeaders();
-    const { operation, endpoint, payload } = resolveOperation(job);
+    const headers = await bearerHeaders();
+    const { model, input } = resolveOperation(job);
 
-    // Strip undefined values before sending
-    const cleanPayload = Object.fromEntries(
-      Object.entries(payload).filter(([, v]) => v !== undefined && v !== null)
+    // Strip undefined/null before sending
+    const cleanInput = Object.fromEntries(
+      Object.entries(input).filter(([, v]) => v !== undefined && v !== null)
     );
 
-    const res = await fetch(endpoint, {
+    const body: Record<string, unknown> = { model, input: cleanInput };
+
+    const res = await fetch(POYO_SUBMIT, {
       method:  "POST",
       headers,
-      body:    JSON.stringify(cleanPayload),
+      body:    JSON.stringify(body),
       signal:  AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`[Poyo] Dispatch failed (${operation}): ${res.status} ${errText}`);
+      throw new Error(`[Poyo] Dispatch failed (${model}): HTTP ${res.status} — ${errText}`);
     }
 
-    const data = await res.json() as PoyoTaskResponse;
+    const data = await res.json() as PoyoSubmitResponse;
 
     if (data.error) {
-      throw new Error(`[Poyo] API error (${operation}): ${data.error}`);
+      throw new Error(`[Poyo] API error (${model}): ${data.error.message}`);
     }
 
-    const taskId = data.task_id ?? data.taskId ?? data.id;
-
-    if (!taskId) {
-      throw new Error(`[Poyo] No task_id returned for ${operation}`);
+    if (!data.data?.task_id) {
+      throw new Error(`[Poyo] No task_id returned for ${model}: ${JSON.stringify(data)}`);
     }
 
-    // Increment monthly song counter for analytics
-    if (operation === "generate") {
+    if (model === "generate-music") {
       await incrementMonthlyCounter();
     }
 
     return {
-      externalJobId:  taskId,
+      externalJobId:  data.data.task_id,
       provider:       this.name,
       dispatchedAt:   new Date(),
       pollIntervalMs: 8_000,
-      metadata: { operation, endpoint },
+      metadata:       { model },
     };
   },
 
   async getStatus(handle: JobHandle): Promise<ProviderJobResult> {
     const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
-    const operation = (handle.metadata as any)?.operation ?? "generate";
+    const model  = (handle.metadata as any)?.model ?? "generate-music";
 
-    const res = await fetch(`${POYO_API}/music/task/${handle.externalJobId}`, {
+    const res = await fetch(`${POYO_DETAIL}?task_id=${handle.externalJobId}`, {
       headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type":  "application/json",
       },
       signal: AbortSignal.timeout(15_000),
     });
@@ -410,77 +472,106 @@ export const PoyoAdapter: ProviderAdapter = {
     if (!res.ok) {
       return {
         status:       "failed",
-        errorMessage: `[Poyo] Status check failed: ${res.status}`,
+        errorMessage: `[Poyo] Status check failed: HTTP ${res.status}`,
       };
     }
 
-    const data = await res.json() as PoyoStatusResponse;
+    const resp = await res.json() as PoyoDetailResponse;
+    const d    = resp.data;
 
-    // Normalize status
-    const status = data.status?.toLowerCase();
+    if (!d) {
+      return { status: "processing" };
+    }
 
-    if (status === "complete" || status === "completed" || status === "success" || status === "done") {
-      // Build output URLs — collect all result URLs for this operation
+    const status = d.status?.toLowerCase();
+
+    if (status === "finished") {
+      const files  = d.files ?? [];
+      const first  = files[0] ?? {};
+
+      // ── Collect all output URLs ────────────────────────────────────────────
       const outputUrls: string[] = [];
-      if (data.audio_url)          outputUrls.push(data.audio_url);
-      if (data.video_url)          outputUrls.push(data.video_url);
-      if (data.cover_url)          outputUrls.push(data.cover_url);
-      if (data.instrumental_url)   outputUrls.push(data.instrumental_url);
-      if (data.vocals_url)         outputUrls.push(data.vocals_url);
-      if (data.wav_url)            outputUrls.push(data.wav_url);
+
+      for (const f of files) {
+        if (f.audio_url)  outputUrls.push(f.audio_url);
+        if (f.video_url)  outputUrls.push(f.video_url);
+        if (f.wav_url)    outputUrls.push(f.wav_url);
+        if (f.image_url)  outputUrls.push(f.image_url);
+
+        // Stem/vocal separation — parse JSON fields
+        if (f.separate_vocals) {
+          try {
+            const sv = JSON.parse(f.separate_vocals) as { vocal_url?: string; instrumental_url?: string };
+            if (sv.vocal_url)          outputUrls.push(sv.vocal_url);
+            if (sv.instrumental_url)   outputUrls.push(sv.instrumental_url);
+          } catch { /* ignore */ }
+        }
+        if (f.vocal_removal) {
+          try {
+            const vr = JSON.parse(f.vocal_removal) as Record<string, string>;
+            outputUrls.push(...Object.values(vr).filter(Boolean));
+          } catch { /* ignore */ }
+        }
+        if (f.generate_cover) {
+          try {
+            const gc = JSON.parse(f.generate_cover) as Array<{ file_url: string }>;
+            outputUrls.push(...gc.map(x => x.file_url).filter(Boolean));
+          } catch { /* ignore */ }
+        }
+      }
 
       const primaryUrl =
-        data.audio_url ??
-        data.video_url ??
-        data.cover_url ??
-        data.instrumental_url ??
-        data.wav_url ??
+        first.audio_url ??
+        first.video_url ??
+        first.wav_url   ??
+        first.image_url ??
         outputUrls[0];
 
-      const costCents = OPERATION_COSTS[operation] ?? 10;
+      const costCents = OPERATION_COSTS[model] ?? 10;
 
       return {
         status:     "complete",
         outputUrl:  primaryUrl,
         outputUrls: outputUrls.length > 0 ? outputUrls : undefined,
         metadata: {
-          operation,
-          lyrics:              data.lyrics,
-          timestamped_lyrics:  data.timestamped_lyrics,
-          audio_url:           data.audio_url,
-          video_url:           data.video_url,
-          cover_url:           data.cover_url,
-          instrumental_url:    data.instrumental_url,
-          vocals_url:          data.vocals_url,
-          wav_url:             data.wav_url,
-          duration_seconds:    data.metadata?.duration_seconds,
-          bpm:                 data.metadata?.bpm,
-          model:               data.metadata?.model,
-          title:               data.metadata?.title,
-          tags:                data.metadata?.tags,
-          credits_used:        data.metadata?.credits_used,
+          model,
+          files,
+          // Convenience unwrapped fields
+          audio_url:          first.audio_url,
+          video_url:          first.video_url,
+          wav_url:            first.wav_url,
+          image_url:          first.image_url,
+          audio_id:           first.audio_id,
+          title:              first.title,
+          tags:               first.tags,
+          duration:           first.duration,
+          lyrics_text:        first.text,
+          timestamped_lyrics: first.timestampe_lyrics,
+          style_boost:        first.style,
+          persona_id:         first.persona_id,
+          separate_vocals:    first.separate_vocals,
+          vocal_removal:      first.vocal_removal,
+          stem_split:         first.stem_split,
+          generate_cover:     first.generate_cover,
+          credits_used:       d.credits_amount,
         },
         costCents,
       };
     }
 
-    if (
-      status === "error" ||
-      status === "failed" ||
-      status === "failure"
-    ) {
+    if (status === "failed") {
       return {
         status:       "failed",
-        errorMessage: data.error_message ?? data.error ?? "Poyo.ai generation failed",
+        errorMessage: d.error_message ?? "Poyo.ai generation failed",
       };
     }
 
-    // Still processing (pending / processing / queued)
+    // not_started | running
     return { status: "processing" };
   },
 
   async cancelJob(_handle: JobHandle): Promise<void> {
-    // Poyo.ai does not expose a cancel endpoint — no-op (same as Sunor.cc)
+    // Poyo.ai has no cancel endpoint — no-op
   },
 
   async healthCheck(): Promise<ProviderHealth> {
@@ -488,21 +579,15 @@ export const PoyoAdapter: ProviderAdapter = {
     try {
       const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
 
-      // GET /api/v1/music/generate — expect 405 (wrong method) or 200, 401 (bad key)
-      // Any response means server is up and reachable
-      const res = await fetch(`${POYO_API}/music/generate`, {
-        method:  "GET",
-        headers: { "x-api-key": apiKey },
+      // Probe the status endpoint with a dummy task_id.
+      // Returns { code:200, data:{ task_id:"ping", status:null, ... } } — alive.
+      const res = await fetch(`${POYO_DETAIL}?task_id=ping`, {
+        headers: { "Authorization": `Bearer ${apiKey}` },
         signal:  AbortSignal.timeout(8_000),
       });
 
-      const alive =
-        res.ok ||
-        res.status === 401 ||
-        res.status === 405 ||
-        res.status === 403 ||
-        res.status === 422 ||
-        res.status === 400;
+      // 200 with null status = server up and auth valid
+      const alive = res.status === 200 || res.status === 400 || res.status === 404;
 
       return {
         healthy:   alive,

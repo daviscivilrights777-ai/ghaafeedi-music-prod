@@ -3,7 +3,8 @@
 // Priority queue per membership tier using Redis lists.
 // elite > premium > starter > free
 // ============================================================
-import { getRedis, REDIS_KEYS, QUEUE_TIERS, QueueTier } from "./redis-client";
+import { getRedis, REDIS_KEYS, QUEUE_TIERS } from "./redis-client";
+import type { QueueTier } from "./redis-client";
 import { v4 as uuidv4 } from "uuid";
 
 export interface JobSpec {
@@ -60,7 +61,8 @@ export type JobType =
   | "section_replace"    // Poyo.ai surgical inpainting — replace segment of a song
   | "album_art"          // Poyo.ai AI-generated album artwork
   | "timestamped_lyrics" // Poyo.ai sync-ready lyric timestamps
-  | "wav_export";        // Poyo.ai MP3 → WAV lossless conversion
+  | "wav_export"         // Poyo.ai MP3 → WAV lossless conversion
+  | "add_instrumental";  // Poyo.ai add instrumental backing to vocals
 
 export class JobQueue {
   /**
