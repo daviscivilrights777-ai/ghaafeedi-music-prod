@@ -287,6 +287,15 @@ class GhaafeediSettings(BaseModel):
     ssim_threshold: float = Field(
         default_factory=lambda: float(os.environ.get('SSIM_THRESHOLD', '0.45'))
     )
+    # Fix 4: Drift detection thresholds
+    # drift_threshold            — absolute drop from baseline score that flags drift
+    # drift_rolling_drop_threshold — 3-shot rolling average drop that flags drift
+    drift_threshold: float = Field(
+        default_factory=lambda: float(os.environ.get('DRIFT_THRESHOLD', '0.12'))
+    )
+    drift_rolling_drop_threshold: float = Field(
+        default_factory=lambda: float(os.environ.get('DRIFT_ROLLING_DROP_THRESHOLD', '0.08'))
+    )
     audit_chain_secret: str = Field(
         default_factory=lambda: os.environ.get('AUDIT_CHAIN_SECRET', 'ghaafeedi-audit-chain-v1')
     )

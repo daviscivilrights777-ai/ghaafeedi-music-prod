@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { path: "/admin/productions", label: "Productions",  icon: "▶", accent: "#06B6D4" },
   { path: "/admin/ai-jobs",     label: "AI Jobs",      icon: "⚡", accent: PURPLE },
   { path: "/admin/lipsync",     label: "Lip Sync",     icon: "🎙", accent: "#EC4899" },
+  { path: "/admin/qa-results",  label: "QA Monitor",   icon: "◎", accent: "#22C55E" },
   { path: "/admin/revenue",     label: "Revenue",      icon: "▣", accent: GREEN },
   { path: "/admin/support",     label: "Support",      icon: "◈", accent: BLUE },
   { path: "/admin/audit-logs",  label: "Audit Logs",   icon: "≡", accent: "#64748B" },

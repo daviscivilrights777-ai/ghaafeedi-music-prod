@@ -29,6 +29,7 @@ const AdminRevenue     = lazy(() => import("./pages/admin/revenue"));
 const AdminSupport     = lazy(() => import("./pages/admin/support"));
 const AdminAuditLogs   = lazy(() => import("./pages/admin/audit-logs"));
 const AdminLipSync       = lazy(() => import("./pages/admin/lipsync"));
+const AdminQAResults     = lazy(() => import("./pages/admin/qa-results"));
 const RevisionIntakePage = lazy(() => import("./pages/revision-intake"));
 const AdminRevisions     = lazy(() => import("./pages/admin/admin-revisions"));
 
@@ -70,6 +71,7 @@ function App() {
           <Route path="/admin/audit-logs" component={AdminAuditLogs} />
           <Route path="/admin/lipsync" component={AdminLipSync} />
           <Route path="/admin/revisions" component={AdminRevisions} />
+          <Route path="/admin/qa-results" component={AdminQAResults} />
           <Route path="/revisions/submit" component={RevisionIntakePage} />
         </Switch>
       </Suspense>

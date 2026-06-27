@@ -19,7 +19,6 @@ from knowledge.camera_moves import get_camera_move
 
 # ── Consistency + Security (lazy — only imported when order_id provided) ──────
 import sys
-import os
 _CONSISTENCY_AVAILABLE = False
 try:
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -265,7 +264,17 @@ class ShotGenerationEngine:
     def __init__(self, settings: GhaafeediSettings,
                  output_dir: str = "/tmp/ghaafeedi_production",
                  order_id: Optional[str] = None,
-                 character_id: Optional[str] = None):
+                 character_id: Optional[str] = None,
+                 character_ids: Optional[List[str]] = None):
+        """
+        Parameters
+        ----------
+        character_id  : Single character ID (backwards-compat).
+        character_ids : List of character IDs for multi-character productions.
+                        If both provided, character_ids takes precedence.
+                        Couples Journey Film, Family Vault, etc. should pass
+                        all character IDs here.
+        """
         self.settings   = settings
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -279,7 +288,16 @@ class ShotGenerationEngine:
 
         self.poyo = PoyoVideoEngine(api_key=api_key, output_dir=str(self.output_dir))
         self.order_id     = order_id
-        self.character_id = character_id
+        # Resolve character list — prefer explicit character_ids, fall back to singular
+        if character_ids:
+            self.character_ids: Optional[List[str]] = character_ids
+            self.character_id  = character_ids[0]  # primary
+        elif character_id:
+            self.character_ids = [character_id]
+            self.character_id  = character_id
+        else:
+            self.character_ids = None
+            self.character_id  = None
 
     def _tier_to_resolution(self) -> str:
         """Map production tier to Seedance 2 resolution."""
@@ -312,43 +330,60 @@ class ShotGenerationEngine:
 
         # ── Consent gate (async-safe: called synchronously via asyncio.run if needed) ──
         _consistency_mgr = None
-        if self.order_id and self.character_id and _CONSISTENCY_AVAILABLE:
+        _multi_char_mode = False
+        if self.order_id and self.character_ids and _CONSISTENCY_AVAILABLE:
             try:
                 import asyncio
-                from consistency.consistency_manager import ConsistencyManager
                 from security.consent.consent_manager import ConsentManager
 
                 consent_mgr = ConsentManager()
                 loop = asyncio.new_event_loop()
 
-                ok, reason = loop.run_until_complete(
-                    consent_mgr.check_gate(
-                        order_id=self.order_id,
-                        character_id=self.character_id,
-                        user_id=getattr(self.settings, "user_id", "unknown"),
-                    )
-                )
-                if not ok:
-                    logger.error(
-                        "[ShotGenerationEngine] Consent gate BLOCKED: %s", reason
-                    )
-                    loop.close()
-                    # Return empty results with error marker
-                    return [
-                        GeneratedShot(
-                            shot=s,
-                            success=False,
-                            error=f"Consent gate: {reason}",
+                # Check consent for every character in this production
+                for _cid in self.character_ids:
+                    ok, reason = loop.run_until_complete(
+                        consent_mgr.check_gate(
+                            order_id=self.order_id,
+                            character_id=_cid,
+                            user_id=getattr(self.settings, "user_id", "unknown"),
                         )
-                        for s in shot_plan.shots
-                    ]
+                    )
+                    if not ok:
+                        logger.error(
+                            "[ShotGenerationEngine] Consent gate BLOCKED for char %s: %s",
+                            _cid, reason,
+                        )
+                        loop.close()
+                        return [
+                            GeneratedShot(
+                                shot=s,
+                                success=False,
+                                error=f"Consent gate [{_cid}]: {reason}",
+                            )
+                            for s in shot_plan.shots
+                        ]
 
                 loop.close()
-                _consistency_mgr = ConsistencyManager(
-                    order_id=self.order_id,
-                    character_id=self.character_id,
-                )
-                logger.info("[ShotGenerationEngine] Consent gate PASSED, consistency manager ready")
+
+                # Pick single vs multi-character consistency manager
+                if len(self.character_ids) > 1:
+                    from consistency.multi_character_manager import MultiCharacterConsistencyManager
+                    _consistency_mgr = MultiCharacterConsistencyManager(
+                        order_id=self.order_id,
+                        character_ids=self.character_ids,
+                    )
+                    _multi_char_mode = True
+                    logger.info(
+                        "[ShotGenerationEngine] Consent gate PASSED — multi-char mode (%d chars)",
+                        len(self.character_ids),
+                    )
+                else:
+                    from consistency.consistency_manager import ConsistencyManager
+                    _consistency_mgr = ConsistencyManager(
+                        order_id=self.order_id,
+                        character_id=self.character_ids[0],
+                    )
+                    logger.info("[ShotGenerationEngine] Consent gate PASSED — single-char consistency manager ready")
             except Exception as cg_err:
                 logger.warning("[ShotGenerationEngine] Consent/consistency init failed (non-blocking): %s", cg_err)
 
@@ -369,9 +404,15 @@ class ShotGenerationEngine:
                 try:
                     import asyncio
                     _loop2 = asyncio.new_event_loop()
-                    _base_payload = _loop2.run_until_complete(
-                        _consistency_mgr.get_consistent_payload({}, _shot_desc)
-                    )
+                    if _multi_char_mode:
+                        # Multi-char: get merged consistency context for all chars
+                        _base_payload = _loop2.run_until_complete(
+                            _consistency_mgr.get_consistent_payload_multi({}, _shot_desc)
+                        )
+                    else:
+                        _base_payload = _loop2.run_until_complete(
+                            _consistency_mgr.get_consistent_payload({}, _shot_desc)
+                        )
                     _loop2.close()
                     # Merge consistency context into shot description
                     if _base_payload.get("prompt"):
@@ -395,30 +436,49 @@ class ShotGenerationEngine:
                 try:
                     import asyncio
                     _loop3 = asyncio.new_event_loop()
-                    _verify = _loop3.run_until_complete(
-                        _consistency_mgr.verify_shot_with_pause(
-                            generated_frame_url=result.video_url,
-                            shot_index=i,
+                    if _multi_char_mode:
+                        # Multi-char: broadcast one video URL to all character managers
+                        _verify = _loop3.run_until_complete(
+                            _consistency_mgr.verify_shot_broadcast(
+                                video_url=result.video_url,
+                                shot_index=i,
+                            )
                         )
-                    )
-                    _loop3.close()
-                    if _verify.paused:
+                        _loop3.close()
+                        _is_paused   = _verify.any_paused
+                        _qa_passed   = _verify.all_passed
+                        _worst_score = _verify.worst_score
+                    else:
+                        _verify = _loop3.run_until_complete(
+                            _consistency_mgr.verify_shot_with_pause(
+                                generated_frame_url=result.video_url,
+                                shot_index=i,
+                            )
+                        )
+                        _loop3.close()
+                        _is_paused   = _verify.paused
+                        _qa_passed   = _verify.passed
+                        _worst_score = (
+                            getattr(_verify.qa, "score", 0.0)
+                            if hasattr(_verify, "qa") and _verify.qa else 0.0
+                        )
+
+                    if _is_paused:
                         logger.error(
                             "Shot %d: double QA fail — job paused. order=%s",
-                            i, self.order_id
+                            i, self.order_id,
                         )
-                        # Mark remaining shots as not run, return early
                         results.append(result)
                         for remaining in shot_plan.shots[i+1:]:
                             results.append(GeneratedShot(
                                 shot=remaining, success=False,
-                                error="Job paused after double QA fail on shot " + str(i+1)
+                                error="Job paused after double QA fail on shot " + str(i+1),
                             ))
                         return results
-                    elif not _verify.passed:
+                    elif not _qa_passed:
                         logger.warning(
-                            "Shot %d QA fail (score=%.3f) — continuing.",
-                            i, _verify.qa.score
+                            "Shot %d QA fail (worst_score=%.3f) — continuing.",
+                            i, _worst_score,
                         )
                 except Exception as _qa_err:
                     logger.warning("Post-gen QA failed (non-blocking): %s", _qa_err)

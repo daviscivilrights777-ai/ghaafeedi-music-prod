@@ -463,4 +463,97 @@ export const admin = new Hono<HonoEnv>()
     );
 
     return c.json({ ok: true, jobId, message: "Job cancelled" }, 200);
+  })
+
+  // ─── Fix 5: GET /api/admin/qa-results ────────────────────────────────────
+  // Returns shot QA results with optional order_id filter and pagination.
+  .get("/qa-results", async (c) => {
+    const pool  = (db as any).$client;
+    const orderId = c.req.query("order_id") || null;
+    const limit   = Math.min(parseInt(c.req.query("limit") || "100"), 500);
+    const offset  = parseInt(c.req.query("offset") || "0");
+
+    // Ensure table exists (idempotent)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS shot_qa_results (
+        id              BIGSERIAL PRIMARY KEY,
+        order_id        TEXT        NOT NULL,
+        character_id    TEXT        NOT NULL,
+        shot_index      INTEGER     NOT NULL,
+        passed          BOOLEAN     NOT NULL,
+        score           REAL        NOT NULL,
+        method          TEXT        NOT NULL,
+        message         TEXT        NOT NULL,
+        fail_count      INTEGER     NOT NULL DEFAULT 0,
+        frame_url       TEXT        NOT NULL DEFAULT '',
+        drift_flagged   BOOLEAN     NOT NULL DEFAULT FALSE,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_shot_qa_order
+        ON shot_qa_results (order_id, created_at DESC);
+    `);
+
+    // KPI row
+    const kpiRes = await pool.query(`
+      SELECT
+        COUNT(*)                                         AS total_shots,
+        COUNT(*) FILTER (WHERE passed = TRUE)           AS passed_shots,
+        COUNT(*) FILTER (WHERE passed = FALSE)          AS failed_shots,
+        COUNT(*) FILTER (WHERE drift_flagged = TRUE)    AS drift_flagged,
+        ROUND(AVG(score)::numeric, 4)                   AS avg_score,
+        ROUND(MIN(score)::numeric, 4)                   AS min_score,
+        COUNT(DISTINCT order_id)                        AS total_orders
+      FROM shot_qa_results
+      ${orderId ? "WHERE order_id = $1" : ""}
+    `, orderId ? [orderId] : []);
+
+    // Rows
+    const rowsRes = await pool.query(`
+      SELECT id, order_id, character_id, shot_index, passed, score,
+             method, message, fail_count, frame_url, drift_flagged, created_at
+      FROM   shot_qa_results
+      ${orderId ? "WHERE order_id = $1" : ""}
+      ORDER  BY created_at DESC
+      LIMIT  ${limit} OFFSET ${offset}
+    `, orderId ? [orderId] : []);
+
+    // Worst orders (most failed shots)
+    const worstRes = await pool.query(`
+      SELECT order_id,
+             COUNT(*)                                       AS total_shots,
+             COUNT(*) FILTER (WHERE passed = FALSE)        AS failed_shots,
+             COUNT(*) FILTER (WHERE drift_flagged = TRUE)  AS drift_flags,
+             ROUND(AVG(score)::numeric, 3)                 AS avg_score
+      FROM   shot_qa_results
+      GROUP  BY order_id
+      ORDER  BY failed_shots DESC
+      LIMIT  10
+    `);
+
+    return c.json({
+      kpis:         kpiRes.rows[0] ?? {},
+      rows:         rowsRes.rows ?? [],
+      worst_orders: worstRes.rows ?? [],
+      pagination:   { limit, offset, returned: rowsRes.rows?.length ?? 0 },
+    });
+  })
+
+  // ─── Fix 5: GET /api/admin/qa-results/drift ──────────────────────────────
+  // Returns only drift-flagged shots for the drift monitor view.
+  .get("/qa-results/drift", async (c) => {
+    const pool  = (db as any).$client;
+    const limit = Math.min(parseInt(c.req.query("limit") || "50"), 200);
+    try {
+      const res = await pool.query(`
+        SELECT id, order_id, character_id, shot_index, score, method, message,
+               fail_count, frame_url, created_at
+        FROM   shot_qa_results
+        WHERE  drift_flagged = TRUE
+        ORDER  BY created_at DESC
+        LIMIT  $1
+      `, [limit]);
+      return c.json({ rows: res.rows ?? [] });
+    } catch {
+      return c.json({ rows: [] });
+    }
   });
