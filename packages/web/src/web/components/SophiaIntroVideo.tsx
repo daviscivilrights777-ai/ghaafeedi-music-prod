@@ -1,20 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
-
-// Responsive hook — reactive to resize/orientation change
-function useIsMobile() {
-  return useSyncExternalStore(
-    (cb) => {
-      window.addEventListener("resize", cb);
-      window.addEventListener("orientationchange", cb);
-      return () => {
-        window.removeEventListener("resize", cb);
-        window.removeEventListener("orientationchange", cb);
-      };
-    },
-    () => window.innerWidth <= 768,
-    () => false
-  );
-}
+import { useEffect, useRef, useState, useCallback } from "react";
 
 interface SophiaIntroVideoProps {
   onComplete?: () => void;
@@ -22,7 +6,6 @@ interface SophiaIntroVideoProps {
 
 export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const isMobile = useIsMobile();
   const [muted, setMuted] = useState(true);
   const [showCta, setShowCta] = useState(false);
   const [showUnmute, setShowUnmute] = useState(true);
@@ -96,7 +79,7 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
         overflow: "hidden",
       }}
     >
-      {/* Video */}
+      {/* Video — CSS handles object-fit per breakpoint */}
       <video
         ref={videoRef}
         src={VIDEO_URL}
@@ -108,12 +91,12 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
         onError={() => setVideoError(true)}
+        className="siv-video"
         style={{
           position: "absolute",
           inset: 0,
           width: "100%",
           height: "100%",
-          objectFit: isMobile ? "contain" : "cover",
           objectPosition: "center center",
           background: "#000",
         }}
@@ -153,22 +136,11 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
       </div>
 
       {/* Logo watermark — top left */}
-      <div
-        style={{
-          position: "absolute",
-          top: isMobile ? 14 : 20,
-          left: isMobile ? 16 : 24,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          zIndex: 10,
-          opacity: 0.85,
-        }}
-      >
+      <div className="siv-logo">
         <img
           src="/assets/ghaafeedi-logo-transparent.png"
           alt="Ghaafeedi Music"
-          style={{ height: isMobile ? 24 : 32, objectFit: "contain" }}
+          className="siv-logo-img"
         />
       </div>
 
@@ -176,27 +148,7 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
       {showUnmute && (
         <button
           onClick={toggleMute}
-          style={{
-            position: "absolute",
-            top: isMobile ? 14 : 20,
-            right: isMobile ? 16 : 24,
-            zIndex: 10,
-            background: "rgba(255,255,255,0.12)",
-            backdropFilter: "blur(8px)",
-            border: "1px solid rgba(212,175,55,0.4)",
-            borderRadius: 40,
-            padding: isMobile ? "6px 14px" : "8px 18px",
-            color: "#fff",
-            fontSize: isMobile ? 12 : 13,
-            fontFamily: "Inter, sans-serif",
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            letterSpacing: "0.02em",
-            transition: "background 0.2s, border-color 0.2s",
-          }}
+          className="siv-unmute"
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLElement).style.background =
               "rgba(212,175,55,0.2)";
@@ -252,89 +204,125 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
           </p>
           <button
             onClick={handleEnter}
-            style={ctaStyle(true, isMobile)}
+            className="siv-cta siv-cta-active"
           >
             Enter Ghaafeedi Music →
           </button>
         </div>
       )}
 
-      {/* CTA — bottom center, appears at 100s with border-draw animation */}
+      {/* CTA — bottom center */}
       {showCta && !videoError && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: isMobile ? 48 : 60,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 10,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 12,
-            animation: "fadeSlideUp 0.8s ease forwards",
-            width: isMobile ? "calc(100% - 48px)" : "auto",
-          }}
-        >
+        <div className="siv-cta-wrap" style={{ animation: "fadeSlideUp 0.8s ease forwards" }}>
           <button
             onClick={handleEnter}
-            className={ctaBorderDraw ? "cta-border-drawn" : ""}
-            style={ctaStyle(ctaBorderDraw, isMobile)}
+            className={`siv-cta siv-cta-active${ctaBorderDraw ? " cta-border-drawn" : ""}`}
           >
             Enter Ghaafeedi Music →
           </button>
-          <p
-            style={{
-              color: "rgba(255,255,255,0.45)",
-              fontSize: 11,
-              fontFamily: "Inter, sans-serif",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-            }}
-          >
-            Your story begins here
-          </p>
+          <p className="siv-cta-sub">Your story begins here</p>
         </div>
       )}
 
-      {/* Skip button — bottom right */}
+      {/* Skip button */}
       {!showCta && !videoError && (
-        <button
-          onClick={handleEnter}
-          style={{
-            position: "absolute",
-            bottom: isMobile ? 18 : 24,
-            right: isMobile ? 16 : 24,
-            zIndex: 10,
-            background: "transparent",
-            border: "none",
-            color: "rgba(255,255,255,0.35)",
-            fontSize: 12,
-            fontFamily: "Inter, sans-serif",
-            cursor: "pointer",
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            padding: "8px 12px",
-            transition: "color 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.7)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)";
-          }}
-        >
+        <button onClick={handleEnter} className="siv-skip">
           Skip intro
         </button>
       )}
 
       <style>{`
+        /* Video fit — contain on mobile so full frame visible */
+        .siv-video { object-fit: cover; }
+        @media (max-width: 768px) {
+          .siv-video { object-fit: contain !important; }
+        }
+
+        /* Logo */
+        .siv-logo {
+          position: absolute; top: 20px; left: 24px;
+          display: flex; align-items: center; gap: 10px;
+          z-index: 10; opacity: 0.85;
+        }
+        .siv-logo-img { height: 32px; object-fit: contain; }
+        @media (max-width: 768px) {
+          .siv-logo { top: 14px; left: 16px; }
+          .siv-logo-img { height: 22px; }
+        }
+
+        /* Unmute button */
+        .siv-unmute {
+          position: absolute; top: 20px; right: 24px; z-index: 10;
+          background: rgba(255,255,255,0.12); backdrop-filter: blur(8px);
+          border: 1px solid rgba(212,175,55,0.4); border-radius: 40px;
+          padding: 8px 18px; color: #fff; font-size: 13px;
+          font-family: Inter, sans-serif; font-weight: 500; cursor: pointer;
+          display: flex; align-items: center; gap: 7px;
+          letter-spacing: 0.02em; transition: background 0.2s;
+        }
+        .siv-unmute:hover { background: rgba(212,175,55,0.2); }
+        @media (max-width: 768px) {
+          .siv-unmute { top: 14px; right: 16px; padding: 6px 12px; font-size: 12px; }
+        }
+
+        /* CTA wrapper */
+        .siv-cta-wrap {
+          position: absolute; bottom: 60px; left: 50%;
+          transform: translateX(-50%); z-index: 10;
+          display: flex; flex-direction: column; align-items: center; gap: 12px;
+        }
+        @media (max-width: 768px) {
+          .siv-cta-wrap {
+            bottom: 48px;
+            width: calc(100% - 48px);
+          }
+        }
+
+        /* CTA button */
+        .siv-cta {
+          background: rgba(212,175,55,0.15);
+          border: 1px solid rgba(212,175,55,0.6); border-radius: 50px;
+          padding: 16px 48px; color: #D4AF37; font-size: 16px;
+          font-family: 'Playfair Display', serif; font-weight: 700;
+          letter-spacing: 0.05em; cursor: pointer; transition: all 0.4s ease;
+          white-space: nowrap; text-align: center;
+        }
+        .siv-cta-active {
+          background: linear-gradient(135deg, #D4AF37 0%, #F4D27A 50%, #D4AF37 100%);
+          color: #050B1A;
+          box-shadow: 0 0 40px rgba(212,175,55,0.4);
+        }
+        @media (max-width: 768px) {
+          .siv-cta { padding: 14px 28px; font-size: 15px; width: 100%; }
+        }
+
+        /* CTA sub-text */
+        .siv-cta-sub {
+          color: rgba(255,255,255,0.45); font-size: 11px;
+          font-family: Inter, sans-serif; letter-spacing: 0.05em;
+          text-transform: uppercase; margin: 0;
+        }
+
+        /* Skip button */
+        .siv-skip {
+          position: absolute; bottom: 24px; right: 24px; z-index: 10;
+          background: transparent; border: none;
+          color: rgba(255,255,255,0.35); font-size: 12px;
+          font-family: Inter, sans-serif; cursor: pointer;
+          letter-spacing: 0.05em; text-transform: uppercase; padding: 8px 12px;
+          transition: color 0.2s;
+        }
+        .siv-skip:hover { color: rgba(255,255,255,0.7); }
+        @media (max-width: 768px) {
+          .siv-skip { bottom: 16px; right: 16px; }
+        }
+
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateX(-50%) translateY(20px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
         @keyframes borderDraw {
-          from { box-shadow: 0 0 0 0 rgba(212,175,55,0), inset 0 0 0 0 rgba(212,175,55,0); }
+          from { box-shadow: 0 0 0 0 rgba(212,175,55,0); }
           to { box-shadow: 0 0 30px 4px rgba(212,175,55,0.5), inset 0 0 0 2px rgba(212,175,55,0.8); }
         }
         .cta-border-drawn {
@@ -345,24 +333,4 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
   );
 }
 
-function ctaStyle(active: boolean, mobile = false): React.CSSProperties {
-  return {
-    background: active
-      ? "linear-gradient(135deg, #D4AF37 0%, #F4D27A 50%, #D4AF37 100%)"
-      : "rgba(212,175,55,0.15)",
-    border: "1px solid rgba(212,175,55,0.6)",
-    borderRadius: 50,
-    padding: mobile ? "14px 28px" : "16px 48px",
-    width: mobile ? "100%" : "auto",
-    color: active ? "#050B1A" : "#D4AF37",
-    fontSize: mobile ? 15 : 16,
-    fontFamily: "Playfair Display, serif",
-    fontWeight: 700,
-    letterSpacing: "0.05em",
-    cursor: "pointer",
-    transition: "all 0.4s ease",
-    boxShadow: active ? "0 0 40px rgba(212,175,55,0.4)" : "none",
-    whiteSpace: "nowrap",
-    textAlign: "center",
-  };
-}
+
