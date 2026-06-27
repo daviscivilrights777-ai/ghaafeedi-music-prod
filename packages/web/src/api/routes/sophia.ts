@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { auth } from "../auth";
-import { getSecret } from "../orchestration/secrets";
+import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 import { SophiaIntroGenerator, type SophiaIntroRequest } from "../orchestration/sophia-intro-generator";
 import { logAICall } from "../lib/braintrust";
+import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 const app = new Hono();
 
@@ -77,8 +78,9 @@ app.post("/chat", async (c) => {
   }
 
   try {
-    const apiKey = await getSecret("OPENAI_API_KEY").catch(() => process.env.OPENAI_API_KEY ?? "");
-    if (!apiKey) return c.json({ error: "AI not configured" }, 503);
+    // Guard: verify Poyo API key is configured (primary LLM provider)
+    const poyoKey = await getSecret(SECRET_KEYS.POYO_API_KEY).catch(() => process.env.POYO_API_KEY ?? "");
+    if (!poyoKey) return c.json({ error: "AI not configured" }, 503);
 
     // ── Phase 8: Lip sync context injection ────────────────────────────────
     const lipSyncTriggers = ["lip sync", "lipsync", "sophia video", "my video", "video status", "lip-sync"];
@@ -135,30 +137,47 @@ For non-members, keep responses concise and focused. Always encourage them to st
 
 Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        max_tokens: 180,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...history.slice(-6), // keep last 6 messages for context
-          { role: "user", content: message.trim() },
-        ],
-      }),
-    });
+    // ── Claude Opus 4.8 via Poyo.ai (primary Sophia model) ──────────────────
+    const sophiaMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: systemPrompt },
+      ...history.slice(-6).map((m: any) => ({
+        role:    (m.role === "assistant" ? "assistant" : "user") as "assistant" | "user",
+        content: String(m.content ?? ""),
+      })),
+      { role: "user", content: message.trim() },
+    ];
 
-    const data = await response.json() as any;
-    const reply = data.choices?.[0]?.message?.content?.trim() ?? "I'm here to help. Could you tell me more?";
+    let reply = "I'm here to help. Could you tell me more?";
+    let usedModel = POYO_LLM.sophia;
+
+    try {
+      const data = await poyoChat({
+        model:      POYO_LLM.sophia,
+        messages:   sophiaMessages,
+        max_tokens: 180,
+        temperature: 0.8,
+      });
+      reply = data.choices?.[0]?.message?.content?.trim() ?? reply;
+    } catch (sophiaErr) {
+      console.warn("[Sophia] Claude Opus 4.8 via Poyo failed, falling back to GPT-4o-mini:", sophiaErr);
+      // Fallback to direct OpenAI
+      try {
+        const apiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY);
+        usedModel = "gpt-4o-mini";
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: 180, messages: sophiaMessages }),
+        });
+        const fb = await response.json() as any;
+        reply = fb.choices?.[0]?.message?.content?.trim() ?? reply;
+      } catch { /* keep default reply */ }
+    }
 
     // Log to Braintrust for fine-tuning dataset collection
     logAICall({
       name: "sophia-chat",
-      model: "gpt-4o-mini",
+      model: usedModel,
       prompt: message.trim(),
       output: reply,
       metadata: {

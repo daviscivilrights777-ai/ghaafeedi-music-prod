@@ -17,6 +17,7 @@
  */
 
 import { getSecret } from "./secrets";
+import { poyoChat, POYO_LLM } from "./adapters/poyo.adapter";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -134,11 +135,10 @@ function humanizeProductType(productType: string): string {
 // ─── Script generation ───────────────────────────────────────────────────────
 
 async function generateScripts(req: SophiaIntroRequest): Promise<{ introScript: string; outroScript: string }> {
-  const apiKey = await getSecret("OPENAI_API_KEY").catch(() => process.env.OPENAI_API_KEY ?? "");
-  if (!apiKey) throw new Error("OpenAI API key not available");
+  // No key fetch needed — poyoChat uses POYO_API_KEY internally
 
   const dominantEmotion = getDominantEmotion(req.emotionalScores);
-  const emotionMeta = EMOTION_THEMES[dominantEmotion] ?? EMOTION_THEMES.love;
+  const emotionMeta = (EMOTION_THEMES[dominantEmotion] ?? EMOTION_THEMES.love)!;
   const productHuman = humanizeProductType(req.productType);
   const scoresSummary = Object.entries(req.emotionalScores)
     .filter(([, v]) => v !== undefined && v > 0)
@@ -175,30 +175,18 @@ Respond with valid JSON only:
   "outroScript": "... Presented by Ghaafeedi Music."
 }`;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      max_tokens: 300,
-      temperature: 0.85,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-    }),
+  // ── DeepSeek V3 via Poyo.ai (pipeline LLM) ────────────────────────────────
+  const data = await poyoChat({
+    model:           POYO_LLM.pipeline,
+    max_tokens:      300,
+    temperature:     0.85,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user",   content: userPrompt },
+    ],
   });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenAI script generation failed: ${response.status} — ${err}`);
-  }
-
-  const data = await response.json() as any;
   const raw = data.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(raw);
 
@@ -276,7 +264,7 @@ export class SophiaIntroGenerator {
    */
   static async generate(req: SophiaIntroRequest): Promise<SophiaIntroResult> {
     const dominantEmotion = getDominantEmotion(req.emotionalScores);
-    const emotionMeta = EMOTION_THEMES[dominantEmotion] ?? EMOTION_THEMES.love;
+    const emotionMeta = (EMOTION_THEMES[dominantEmotion] ?? EMOTION_THEMES.love)!;
 
     console.log(`[SophiaIntroGenerator] Generating for ${req.customerFirstName} ${req.customerLastName} | emotion=${dominantEmotion} | product=${req.productType}`);
 

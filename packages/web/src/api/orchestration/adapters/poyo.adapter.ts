@@ -29,9 +29,18 @@
 //
 // ── VIDEO model strings ─────────────────────────────────────
 //   seedance-2              — Cinematic video gen (primary: clip_batch/video/visualization)
-//                             4K/1080p/720p/480p, 4-15s, image_url first/last frame
-//   seedance-2-fast         — Draft/preview tier, cheaper, 720p max
+//                             4K/1080p ONLY, 4-15s. Use image_urls:[first, last] for frame ctrl
+//   seedance-2-fast         — Draft/preview tier, cheaper, 480p/720p only
 //   seedance-2-mini         — Music video gen (music_video jobType), 480p/720p, fast
+//
+// ── LLM routing ─────────────────────────────────────────────
+//   Sophia chat   → claude-opus-4-8 (POST /v1/chat/completions, OpenAI-compat format)
+//   Pipeline orch → deepseek-v3-0324 (emotion analysis, lyrics, storyboards, scripts)
+//   Background    → deepseek-v3-0324 (fallback/cheap tasks — flash not yet confirmed)
+//   GPT-4o stays as fallback via openai.adapter.ts only
+//
+// Poll endpoint (ALL task types — music + video):
+//   GET https://api.poyo.ai/api/generate/status/{task_id}  (path param, NOT query)
 // ============================================================
 
 import type {
@@ -49,7 +58,18 @@ import { getRedis } from "../redis-client";
 
 const POYO_BASE = "https://api.poyo.ai";
 const POYO_SUBMIT = `${POYO_BASE}/api/generate/submit`;
-const POYO_DETAIL = `${POYO_BASE}/api/generate/detail/music`;
+const POYO_STATUS  = `${POYO_BASE}/api/generate/status`;   // GET /<task_id>  (path param)
+const POYO_CHAT    = `${POYO_BASE}/v1/chat/completions`;    // OpenAI-compat LLM endpoint
+
+// ── LLM Model Strings (via Poyo.ai Chat Completions) ────────────────────────
+// Sophia chat: Claude Opus 4.8 — warm, emotional, luxury concierge
+// Pipeline:    DeepSeek V3 Pro — cheap+smart for story/lyrics/scripts/shot lists
+// Background:  DeepSeek V3 Pro — cheapest capable model
+export const POYO_LLM = {
+  sophia:     "claude-opus-4-8",          // Sophia AI chat — Claude Opus 4.8
+  pipeline:   "deepseek-v3-0324",         // Orchestration pipeline — DeepSeek V3 Pro
+  background: "deepseek-v3-0324",         // Background tasks — DeepSeek V3 Pro
+} as const;
 
 /** Default Suno model version for Ghaafeedi productions */
 const DEFAULT_MV = "V5";
@@ -337,39 +357,53 @@ function resolveOperation(job: JobSpec): {
     }
 
     // ── Cinematic video / clip_batch / visualization (Seedance 2) ────────────
-    // Seedance 2 supports: text-to-video, image-to-video (first/last frame), 4-15s
-    // resolution: "4K" | "1080p" | "720p" | "480p"
-    // aspect_ratio: "16:9" | "9:16" | "1:1"
+    // Seedance 2 API notes:
+    //   - image_urls: array[0]=first_frame, array[1]=end_frame (up to 2 images)
+    //   - seedance-2: resolution = "1080p" | "4k" ONLY
+    //   - seedance-2-fast: resolution = "480p" | "720p" ONLY
+    //   - aspect_ratio: "auto" | "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16"
     case "video":
     case "clip_batch":
     case "visualization": {
       const isDraft = p.draft === true;
       const model   = isDraft ? "seedance-2-fast" : "seedance-2";
-      const res     = (p.resolution as string)   ?? (isDraft ? "720p" : "1080p");
-      const dur     = (p.durationSeconds as number) ?? (p.duration as number) ?? 5;
-      const aspect  = (p.aspectRatio as string)  ?? "16:9";
+
+      // Resolution: seedance-2 only supports 1080p/4k; fast only 480p/720p
+      const reqRes  = (p.resolution as string) ?? "";
+      let res: string;
+      if (isDraft) {
+        res = (reqRes === "480p" || reqRes === "720p") ? reqRes : "720p";
+      } else {
+        res = (reqRes === "4k" || reqRes === "4K") ? "4k" : "1080p";
+      }
+
+      const dur    = (p.durationSeconds as number) ?? (p.duration as number) ?? 5;
+      const aspect = (p.aspectRatio as string) ?? "16:9";
+
+      // Build image_urls array for first/last frame control
+      const imageUrls: string[] = [];
+      const startImg = (p.startImageUrl ?? p.imageUrl) as string | undefined;
+      const endImg   = p.endImageUrl as string | undefined;
+      if (startImg) imageUrls.push(startImg);
+      if (endImg)   imageUrls.push(endImg);
+
+      // Shot-specific overrides from pipeline (clip_batch carries a shot object)
+      const shot         = p.shot as Record<string, unknown> | undefined;
+      const shotPrompt   = shot ? ((shot.falPrompt as string) || (p.prompt as string) || "") : undefined;
+      const shotNegative = shot ? ((shot.negativePrompt as string) || "blurry, low quality, amateur, watermark") : undefined;
+      const shotDur      = shot ? Math.min(Math.max(Math.round((shot.durationSeconds as number) ?? 5), 4), 15) : undefined;
 
       return {
         model,
         input: {
-          prompt:         p.prompt ?? p.description ?? "",
-          duration:       Math.min(Math.max(Math.round(dur), 4), 15), // clamp 4–15s
+          prompt:         shotPrompt ?? p.prompt ?? p.description ?? "",
+          duration:       shotDur ?? Math.min(Math.max(Math.round(dur), 4), 15),
           aspect_ratio:   aspect,
           resolution:     res,
           generate_audio: p.generateAudio ?? false,  // audio added at edit_assemble stage
-          ...(p.imageUrl       ? { image_url:       p.imageUrl }       : {}),
-          ...(p.startImageUrl  ? { image_url:       p.startImageUrl }  : {}),
-          ...(p.endImageUrl    ? { end_image_url:   p.endImageUrl }    : {}),
-          ...(p.negativePrompt ? { negative_prompt: p.negativePrompt } : {}),
-          // Shot-specific fields from pipeline (clip_batch carries a shot object)
-          ...(p.shot ? (() => {
-            const s = p.shot as Record<string, unknown>;
-            return {
-              prompt:           (s.falPrompt as string)     || (p.prompt as string) || "",
-              negative_prompt:  (s.negativePrompt as string) || "blurry, low quality, amateur, watermark",
-              duration:         Math.min(Math.max(Math.round((s.durationSeconds as number) ?? 5), 4), 15),
-            };
-          })() : {}),
+          ...(imageUrls.length > 0  ? { image_urls: imageUrls }                                               : {}),
+          ...(shotNegative          ? { negative_prompt: shotNegative }                                       : {}),
+          ...(!shot && p.negativePrompt ? { negative_prompt: p.negativePrompt }                               : {}),
         },
       };
     }
@@ -555,7 +589,7 @@ export const PoyoAdapter: ProviderAdapter = {
     const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
     const model  = (handle.metadata as any)?.model ?? "generate-music";
 
-    const res = await fetch(`${POYO_DETAIL}?task_id=${handle.externalJobId}`, {
+    const res = await fetch(`${POYO_STATUS}/${handle.externalJobId}`, {
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type":  "application/json",
@@ -681,8 +715,8 @@ export const PoyoAdapter: ProviderAdapter = {
       const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
 
       // Probe the status endpoint with a dummy task_id.
-      // Returns { code:200, data:{ task_id:"ping", status:null, ... } } — alive.
-      const res = await fetch(`${POYO_DETAIL}?task_id=ping`, {
+      // 200/400/404 = server up and auth valid.
+      const res = await fetch(`${POYO_STATUS}/health-probe`, {
         headers: { "Authorization": `Bearer ${apiKey}` },
         signal:  AbortSignal.timeout(8_000),
       });
@@ -708,3 +742,84 @@ export const PoyoAdapter: ProviderAdapter = {
     }
   },
 };
+
+// ─── Poyo LLM Chat Helper ─────────────────────────────────────────────────────
+// Drop-in replacement for OpenAI chat/completions calls.
+// Uses Poyo.ai /v1/chat/completions (OpenAI-compatible format).
+// Model strings: POYO_LLM.sophia | POYO_LLM.pipeline | POYO_LLM.background
+
+export interface PoyoChatMessage {
+  role:    "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface PoyoChatOptions {
+  model?:          string;            // defaults to POYO_LLM.pipeline
+  messages:        PoyoChatMessage[];
+  temperature?:    number;
+  max_tokens?:     number;
+  response_format?: { type: "json_object" | "text" };
+  stream?:         boolean;
+}
+
+export interface PoyoChatResponse {
+  choices: Array<{
+    message: { role: string; content: string };
+    finish_reason: string;
+  }>;
+  usage?: {
+    prompt_tokens:     number;
+    completion_tokens: number;
+    total_tokens:      number;
+  };
+  model?: string;
+}
+
+/**
+ * Send a chat completion request via Poyo.ai.
+ * Automatically uses POYO_API_KEY — no separate API key needed.
+ *
+ * @example
+ * const resp = await poyoChat({
+ *   model: POYO_LLM.sophia,
+ *   messages: [{ role: "user", content: "Hello Sophia" }],
+ * });
+ * const reply = resp.choices[0].message.content;
+ */
+export async function poyoChat(opts: PoyoChatOptions): Promise<PoyoChatResponse> {
+  const apiKey = await getSecret(SECRET_KEYS.POYO_API_KEY);
+  const body = {
+    model:            opts.model ?? POYO_LLM.pipeline,
+    messages:         opts.messages,
+    temperature:      opts.temperature ?? 0.7,
+    max_tokens:       opts.max_tokens  ?? 2000,
+    ...(opts.response_format ? { response_format: opts.response_format } : {}),
+    ...(opts.stream           ? { stream: opts.stream }                   : {}),
+  };
+
+  const res = await fetch(POYO_CHAT, {
+    method:  "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body:   JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`[Poyo LLM] ${opts.model ?? body.model} failed: HTTP ${res.status} — ${errText}`);
+  }
+
+  // Poyo wraps in { code, data: { ...openai_response } } for some endpoints
+  // but /v1/chat/completions returns standard OpenAI format directly
+  const json = await res.json() as any;
+
+  // Handle Poyo wrapper format if present
+  if (json.code === 200 && json.data?.choices) {
+    return json.data as PoyoChatResponse;
+  }
+
+  return json as PoyoChatResponse;
+}

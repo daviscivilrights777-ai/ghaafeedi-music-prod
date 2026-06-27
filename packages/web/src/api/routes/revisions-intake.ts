@@ -22,6 +22,7 @@ import {
 import { eq, and, desc, count, sql } from "drizzle-orm";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
+import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 // ─── Customer Context Builder ──────────────────────────────────────────────────
 // Pulls everything Sophia needs to know about this customer + production
@@ -474,8 +475,7 @@ revisionsIntake.post("/sophia-analysis", async (c) => {
       maxRevisions,
     );
 
-    const apiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY);
-    if (!apiKey) return c.json({ error: "AI service unavailable" }, 503);
+    // Poyo.ai is primary — no key fetch needed (POYO_API_KEY in env)
 
     // ── Build emotional fingerprint summary ───────────────────────────────────
     let emotionSummary = "Unknown emotional profile";
@@ -591,35 +591,44 @@ ${body.shotIndex !== undefined ? `Specific shot being retaken: Shot ${body.shotI
 
 Analyze everything you know about this customer and write the retake directive now.`;
 
-    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method:  "POST",
-      headers: {
-        Authorization:  `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model:           "gpt-4o",   // Full 4o — this is Sophia's surgical creative work
-        messages: [
+    // ── Sophia analysis via Poyo.ai (Claude Opus 4.8) — GPT-4o fallback ──────
+    let directive: any;
+    try {
+      const poyoContent = await poyoChat({
+        model:       POYO_LLM.sophia,   // Claude Opus 4.8 — Sophia's creative surgical work
+        messages:    [
           { role: "system", content: systemPrompt },
           { role: "user",   content: userPrompt },
         ],
-        temperature:     0.75,
-        max_tokens:      1200,
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!openaiRes.ok) {
-      const errText = await openaiRes.text();
-      console.error("[sophia-analysis] OpenAI error:", errText);
-      return c.json({ error: "AI analysis failed" }, 502);
+        temperature: 0.75,
+        max_tokens:  1200,
+      });
+      directive = JSON.parse(poyoContent);
+    } catch (poyoErr: any) {
+      console.warn("[sophia-analysis] Poyo failed, falling back to GPT-4o:", poyoErr.message);
+      const fallbackApiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY);
+      if (!fallbackApiKey) return c.json({ error: "AI service unavailable" }, 503);
+      const fallbackRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${fallbackApiKey}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          model:           "gpt-4o",
+          messages:        [
+            { role: "system", content: systemPrompt },
+            { role: "user",   content: userPrompt },
+          ],
+          temperature:     0.75,
+          max_tokens:      1200,
+          response_format: { type: "json_object" },
+        }),
+      });
+      if (!fallbackRes.ok) {
+        console.error("[sophia-analysis] GPT-4o fallback error:", await fallbackRes.text());
+        return c.json({ error: "AI analysis failed" }, 502);
+      }
+      const fallbackData = await fallbackRes.json() as { choices: Array<{ message: { content: string } }> };
+      directive = JSON.parse(fallbackData.choices[0].message.content);
     }
-
-    const aiData = await openaiRes.json() as {
-      choices: Array<{ message: { content: string } }>;
-    };
-
-    const directive = JSON.parse(aiData.choices[0].message.content);
 
     // Return directive + the customer context so the frontend can
     // update Sophia's spoken script with personal references

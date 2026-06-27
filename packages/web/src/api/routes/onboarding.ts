@@ -1,8 +1,7 @@
 import { Hono } from "hono";
-import { generateText } from "ai";
-import { gateway } from "../lib/ai";
 import { logAICall } from "../lib/braintrust";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
+import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
 
 // All 14 Ghaafeedi Music products + memberships for recommendation engine
 const GM_CATALOG = [
@@ -157,16 +156,16 @@ RULES:
 - profileSummary should feel emotionally resonant and personal
 - If no story text: base everything on whoFor + experienceType context only`;
 
-      const { text } = await generateText({
-        model: gateway("openai/gpt-4o-mini"),
-        prompt,
-        maxTokens: 900,
+      const text = await poyoChat({
+        model:      POYO_LLM.pipeline,  // DeepSeek V3 — emotion analysis pipeline
+        messages:   [{ role: "user", content: prompt }],
+        max_tokens: 900,
       });
 
       // Log to Braintrust for fine-tuning dataset collection
       logAICall({
         name: "emotional-analysis",
-        model: "openai/gpt-4o-mini",
+        model: POYO_LLM.pipeline,
         prompt,
         output: text,
         metadata: {
@@ -257,10 +256,10 @@ RULES:
 - BPM: ballad 65-80, mid-tempo 80-95, upbeat 95-110
 - Match the dominant emotion: grief=slower, love=mid-tempo warm, joy=upbeat`;
 
-      const { text: lyricsRaw } = await generateText({
-        model: gateway("openai/gpt-4o-mini"),
-        prompt: lyricsPrompt,
-        maxTokens: 1200,
+      const lyricsRaw = await poyoChat({
+        model:      POYO_LLM.pipeline,  // DeepSeek V3 — song metadata generation
+        messages:   [{ role: "user", content: lyricsPrompt }],
+        max_tokens: 1200,
       });
 
       let songMeta: any;
