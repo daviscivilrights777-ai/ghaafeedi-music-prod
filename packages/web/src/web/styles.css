@@ -61,3 +61,14 @@ input::placeholder { color: rgba(255,255,255,0.3); }
     grid-template-columns: 1fr 1fr !important;
   }
 }
+
+/* ── Sophia Intro Video – mobile fit ── */
+.siv-video {
+  object-fit: cover;
+}
+@media (max-width: 768px) {
+  .siv-video {
+    object-fit: contain !important;
+    background: #000;
+  }
+}
