@@ -23,9 +23,11 @@ export function bootstrapAdapters(): void {
   _bootstrapped = true;
 
   // Adapters are plain objects (not classes), register directly
+  // Poyo registered FIRST — takes priority for video/clip_batch/visualization + all music
+  ProviderRegistry.register(PoyoAdapter);
+  // FAL.ai demoted to fallback (balance exhausted; kept for image + overflow)
   ProviderRegistry.register(FalAiAdapter);
   ProviderRegistry.register(FalAiHailuoAdapter);
-  ProviderRegistry.register(PoyoAdapter);
   ProviderRegistry.register(ElevenLabsAdapter);
   ProviderRegistry.register(OpenAIAdapter);
   ProviderRegistry.register(ModalAdapter);

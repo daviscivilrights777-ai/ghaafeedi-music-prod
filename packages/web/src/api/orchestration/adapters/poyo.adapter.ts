@@ -1,20 +1,21 @@
 // ============================================================
-// Ghaafeedi Music — Poyo.ai Music Adapter
-// PRIMARY music infrastructure provider. Replaces Sunor.cc.
+// Ghaafeedi Music — Poyo.ai Adapter
+// PRIMARY provider for BOTH music and cinematic video generation.
 //
-// Poyo.ai is an AI gateway (like FAL.ai) that proxies Suno V4/V5/V5.5
-// and MiniMax music models under a single Bearer-auth API.
+// Poyo.ai is an AI gateway that proxies Suno V4/V5/V5.5 (music),
+// Seedance 2 / Seedance 2 Mini (video), and more.
 //
 // API:
 //   Base:   https://api.poyo.ai
 //   Auth:   Authorization: Bearer <key>
 //   Submit: POST /api/generate/submit  { model, input, callback_url? }
-//   Poll:   GET  /api/generate/detail/music?task_id=<id>
+//   Poll:   GET  /api/generate/detail/music?task_id=<id>   ← UNIVERSAL endpoint
+//           (works for ALL task types including video — /detail/video returns 404)
 //
-// Model strings (exact, from docs):
+// ── MUSIC model strings ─────────────────────────────────────
 //   generate-music          — Suno song generation
 //   generate-lyrics         — Suno lyrics engine (free)
-//   create-music-video      — Visualised MP4 from audio_id
+//   create-music-video      — Visualised MP4 from audio_id (Seedance 2 Mini)
 //   extend-music            — Suno continuation / long-form
 //   separate-vocals         — 2-stem split (Suno-based, no upload)
 //   upload-and-cover-audio  — Style transfer with uploaded audio
@@ -25,6 +26,12 @@
 //   generate-music-cover    — AI album art from song_id
 //   get-timestamped-lyrics  — Sync-ready lyric timestamps
 //   convert-to-wav          — MP3 → WAV lossless export
+//
+// ── VIDEO model strings ─────────────────────────────────────
+//   seedance-2              — Cinematic video gen (primary: clip_batch/video/visualization)
+//                             4K/1080p/720p/480p, 4-15s, image_url first/last frame
+//   seedance-2-fast         — Draft/preview tier, cheaper, 720p max
+//   seedance-2-mini         — Music video gen (music_video jobType), 480p/720p, fast
 // ============================================================
 
 import type {
@@ -49,6 +56,7 @@ const DEFAULT_MV = "V5";
 
 /** Cost in credits (cents equivalent) per operation */
 const OPERATION_COSTS: Record<string, number> = {
+  // ── Music ──────────────────────────────────────────────────────────────────
   "generate-music":         10,  // $0.10 — song gen
   "generate-lyrics":         0,  // Free  — Suno lyrics engine
   "create-music-video":      2,  // $0.02 — audio → MP4 (Seedance 2 Mini)
@@ -62,6 +70,10 @@ const OPERATION_COSTS: Record<string, number> = {
   "generate-music-cover":    2,  // $0.02 — album art
   "get-timestamped-lyrics":  1,  // $0.01 — sync lyrics
   "convert-to-wav":          0,  // Free  — lossless export
+  // ── Video (Seedance 2) ─────────────────────────────────────────────────────
+  "seedance-2":             40,  // ~$0.40 — cinematic 1080p 5s clip
+  "seedance-2-fast":        20,  // ~$0.20 — draft 720p 5s clip
+  "seedance-2-mini":         2,  // $0.02  — MV 480p/720p (same as create-music-video)
 };
 
 const MONTHLY_COUNTER_KEY = (ym: string) => `poyo:monthly:${ym}`;
@@ -133,14 +145,32 @@ function resolveOperation(job: JobSpec): {
     }
 
     // ── Music Video ──────────────────────────────────────────────────────────
+    // Two paths:
+    //   • With audio_id (Suno song) → create-music-video (Seedance 2 Mini via Suno)
+    //   • Without audio_id (standalone visual MV) → seedance-2-mini direct
     case "music_video": {
+      if (p.audio_id || p.task_id) {
+        return {
+          model: "create-music-video",
+          input: {
+            task_id:  p.task_id,
+            audio_id: p.audio_id,
+            ...(p.author      ? { author:      p.author }      : {}),
+            ...(p.domain_name ? { domain_name: p.domain_name } : {}),
+          },
+        };
+      }
+      // Standalone Seedance 2 Mini — text/image → short music video
       return {
-        model: "create-music-video",
+        model: "seedance-2-mini",
         input: {
-          task_id:  p.task_id,
-          audio_id: p.audio_id,
-          ...(p.author      ? { author:      p.author }      : {}),
-          ...(p.domain_name ? { domain_name: p.domain_name } : {}),
+          prompt:         p.prompt ?? p.description ?? "",
+          duration:       Math.min(Math.max(Math.round((p.durationSeconds as number) ?? 5), 4), 15),
+          aspect_ratio:   (p.aspectRatio as string) ?? "16:9",
+          resolution:     (p.resolution as string)  ?? "720p",
+          generate_audio: p.generateAudio ?? true,  // MV: audio ON by default
+          ...(p.imageUrl  ? { image_url: p.imageUrl }  : {}),
+          ...(p.negativePrompt ? { negative_prompt: p.negativePrompt } : {}),
         },
       };
     }
@@ -306,6 +336,50 @@ function resolveOperation(job: JobSpec): {
       };
     }
 
+    // ── Cinematic video / clip_batch / visualization (Seedance 2) ────────────
+    // Seedance 2 supports: text-to-video, image-to-video (first/last frame), 4-15s
+    // resolution: "4K" | "1080p" | "720p" | "480p"
+    // aspect_ratio: "16:9" | "9:16" | "1:1"
+    case "video":
+    case "clip_batch":
+    case "visualization": {
+      const isDraft = p.draft === true;
+      const model   = isDraft ? "seedance-2-fast" : "seedance-2";
+      const res     = (p.resolution as string)   ?? (isDraft ? "720p" : "1080p");
+      const dur     = (p.durationSeconds as number) ?? (p.duration as number) ?? 5;
+      const aspect  = (p.aspectRatio as string)  ?? "16:9";
+
+      return {
+        model,
+        input: {
+          prompt:         p.prompt ?? p.description ?? "",
+          duration:       Math.min(Math.max(Math.round(dur), 4), 15), // clamp 4–15s
+          aspect_ratio:   aspect,
+          resolution:     res,
+          generate_audio: p.generateAudio ?? false,  // audio added at edit_assemble stage
+          ...(p.imageUrl       ? { image_url:       p.imageUrl }       : {}),
+          ...(p.startImageUrl  ? { image_url:       p.startImageUrl }  : {}),
+          ...(p.endImageUrl    ? { end_image_url:   p.endImageUrl }    : {}),
+          ...(p.negativePrompt ? { negative_prompt: p.negativePrompt } : {}),
+          // Shot-specific fields from pipeline (clip_batch carries a shot object)
+          ...(p.shot ? (() => {
+            const s = p.shot as Record<string, unknown>;
+            return {
+              prompt:           (s.falPrompt as string)     || (p.prompt as string) || "",
+              negative_prompt:  (s.negativePrompt as string) || "blurry, low quality, amateur, watermark",
+              duration:         Math.min(Math.max(Math.round((s.durationSeconds as number) ?? 5), 4), 15),
+            };
+          })() : {}),
+        },
+      };
+    }
+
+    // ── Music Video (Seedance 2 Mini) ─────────────────────────────────────────
+    // create-music-video already handled above (takes audio_id → MP4 via Suno).
+    // music_video jobType here is for the Seedance-2-mini visual generation path
+    // when generating a standalone music video without a Suno audio_id.
+    // If audio_id is present → delegate to create-music-video model instead.
+
     // ── Fallback → song gen ──────────────────────────────────────────────────
     default: {
       return {
@@ -383,9 +457,14 @@ export const PoyoAdapter: ProviderAdapter = {
   displayName: "Poyo.ai",
 
   jobTypes: [
+    // ── Video (Seedance 2 / Mini) — PRIMARY for all cinematic video ───────
+    "video",
+    "clip_batch",
+    "visualization",
+    "music_video",
+    // ── Music (Suno V4/V5/V5.5) ──────────────────────────────────────────
     "song",
     "lyrics",
-    "music_video",
     "song_extension",
     "vocal_removal",
     "stem_separation",
@@ -401,13 +480,28 @@ export const PoyoAdapter: ProviderAdapter = {
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
     const { model } = resolveOperation(job);
-    const cpc = OPERATION_COSTS[model] ?? 10;
+    const baseCpc = OPERATION_COSTS[model] ?? 10;
+
+    // For video models, scale by requested duration
+    if (model === "seedance-2" || model === "seedance-2-fast" || model === "seedance-2-mini") {
+      const dur       = (job.inputPayload?.durationSeconds as number) ?? 5;
+      const perSec    = baseCpc / 5; // base cost assumes 5s; scale linearly
+      const cpc       = Math.round(perSec * dur);
+      return {
+        minCents:      Math.round(cpc * 0.8),
+        maxCents:      Math.round(cpc * 1.3),
+        estimateCents: cpc,
+        unit:          "per_clip",
+        breakdown:     `${dur}s ${model} ≈ ${(cpc / 100).toFixed(2)} (Poyo.ai Seedance 2)`,
+      };
+    }
+
     return {
-      minCents:      cpc,
-      maxCents:      cpc,
-      estimateCents: cpc,
+      minCents:      baseCpc,
+      maxCents:      baseCpc,
+      estimateCents: baseCpc,
       unit:          `per_${model}`,
-      breakdown:     `1 ${model} × $${(cpc / 100).toFixed(2)} (Poyo.ai)`,
+      breakdown:     `1 ${model} × ${(baseCpc / 100).toFixed(2)} (Poyo.ai)`,
     };
   },
 
@@ -521,13 +615,16 @@ export const PoyoAdapter: ProviderAdapter = {
       }
 
       const primaryUrl =
+        first.video_url ??   // video first — Seedance 2 outputs video_url
         first.audio_url ??
-        first.video_url ??
         first.wav_url   ??
         first.image_url ??
         outputUrls[0];
 
       const costCents = OPERATION_COSTS[model] ?? 10;
+
+      // Preserve clip_batch / pipeline metadata passed through handle
+      const handleMeta = handle.metadata as Record<string, unknown> ?? {};
 
       return {
         status:     "complete",
@@ -536,6 +633,10 @@ export const PoyoAdapter: ProviderAdapter = {
         metadata: {
           model,
           files,
+          // Pipeline passthrough — required by OrchestrationEngine clip_batch handler
+          shotIndex:          handleMeta.shotIndex,
+          pipelineRunId:      handleMeta.pipelineRunId,
+          clipUrl:            first.video_url ?? primaryUrl,
           // Convenience unwrapped fields
           audio_url:          first.audio_url,
           video_url:          first.video_url,

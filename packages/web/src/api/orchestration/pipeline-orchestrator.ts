@@ -248,7 +248,7 @@ export class PipelineOrchestrator {
       production_bible: { jobType: "production_bible", provider: "openai",     costCents: 10  },
       shot_list:        { jobType: "shot_list",         provider: "openai",     costCents: 8   },
       audio:            { jobType: "song",              provider: "poyo",      costCents: 10  },
-      clip_batch:       { jobType: "clip_batch",        provider: "fal-ai",     costCents: 800 },
+      clip_batch:       { jobType: "clip_batch",        provider: "poyo",       costCents: 40  },
       edit_assemble:    { jobType: "edit_assemble",     provider: "modal_ffmpeg", costCents: 50  },
       qc_check:         { jobType: "qc_check",          provider: "openai",     costCents: 5   },
       deliver:          { jobType: "deliver",           provider: "internal",   costCents: 1   },
@@ -401,7 +401,7 @@ export class PipelineOrchestrator {
 
     const idx = PIPELINE.indexOf(current);
     if (idx === -1 || idx === PIPELINE.length - 1) return null;
-    return PIPELINE[idx + 1];
+    return PIPELINE[idx + 1] ?? null;
   }
 
   private _tierToPriority(tier: QueueTier): number {
@@ -432,7 +432,7 @@ export class PipelineOrchestrator {
           productionId: params.productionId,
           jobType:      stage === "clip_batch" ? "clip_batch" : stage,
           status:       "queued" as const,
-          provider:     stage === "clip_batch" ? "fal-ai" : "openai",
+          provider:     stage === "clip_batch" ? "poyo" : "openai",
           inputPayload: params.stageOutput,
           estimatedCostCents: costCents,
           priority:     this._tierToPriority(params.queueTier),

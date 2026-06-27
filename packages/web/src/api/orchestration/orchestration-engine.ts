@@ -81,7 +81,7 @@ const JOB_TYPE_COST_CENTS: Record<JobType, number> = {
   story_bible:      3,   // GPT-4o-mini extraction ~3¢
   production_bible: 10,  // Claude/GPT-4o creative brief ~10¢
   shot_list:        8,   // Claude/GPT-4o shot breakdown ~8¢
-  clip_batch:       800, // FAL.ai/Modal per clip ~$8
+  clip_batch:       40,  // Poyo.ai Seedance 2 per clip ~$0.40 (5s @ 1080p)
   edit_assemble:    50,  // Modal FFmpeg GPU assembly ~50¢
   qc_check:         5,   // OpenAI vision QC ~5¢
   deliver:          1,   // R2 upload + URL signing ~1¢
@@ -1060,7 +1060,7 @@ print(json.dumps(out))
   private _getFailoverChain(jobType: JobType, primary: string): string[] {
     const chain = [primary];
     const ALL_FALLBACKS: Partial<Record<JobType, string[]>> = {
-      video:        ["fal-ai", "fal-ai-hailuo", "modal", "vast-ai"],
+      video:        ["poyo", "fal-ai", "fal-ai-hailuo", "modal", "vast-ai"],
       song:         ["poyo"],
       music_video:  ["poyo"],
       song_extension:     ["poyo"],
@@ -1079,7 +1079,7 @@ print(json.dumps(out))
       analysis:     ["openai"],
       lyrics:       ["openai"],
       image:        ["fal-ai", "modal", "vast-ai"],
-      visualization: ["fal-ai", "modal"],
+      visualization: ["poyo", "fal-ai", "modal"],
       storyboard:   ["openai"],
       sophia_intro: ["openai", "elevenlabs"],
       lip_sync:     ["latentsync", "fal_ai_kling"],
@@ -1088,7 +1088,7 @@ print(json.dumps(out))
       story_bible:      ["openai"],
       production_bible: ["openai"],   // Claude primary, GPT-4o fallback
       shot_list:        ["openai"],
-      clip_batch:       ["fal-ai", "modal", "vast-ai"],
+      clip_batch:       ["poyo", "fal-ai", "modal", "vast-ai"],
       edit_assemble:    ["modal_ffmpeg"],  // FFmpeg Modal only (Phase 9)
       qc_check:         ["openai"],
       deliver:          ["internal"], // R2 direct — no fallback needed

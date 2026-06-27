@@ -31,7 +31,9 @@ const ESTIMATED_DURATION: Record<string, number> = {
 export const FalAiAdapter: ProviderAdapter = {
   name:        "fal_ai_kling",
   displayName: "FAL.ai Kling v3 Pro",
-  jobTypes:    ["video", "visualization", "image", "clip_batch"],
+  // DEMOTED TO FALLBACK — Poyo Seedance 2 is now primary for video/clip_batch/visualization.
+  // FAL.ai remains registered for overflow/failover only.
+  jobTypes:    ["image"] as any[],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
     const duration = (job.inputPayload?.durationSeconds as number) || ESTIMATED_DURATION[job.jobType] || 30;
@@ -92,8 +94,8 @@ export const FalAiAdapter: ProviderAdapter = {
       duration:        job.inputPayload?.durationSeconds || 5,
       aspect_ratio:    job.inputPayload?.aspectRatio || "16:9",
       generate_audio:  job.inputPayload?.generateAudio !== false, // default ON for v3
-      ...(job.inputPayload?.negativePrompt && { negative_prompt: job.inputPayload.negativePrompt }),
-      ...(job.inputPayload?.endImageUrl   && { end_image_url:   job.inputPayload.endImageUrl }),
+      ...(job.inputPayload?.negativePrompt ? { negative_prompt: job.inputPayload.negativePrompt as string } : {}),
+      ...(job.inputPayload?.endImageUrl   ? { end_image_url:   job.inputPayload.endImageUrl as string }   : {}),
     };
 
     const res = await fetch(`https://queue.fal.run/${model}`, {
