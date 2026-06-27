@@ -1,4 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useSyncExternalStore } from "react";
+
+// Responsive hook — reactive to resize/orientation change
+function useIsMobile() {
+  return useSyncExternalStore(
+    (cb) => {
+      window.addEventListener("resize", cb);
+      window.addEventListener("orientationchange", cb);
+      return () => {
+        window.removeEventListener("resize", cb);
+        window.removeEventListener("orientationchange", cb);
+      };
+    },
+    () => window.innerWidth <= 768,
+    () => false
+  );
+}
 
 interface SophiaIntroVideoProps {
   onComplete?: () => void;
@@ -6,6 +22,7 @@ interface SophiaIntroVideoProps {
 
 export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const isMobile = useIsMobile();
   const [muted, setMuted] = useState(true);
   const [showCta, setShowCta] = useState(false);
   const [showUnmute, setShowUnmute] = useState(true);
@@ -96,7 +113,9 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
           inset: 0,
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          objectFit: isMobile ? "contain" : "cover",
+          objectPosition: "center center",
+          background: "#000",
         }}
       />
 
@@ -137,8 +156,8 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
       <div
         style={{
           position: "absolute",
-          top: 20,
-          left: 24,
+          top: isMobile ? 14 : 20,
+          left: isMobile ? 16 : 24,
           display: "flex",
           alignItems: "center",
           gap: 10,
@@ -149,7 +168,7 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
         <img
           src="/assets/ghaafeedi-logo-transparent.png"
           alt="Ghaafeedi Music"
-          style={{ height: 32, objectFit: "contain" }}
+          style={{ height: isMobile ? 24 : 32, objectFit: "contain" }}
         />
       </div>
 
@@ -159,16 +178,16 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
           onClick={toggleMute}
           style={{
             position: "absolute",
-            top: 20,
-            right: 24,
+            top: isMobile ? 14 : 20,
+            right: isMobile ? 16 : 24,
             zIndex: 10,
             background: "rgba(255,255,255,0.12)",
             backdropFilter: "blur(8px)",
             border: "1px solid rgba(212,175,55,0.4)",
             borderRadius: 40,
-            padding: "8px 18px",
+            padding: isMobile ? "6px 14px" : "8px 18px",
             color: "#fff",
-            fontSize: 13,
+            fontSize: isMobile ? 12 : 13,
             fontFamily: "Inter, sans-serif",
             fontWeight: 500,
             cursor: "pointer",
@@ -233,7 +252,7 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
           </p>
           <button
             onClick={handleEnter}
-            style={ctaStyle(true)}
+            style={ctaStyle(true, isMobile)}
           >
             Enter Ghaafeedi Music →
           </button>
@@ -245,28 +264,29 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
         <div
           style={{
             position: "absolute",
-            bottom: 60,
+            bottom: isMobile ? 48 : 60,
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 10,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 16,
+            gap: 12,
             animation: "fadeSlideUp 0.8s ease forwards",
+            width: isMobile ? "calc(100% - 48px)" : "auto",
           }}
         >
           <button
             onClick={handleEnter}
             className={ctaBorderDraw ? "cta-border-drawn" : ""}
-            style={ctaStyle(ctaBorderDraw)}
+            style={ctaStyle(ctaBorderDraw, isMobile)}
           >
             Enter Ghaafeedi Music →
           </button>
           <p
             style={{
               color: "rgba(255,255,255,0.45)",
-              fontSize: 12,
+              fontSize: 11,
               fontFamily: "Inter, sans-serif",
               letterSpacing: "0.05em",
               textTransform: "uppercase",
@@ -283,8 +303,8 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
           onClick={handleEnter}
           style={{
             position: "absolute",
-            bottom: 24,
-            right: 24,
+            bottom: isMobile ? 18 : 24,
+            right: isMobile ? 16 : 24,
             zIndex: 10,
             background: "transparent",
             border: "none",
@@ -325,16 +345,17 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
   );
 }
 
-function ctaStyle(active: boolean): React.CSSProperties {
+function ctaStyle(active: boolean, mobile = false): React.CSSProperties {
   return {
     background: active
       ? "linear-gradient(135deg, #D4AF37 0%, #F4D27A 50%, #D4AF37 100%)"
       : "rgba(212,175,55,0.15)",
     border: "1px solid rgba(212,175,55,0.6)",
     borderRadius: 50,
-    padding: "16px 48px",
+    padding: mobile ? "14px 28px" : "16px 48px",
+    width: mobile ? "100%" : "auto",
     color: active ? "#050B1A" : "#D4AF37",
-    fontSize: 16,
+    fontSize: mobile ? 15 : 16,
     fontFamily: "Playfair Display, serif",
     fontWeight: 700,
     letterSpacing: "0.05em",
@@ -342,5 +363,6 @@ function ctaStyle(active: boolean): React.CSSProperties {
     transition: "all 0.4s ease",
     boxShadow: active ? "0 0 40px rgba(212,175,55,0.4)" : "none",
     whiteSpace: "nowrap",
+    textAlign: "center",
   };
 }
