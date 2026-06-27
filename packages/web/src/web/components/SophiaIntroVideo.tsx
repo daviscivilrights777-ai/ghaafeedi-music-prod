@@ -15,8 +15,8 @@ export function SophiaIntroVideo({ onComplete }: SophiaIntroVideoProps) {
 
   const VIDEO_URL = "/assets/sophia-intro.mp4";
   const POSTER_URL = "/assets/sophia-intro-poster.png";
-  const VIDEO_DURATION = 210; // seconds (3:30)
-  const CTA_TRIGGER = 200; // show CTA at 3:20 (200s)
+  const VIDEO_DURATION = 182; // seconds (3:30)
+  const CTA_TRIGGER = 170; // show CTA at 3:20 (200s)
 
   // Auto-play muted on mount
   useEffect(() => {
