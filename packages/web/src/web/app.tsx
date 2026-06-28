@@ -55,7 +55,7 @@ function App() {
           <Route path="/impact" component={ImpactPage} />
           <Route path="/trust" component={TrustPage} />
           <Route path="/legal" component={LegalPage} />
-          <Route path="/legal/:doc" component={LegalDocPage} />
+          <Route path="/legal/:slug" component={LegalDocPage} />
           <Route path="/contact" component={ContactPage} />
           <Route path="/faq" component={FaqPage} />
           <Route path="/revisions" component={RevisionsPage} />
