@@ -4,6 +4,7 @@ import { db } from "../database/pg-client";
 import * as schema from "../database/pg-schema";
 import { authMiddleware, requireAdmin } from "../middleware/auth";
 import { desc, eq, count, sql } from "drizzle-orm";
+import { EngramClient } from "../../lib/engram-client";
 
 export const admin = new Hono<HonoEnv>()
   .use("*", authMiddleware)
@@ -535,6 +536,30 @@ export const admin = new Hono<HonoEnv>()
       rows:         rowsRes.rows ?? [],
       worst_orders: worstRes.rows ?? [],
       pagination:   { limit, offset, returned: rowsRes.rows?.length ?? 0 },
+    });
+  })
+
+  // ─── GET /api/admin/engram/health ────────────────────────────────────────
+  // Returns Engram memory layer health + memory count stats.
+  .get("/engram/health", async (c) => {
+    const [health, sophiaMems, productionMems] = await Promise.all([
+      EngramClient.health(),
+      EngramClient.listByAgent("sophia_global").catch(() => []),
+      EngramClient.listByAgent("production_global").catch(() => []),
+    ]);
+
+    // Count memories across key namespaces via listing a sentinel agent
+    // In production, total count is aggregated per-agent by namespace
+    return c.json({
+      status:         health.status,
+      latencyMs:      health.latencyMs ?? null,
+      ok:             health.ok,
+      error:          health.error ?? null,
+      configured:     EngramClient.isConfigured(),
+      namespaces: {
+        sophia:     sophiaMems.length,
+        production: productionMems.length,
+      },
     });
   })
 

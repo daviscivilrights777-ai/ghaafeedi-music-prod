@@ -213,6 +213,10 @@ export default function AdminOverview() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [engramHealth, setEngramHealth] = useState<{
+    ok: boolean; status: string; latencyMs: number | null; configured: boolean;
+    namespaces?: { sophia: number; production: number };
+  } | null>(null);
 
   useEffect(() => {
     if (isPending) return;
@@ -225,13 +229,19 @@ export default function AdminOverview() {
 
   async function fetchOverview() {
     try {
-      const res = await api.admin.overview.$get();
-      if (!res.ok) {
+      const [overviewRes, engramRes] = await Promise.all([
+        api.admin.overview.$get(),
+        fetch("/api/admin/engram/health", {
+          headers: { Authorization: `Bearer ${(await (authClient as any).getSession?.())?.session?.token ?? ""}` }
+        }).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+      if (!overviewRes.ok) {
         setError("Access denied — administrator only");
         setLoading(false);
         return;
       }
-      setData(await res.json());
+      setData(await overviewRes.json());
+      setEngramHealth(engramRes);
     } catch {
       setError("Failed to load system data");
     } finally {
@@ -334,6 +344,18 @@ export default function AdminOverview() {
           sub="Open tickets"
           accent={kpis.openTickets > 5 ? RED : BLUE} icon="🎫"
           trend={kpis.openTickets > 5 ? "down" : "neutral"}
+        />
+        <CommandKpi
+          label="Engram Memory"
+          value={engramHealth?.ok ? "LIVE" : engramHealth === null ? "…" : "DOWN"}
+          sub={
+            engramHealth?.ok
+              ? `${engramHealth.latencyMs ?? "—"}ms · ${(engramHealth.namespaces?.sophia ?? 0) + (engramHealth.namespaces?.production ?? 0)} memories`
+              : engramHealth?.configured === false ? "Not configured" : "Unreachable"
+          }
+          accent={engramHealth?.ok ? GREEN : engramHealth === null ? AMBER : RED}
+          icon="🧠"
+          trend={engramHealth?.ok ? "up" : engramHealth === null ? "neutral" : "down"}
         />
       </div>
 
@@ -453,12 +475,26 @@ export default function AdminOverview() {
         <CommandSection title="System Status">
           <SystemStatusRow label="Railway PostgreSQL" status="live" detail="thomas.proxy.rlwy.net" />
           <SystemStatusRow label="Upstash Redis" status="live" detail="us-east-1" />
-          <SystemStatusRow label="FAL.ai (Primary)" status="live" detail="LatentSync + video" />
+          <SystemStatusRow label="Poyo.ai (Music+Video)" status="live" detail="seedance-2 · 13 ops" />
           <SystemStatusRow label="ElevenLabs TTS" status="live" detail="turbo_v2_5" />
-          <SystemStatusRow label="Sunor.cc Music Gen" status="live" detail="v1/task" />
+          <SystemStatusRow label="FAL.ai (Fallback)" status="live" detail="LatentSync · image" />
           <SystemStatusRow label="Dodo Payments" status="live" detail="bus_0NRksLGV..." />
           <SystemStatusRow label="Cloudflare R2 CDN" status="live" detail="pub-bc7b2034..." />
           <SystemStatusRow label="Resend Email" status="live" detail="ghaafeedi-prod" />
+          <SystemStatusRow
+            label="Engram Memory Layer"
+            status={
+              engramHealth === null ? "unknown"
+              : engramHealth.ok ? "live"
+              : engramHealth.configured === false ? "unknown"
+              : "degraded"
+            }
+            detail={
+              engramHealth?.ok
+                ? `${engramHealth.latencyMs}ms · ${(engramHealth.namespaces?.sophia ?? 0) + (engramHealth.namespaces?.production ?? 0)} mem`
+                : engramHealth?.configured === false ? "not configured" : "check logs"
+            }
+          />
           <div style={{ paddingTop: 4 }} />
         </CommandSection>
       </div>
