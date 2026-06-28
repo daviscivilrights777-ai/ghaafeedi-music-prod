@@ -178,31 +178,9 @@ export async function saveStyleEmbedding(params: {
   );
 
   try {
-    // Generate text embedding for the genome (Phase 10 — OpenAI embedding)
-    let embedding: number[] | null = null;
-    try {
-      const apiKey = process.env.OPENAI_API_KEY ?? "";
-      if (apiKey) {
-        const text = [
-          genome.visual?.cinematicStyle,
-          genome.primaryEmotion,
-          genome.audio?.genre,
-          genome.audio?.genre,
-        ].filter(Boolean).join(". ");
-
-        const embRes = await fetch("https://api.openai.com/v1/embeddings", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-          body:    JSON.stringify({ model: "text-embedding-3-small", input: text }),
-        });
-        if (embRes.ok) {
-          const embData = await embRes.json() as { data: Array<{ embedding: number[] }> };
-          embedding = embData.data[0]?.embedding ?? null;
-        }
-      }
-    } catch (embErr) {
-      console.warn("[StyleMemory] embedding generation failed:", (embErr as Error).message);
-    }
+    // Embeddings are handled internally by Engram (fastembed, self-hosted).
+    // No external embedding API call needed — column stays null until Engram indexes it.
+    const embedding: number[] | null = null;
 
     await db.execute(sql`
       INSERT INTO style_embeddings (id, production_id, user_id, emotion_vector, genome_json, primary_emotion, product_slug, quality_score, approved, created_at)

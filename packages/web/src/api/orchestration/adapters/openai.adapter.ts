@@ -11,11 +11,11 @@ import { poyoChatText, POYO_LLM } from "./poyo.adapter";
 const BASE = "https://api.openai.com/v1";
 
 // Token cost estimates per job type (cents)
+// NOTE: "image" jobType removed — routed to FAL.ai adapter (fal.adapter.ts)
 const COST_MAP: Record<string, number> = {
   analysis:         2,   // ~$0.02
   lyrics:           3,   // ~$0.03
   storyboard:       5,   // ~$0.05
-  image:            4,   // ~$0.04 per DALL-E image
   narration:        1,   // ~$0.01 TTS
   story_bible:      3,   // ~$0.03 GPT-4o-mini extraction
   production_bible: 10,  // ~$0.10 GPT-4o creative brief
@@ -27,7 +27,8 @@ const COST_MAP: Record<string, number> = {
 export const OpenAIAdapter: ProviderAdapter = {
   name:        "openai",
   displayName: "OpenAI GPT-4o",
-  jobTypes:    ["analysis", "lyrics", "storyboard", "image", "narration",
+  // "image" jobType removed — now handled exclusively by FAL.ai adapter (fal.adapter.ts)
+  jobTypes:    ["analysis", "lyrics", "storyboard", "narration",
                 "story_bible", "production_bible", "shot_list", "qc_check", "deliver"],
 
   async estimateCost(job: JobSpec): Promise<CostEstimate> {
@@ -163,19 +164,9 @@ export const OpenAIAdapter: ProviderAdapter = {
       // This is a no-op in the adapter — just signal success
       result = { choices: [{ message: { content: JSON.stringify({ delivered: true, timestamp: new Date().toISOString() }) } }] };
     } else if (job.jobType === "image") {
-      const res = await fetch(`${BASE}/images/generations`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model:   "gpt-image-1",
-          prompt:  job.inputPayload?.prompt || "",
-          n:       1,
-          size:    job.inputPayload?.size || "1024x1024",
-        }),
-      });
-      if (!res.ok) throw new Error(`[OpenAI] Image gen failed: ${res.status}`);
-      const data = await res.json();
-      result = data;
+      // "image" is no longer handled by OpenAI adapter — FAL.ai is the exclusive image provider.
+      // This branch should never be reached. Throw to surface any routing misconfiguration.
+      throw new Error("[OpenAI Adapter] image jobType was routed here in error — use FAL.ai adapter (fal.adapter.ts)");
     } else {
       // Chat completion for analysis / lyrics / storyboard
       // Primary: Poyo DeepSeek V3 — fallback: GPT-4o

@@ -168,15 +168,15 @@ Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}$
       });
       reply = data.choices?.[0]?.message?.content?.trim() ?? reply;
     } catch (sophiaErr) {
-      console.warn("[Sophia] Claude Opus 4.8 via Poyo failed, falling back to GPT-4o-mini:", sophiaErr);
-      // Fallback to direct OpenAI
+      console.warn("[Sophia] Claude Opus 4.8 via Poyo failed, falling back to Poyo DeepSeek Flash:", sophiaErr);
+      // Fallback to Poyo DeepSeek V3 Flash (cheaper, fast background model)
       try {
-        const apiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY);
-        usedModel = "gpt-4o-mini";
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        const poyoKey = process.env.POYO_API_KEY ?? "";
+        usedModel = "deepseek-v3-0324";
+        const response = await fetch("https://api.poyo.ai/v1/chat/completions", {
           method: "POST",
-          headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "gpt-4o-mini", max_tokens: 180, messages: sophiaMessages }),
+          headers: { "Authorization": `Bearer ${poyoKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "deepseek-v3-0324", max_tokens: 180, messages: sophiaMessages }),
         });
         const fb = await response.json() as any;
         reply = fb.choices?.[0]?.message?.content?.trim() ?? reply;
@@ -209,10 +209,8 @@ Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}$
         { role: "assistant" as const, content: reply },
       ];
       // Fire-and-forget — never blocks the response
-      const openaiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY).catch(() => "");
-      if (openaiKey) {
-        persistSessionMemory(userId, fullSession, openaiKey).catch(() => {});
-      }
+      // Memory extraction uses Poyo DeepSeek Flash internally (no OpenAI key needed)
+      persistSessionMemory(userId, fullSession, "").catch(() => {});
     }
     // ─────────────────────────────────────────────────────────────────────────
 
