@@ -42,9 +42,12 @@ export interface ExtractedMemory {
 export async function extractMemoriesFromSession(
   userId: string,
   session: SessionMessage[],
-  openaiApiKey: string,
+  _openaiApiKey: string, // kept for signature compat — routed to Poyo.ai DeepSeek V4 Flash
 ): Promise<ExtractedMemory[]> {
   if (session.length < 2) return [];
+
+  const poyoApiKey = process.env.POYO_API_KEY ?? "";
+  if (!poyoApiKey) return [];
 
   const transcript = session
     .slice(-12)
@@ -67,11 +70,12 @@ Output ONLY valid JSON: {"memories": [{"content":"...","memoryType":"semantic","
 If nothing worth remembering, return {"memories": []}.`;
 
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Background task → DeepSeek V4 Flash via Poyo.ai ($0.07/$0.14 per 1M — cheapest tier)
+    const res = await fetch("https://api.poyo.ai/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${poyoApiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "deepseek-v4-flash",
         temperature: 0.3,
         max_tokens: 600,
         response_format: { type: "json_object" },
