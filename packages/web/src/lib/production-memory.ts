@@ -20,12 +20,12 @@ const AGENT = (userId: string) => `production_${userId}`;
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface EmotionalAnalysis {
-  userId:              string;
-  storyText:           string;
-  emotionalFingerprint: string[];   // e.g. ["Nostalgic", "Resilient", "Devoted"]
-  emotionalArc:        string;      // e.g. "A journey from grief to gratitude"
-  songTitle:           string;
-  profileSummary:      string;
+  userId:               string;
+  storyText:            string;
+  emotionalFingerprint: string[];
+  emotionalArc:         string;
+  songTitle:            string;
+  profileSummary:       string;
   scores: {
     key:     string;
     label:   string;
@@ -54,8 +54,8 @@ export interface SongCreation {
     outroChorus: string;
   };
   sunoPrompt?: string;
-  audioUrl?:   string;   // populated when Poyo.ai returns
-  duration?:   number;   // seconds
+  audioUrl?:   string;
+  duration?:   number;
 }
 
 export interface DirectorShotList {
@@ -78,7 +78,7 @@ export interface DirectorShotList {
 }
 
 export interface MoodImageSet {
-  userId:              string;
+  userId:               string;
   emotionalFingerprint: string[];
   images: {
     emotion:  string;
@@ -88,65 +88,40 @@ export interface MoodImageSet {
 }
 
 export interface CompletedDeliverable {
-  userId:      string;
-  orderId:     string;
-  productType: string;
-  jobId:       string;
-  outputUrl:   string;   // R2 / CDN URL
-  outputType:  "audio" | "video" | "image" | "lyrics" | "storyboard";
+  userId:       string;
+  orderId:      string;
+  productType:  string;
+  jobId:        string;
+  outputUrl:    string;
+  outputType:   "audio" | "video" | "image" | "lyrics" | "storyboard";
   durationSec?: number;
-  metadata?:   Record<string, unknown>;
+  metadata?:    Record<string, unknown>;
 }
 
 // ─── Store Emotional Analysis ─────────────────────────────────────────────────
 
-/**
- * Called after POST /api/onboarding/analyze completes.
- * Stores the full emotional profile — scores, arc, fingerprint, song title.
- */
 export async function persistEmotionalAnalysis(data: EmotionalAnalysis): Promise<void> {
   try {
     const { userId, emotionalFingerprint, emotionalArc, songTitle, profileSummary, scores } = data;
 
-    // 1. Emotional fingerprint + arc
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Emotional profile — Arc: "${emotionalArc}" | Fingerprint: ${emotionalFingerprint.join(", ")} | Suggested title: "${songTitle}"`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.95,
-      source:            "agent",
-      metadata: {
-        emotionalFingerprint,
-        emotionalArc,
-        songTitle,
-        profileSummary,
-      },
-    });
+    await EngramClient.store(
+      AGENT(userId),
+      `Emotional profile — Arc: "${emotionalArc}" | Fingerprint: ${emotionalFingerprint.join(", ")} | Suggested title: "${songTitle}"`,
+      { emotionalFingerprint, emotionalArc, songTitle, profileSummary, type: "emotional_profile" },
+    );
 
-    // 2. Individual scores
     const scoreLines = scores.map((s) => `${s.label}: ${s.score}/100 — ${s.insight}`).join(" | ");
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Emotional scores — ${scoreLines}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.9,
-      source:            "agent",
-      metadata: { scores },
-    });
+    await EngramClient.store(
+      AGENT(userId),
+      `Emotional scores — ${scoreLines}`,
+      { scores, type: "emotional_scores" },
+    );
 
-    // 3. Profile summary (most personal — high confidence)
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Customer emotional profile: "${profileSummary}"`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.98,
-      source:            "agent",
-      metadata: { profileSummary },
-    });
-
+    await EngramClient.store(
+      AGENT(userId),
+      `Customer emotional profile: "${profileSummary}"`,
+      { profileSummary, type: "profile_summary" },
+    );
   } catch (err) {
     console.warn("[ProductionMemory] persistEmotionalAnalysis error:", (err as Error).message);
   }
@@ -154,38 +129,16 @@ export async function persistEmotionalAnalysis(data: EmotionalAnalysis): Promise
 
 // ─── Store Song Creation ──────────────────────────────────────────────────────
 
-/**
- * Called after /api/onboarding/generate-song completes (with or without audio URL).
- * Stores full lyrics, metadata, and audio URL if available.
- */
 export async function persistSongCreation(data: SongCreation): Promise<void> {
   try {
     const { userId, title, genre, bpm, mood, instruments, lyrics, audioUrl } = data;
 
-    // 1. Song identity + metadata
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Song created: "${title}" | ${genre} | ${bpm} BPM | Mood: ${mood.join(", ")} | Instruments: ${instruments.join(", ")}${audioUrl ? ` | Audio: ${audioUrl}` : ""}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.95,
-      source:            "agent",
-      metadata: {
-        title,
-        genre,
-        subgenre:   data.subgenre,
-        bpm,
-        key:        data.key,
-        mood,
-        instruments,
-        vocalStyle: data.vocalStyle,
-        audioUrl,
-        orderId:    data.orderId,
-        duration:   data.duration,
-      },
-    });
+    await EngramClient.store(
+      AGENT(userId),
+      `Song created: "${title}" | ${genre} | ${bpm} BPM | Mood: ${mood.join(", ")} | Instruments: ${instruments.join(", ")}${audioUrl ? ` | Audio: ${audioUrl}` : ""}`,
+      { title, genre, subgenre: data.subgenre, bpm, key: data.key, mood, instruments, vocalStyle: data.vocalStyle, audioUrl, orderId: data.orderId, duration: data.duration, type: "song_metadata" },
+    );
 
-    // 2. Full lyrics — stored separately so Sophia can recall and reference them
     const fullLyrics =
       `[Verse 1]\n${lyrics.verse1}\n\n` +
       `[Chorus]\n${lyrics.chorus}\n\n` +
@@ -193,29 +146,19 @@ export async function persistSongCreation(data: SongCreation): Promise<void> {
       `[Bridge]\n${lyrics.bridge}\n\n` +
       `[Outro Chorus]\n${lyrics.outroChorus}`;
 
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Lyrics for "${title}":\n${fullLyrics}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        1.0,
-      source:            "agent",
-      metadata: { title, lyrics, orderId: data.orderId },
-    });
+    await EngramClient.store(
+      AGENT(userId),
+      `Lyrics for "${title}":\n${fullLyrics}`,
+      { title, lyrics, orderId: data.orderId, type: "lyrics" },
+    );
 
-    // 3. Suno generation prompt (useful for regeneration / style matching)
     if (data.sunoPrompt) {
-      await EngramClient.store({
-        agentId:           AGENT(userId),
-        content:           `Music generation prompt for "${title}": ${data.sunoPrompt}`,
-        memoryType:        "fact",
-        subjectExternalId: userId,
-        confidence:        0.85,
-        source:            "agent",
-        metadata: { title, sunoPrompt: data.sunoPrompt },
-      });
+      await EngramClient.store(
+        AGENT(userId),
+        `Music generation prompt for "${title}": ${data.sunoPrompt}`,
+        { title, sunoPrompt: data.sunoPrompt, type: "music_prompt" },
+      );
     }
-
   } catch (err) {
     console.warn("[ProductionMemory] persistSongCreation error:", (err as Error).message);
   }
@@ -223,45 +166,25 @@ export async function persistSongCreation(data: SongCreation): Promise<void> {
 
 // ─── Store Director Shot List ─────────────────────────────────────────────────
 
-/**
- * Called after the cinematic orchestration pipeline generates a shot plan.
- * Stores the full director's shot list per customer.
- */
 export async function persistDirectorShotList(data: DirectorShotList): Promise<void> {
   try {
     const { userId, songTitle, totalShots, totalSeconds, shots } = data;
 
-    // 1. Shot list summary
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Director shot list for "${songTitle}" — ${totalShots} shots, ${totalSeconds}s total runtime`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.92,
-      source:            "agent",
-      metadata: {
-        songTitle,
-        totalShots,
-        totalSeconds,
-        orderId: data.orderId,
-      },
-    });
+    await EngramClient.store(
+      AGENT(userId),
+      `Director shot list for "${songTitle}" — ${totalShots} shots, ${totalSeconds}s total runtime`,
+      { songTitle, totalShots, totalSeconds, orderId: data.orderId, type: "shot_list_summary" },
+    );
 
-    // 2. Full shot list detail (cinematic orchestration data)
     const shotLines = shots.map((s) =>
       `Shot ${s.shotNumber} [${s.lyricsSection}]: ${s.cameraMove} — ${s.subject} in ${s.setting}, ${s.lighting} lighting, ${s.mood} mood, ${s.duration}s`
     ).join("\n");
 
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Cinematic shot plan for "${songTitle}":\n${shotLines}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.9,
-      source:            "agent",
-      metadata: { songTitle, shots, orderId: data.orderId },
-    });
-
+    await EngramClient.store(
+      AGENT(userId),
+      `Cinematic shot plan for "${songTitle}":\n${shotLines}`,
+      { songTitle, shots, orderId: data.orderId, type: "shot_list_detail" },
+    );
   } catch (err) {
     console.warn("[ProductionMemory] persistDirectorShotList error:", (err as Error).message);
   }
@@ -269,26 +192,16 @@ export async function persistDirectorShotList(data: DirectorShotList): Promise<v
 
 // ─── Store Mood Images ────────────────────────────────────────────────────────
 
-/**
- * Called after /api/onboarding/generate-mood-images completes.
- * Stores each emotion + image URL so Sophia can reference them.
- */
 export async function persistMoodImages(data: MoodImageSet): Promise<void> {
   try {
     const { userId, emotionalFingerprint, images } = data;
-
     const imageLines = images.map((img) => `${img.emotion}: ${img.imageUrl}`).join(" | ");
 
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Emotional arc mood images — Fingerprint: ${emotionalFingerprint.join(", ")} | ${imageLines}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        0.88,
-      source:            "agent",
-      metadata: { emotionalFingerprint, images },
-    });
-
+    await EngramClient.store(
+      AGENT(userId),
+      `Emotional arc mood images — Fingerprint: ${emotionalFingerprint.join(", ")} | ${imageLines}`,
+      { emotionalFingerprint, images, type: "mood_images" },
+    );
   } catch (err) {
     console.warn("[ProductionMemory] persistMoodImages error:", (err as Error).message);
   }
@@ -296,32 +209,15 @@ export async function persistMoodImages(data: MoodImageSet): Promise<void> {
 
 // ─── Store Completed Deliverable ──────────────────────────────────────────────
 
-/**
- * Called when any job completes and output URL is available.
- * Stores the final deliverable link per customer.
- */
 export async function persistCompletedDeliverable(data: CompletedDeliverable): Promise<void> {
   try {
     const { userId, orderId, productType, jobId, outputUrl, outputType } = data;
 
-    await EngramClient.store({
-      agentId:           AGENT(userId),
-      content:           `Completed ${outputType} deliverable for ${productType} (order: ${orderId}): ${outputUrl}`,
-      memoryType:        "fact",
-      subjectExternalId: userId,
-      confidence:        1.0,
-      source:            "agent",
-      metadata: {
-        orderId,
-        productType,
-        jobId,
-        outputUrl,
-        outputType,
-        durationSec: data.durationSec,
-        ...data.metadata,
-      },
-    });
-
+    await EngramClient.store(
+      AGENT(userId),
+      `Completed ${outputType} deliverable for ${productType} (order: ${orderId}): ${outputUrl}`,
+      { orderId, productType, jobId, outputUrl, outputType, durationSec: data.durationSec, ...data.metadata, type: "deliverable" },
+    );
   } catch (err) {
     console.warn("[ProductionMemory] persistCompletedDeliverable error:", (err as Error).message);
   }
@@ -329,26 +225,15 @@ export async function persistCompletedDeliverable(data: CompletedDeliverable): P
 
 // ─── Recall All Production Data for a Customer ───────────────────────────────
 
-/**
- * Recall everything stored for a customer — used by Sophia to give
- * deeply personalized responses about their productions.
- */
 export async function recallProductionHistory(
   userId: string,
   query: string,
 ): Promise<string> {
   try {
-    const memories = await EngramClient.recall({
-      agentId:           AGENT(userId),
-      query,
-      subjectExternalId: userId,
-      limit:             12,
-      minConfidence:     0.5,
-    });
+    const results = await EngramClient.search(AGENT(userId), query, 12);
+    if (!results.length) return "";
 
-    if (!memories.length) return "";
-
-    const lines = memories.map((m) => `• ${m.content}`).join("\n");
+    const lines = results.map((m) => `• ${m.content_preview}`).join("\n");
     return `\n\n═══ CUSTOMER PRODUCTION HISTORY ═══\n${lines}\n══════════════════════════════════`;
   } catch {
     return "";

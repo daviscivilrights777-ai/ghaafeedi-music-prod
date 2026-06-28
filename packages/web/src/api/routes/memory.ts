@@ -2,9 +2,8 @@
  * Memory Admin Routes — Ghaafeedi Music
  *
  * GET    /api/memory/health           — engram health check (admin)
- * GET    /api/memory/:userId          — view all memories for a user (admin)
- * DELETE /api/memory/:userId          — GDPR erasure for a user (admin)
- * GET    /api/memory/:userId/audit    — audit chain verify (admin)
+ * GET    /api/memory/:userId          — search memories for a user (admin)
+ * DELETE /api/memory/:userId          — forget a user's memories (admin)
  *
  * All routes require admin role.
  */
@@ -60,14 +59,25 @@ app.get("/:userId", async (c) => {
     return c.json({ error: "Engram not configured", configured: false }, 503);
   }
 
-  // Pull all memories for this user across Sophia + pipeline agents
-  const sophiaAgent = `sophia_${userId}`;
-  const memories = await EngramClient.listByAgent(sophiaAgent, userId);
+  // Search across sophia + production namespaces
+  const sophiaAgent     = `sophia_${userId}`;
+  const productionAgent = `production_${userId}`;
+  const revisionAgent   = `revision_${userId}`;
+
+  const [sophiaResults, productionResults, revisionResults] = await Promise.all([
+    EngramClient.search(sophiaAgent, "customer", 20),
+    EngramClient.search(productionAgent, "song lyrics shots emotional", 20),
+    EngramClient.search(revisionAgent, "revision", 10),
+  ]);
 
   return c.json({
     userId,
-    totalMemories: memories.length,
-    memories,
+    totalMemories: sophiaResults.length + productionResults.length + revisionResults.length,
+    namespaces: {
+      sophia:     sophiaResults,
+      production: productionResults,
+      revision:   revisionResults,
+    },
   });
 });
 
@@ -84,42 +94,29 @@ app.delete("/:userId", async (c) => {
     return c.json({ error: "Engram not configured — nothing to erase" }, 503);
   }
 
-  // Resolve engram anchor UUID from external userId
-  const anchorId = await EngramClient.findAnchor(userId);
-  if (!anchorId) {
-    return c.json({ ok: true, userId, note: "No engram anchor found — nothing to erase" });
-  }
+  // Note: Engram's /forget endpoint requires memory_id.
+  // For full user erasure, we search all namespaces and forget each memory.
+  const namespaces = [
+    `sophia_${userId}`,
+    `production_${userId}`,
+    `revision_${userId}`,
+  ];
 
-  const ok = await EngramClient.eraseSubject(anchorId);
-  if (!ok) {
-    return c.json({ error: "Erasure failed or engram unreachable" }, 500);
+  let forgottenCount = 0;
+  for (const ns of namespaces) {
+    const results = await EngramClient.search(ns, ".", 100);
+    for (const m of results) {
+      const ok = await EngramClient.forget(ns, m.doc_id);
+      if (ok) forgottenCount++;
+    }
   }
 
   return c.json({
-    ok:     true,
+    ok:             true,
     userId,
-    note:   "GDPR Art.17 cryptographic erasure complete. Content is unrecoverable. Audit record retained.",
+    forgottenCount,
+    note:           `Erased ${forgottenCount} memories across all namespaces.`,
   });
-});
-
-// ─── GET /api/memory/:userId/audit ───────────────────────────────────────────
-
-app.get("/:userId/audit", async (c) => {
-  const adminId = await requireAdmin(c);
-  if (!adminId) return c.json({ error: "Forbidden" }, 403);
-
-  if (!EngramClient.isConfigured()) {
-    return c.json({ error: "Engram not configured" }, 503);
-  }
-
-  // Audit verify is tenant-wide (not per-user) in engram's API
-  const result = await EngramClient.verifyAudit();
-  if (!result) {
-    return c.json({ error: "Audit verification failed or engram unreachable" }, 500);
-  }
-
-  const { userId } = c.req.param();
-  return c.json({ userId, ...result });
 });
 
 export { app as memoryAdmin };

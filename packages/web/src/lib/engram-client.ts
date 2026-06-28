@@ -1,82 +1,66 @@
 /**
  * Engram REST Client — Ghaafeedi Music
  *
- * Thin typed wrapper around the real engram API surface.
- * Source of truth: https://github.com/Harshitk-cp/engram
+ * Verified against live endpoint: https://engram-memory-production.up.railway.app
  *
- * Real endpoints:
- *   POST   /v1/agents                      — register an agent (idempotent by external_id)
- *   POST   /v1/memories                    — store a memory
- *   GET    /v1/memories/recall?...         — semantic recall
- *   GET    /v1/memories?agent_id=...       — list all memories for agent
- *   GET    /v1/audit/verify                — verify SHA-256 chain
- *   DELETE /v1/anchors/:anchorId?purge=true — GDPR per-subject crypto-shred
- *   GET    /health                          — health check (no /v1 prefix!)
+ * Real endpoints (NO /v1 prefix):
+ *   POST /store          — { agent_id, text, metadata? } → { success, memory_id, category }
+ *   POST /search         — { agent_id, query, limit? }   → { results: SearchResult[] }
+ *   POST /forget         — { agent_id, memory_id }       → { success }
+ *   GET  /dashboard/stats                                → DashboardStats
+ *   GET  /health                                         → { status, tiers, uptime_seconds }
  *
  * Env vars:
- *   ENGRAM_BASE_URL  — e.g. https://engram-ghaafeedi.up.railway.app
- *   ENGRAM_API_KEY   — master key issued by POST /v1/setup
- *   ENGRAM_AGENT_ID  — sophia agent UUID (registered once, stored here)
+ *   ENGRAM_BASE_URL  — e.g. https://engram-memory-production.up.railway.app
+ *   ENGRAM_API_KEY   — api key (sent as Bearer token)
  *
- * All public methods fail silently (return null/[]) so engram being
- * unreachable never breaks the main product flow.
+ * All public methods fail silently (return null/[]) — engram being
+ * unreachable NEVER breaks the main product flow.
  */
 
-const BASE_URL  = (process.env.ENGRAM_BASE_URL  ?? "").replace(/\/$/, "");
-const API_KEY   = process.env.ENGRAM_API_KEY   ?? "";
-const AGENT_ID  = process.env.ENGRAM_AGENT_ID  ?? "";   // optional — used as default
+const BASE_URL = (process.env.ENGRAM_BASE_URL ?? "").replace(/\/$/, "");
+const API_KEY  = process.env.ENGRAM_API_KEY  ?? "";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type MemoryType = "preference" | "fact" | "decision" | "constraint";
-
-/** Raw memory shape returned by engram */
-export interface EngramMemory {
-  id:                 string;
-  agent_id:           string;
-  content:            string;
-  memory_type:        MemoryType;
-  confidence:         number;          // 0.0 – 1.0 (engram calls this confidence, not importance)
-  tier:               "hot" | "warm" | "cold" | "archive";
-  anchor_external_id?: string | null;  // the subjectId / userId we pass in
-  source:             "user" | "agent" | "tool" | "derived";
-  created_at:         string;          // ISO
-  updated_at:         string;
-  metadata?:          Record<string, unknown>;
+export interface StoreResult {
+  success:   boolean;
+  memory_id: string;
+  category:  string;
+  conflicts: unknown[];
 }
 
-export interface StoreMemoryInput {
-  agentId:            string;          // sophia_${userId} or pipeline_${type}
-  content:            string;
-  memoryType:         MemoryType;
-  /** userId — used as anchor_external_id for per-subject GDPR erasure */
-  subjectExternalId?: string;
-  /** 0.0–1.0, default 0.8 */
-  confidence?:        number;
-  source?:            "user" | "agent" | "tool" | "derived";
-  metadata?:          Record<string, unknown>;
+export interface SearchResult {
+  doc_id:          string;
+  content_preview: string;
+  score:           number;
+  confidence:      "high" | "medium" | "low";
+  category:        string;
+  created_at:      number; // unix timestamp
 }
 
-export interface RecallInput {
-  agentId:            string;
-  query:              string;
-  subjectExternalId?: string;          // filter to one user's memories
-  memoryType?:        MemoryType;
-  limit?:             number;          // default 10
-  minConfidence?:     number;          // default 0.3
+export interface SearchResponse {
+  query:        string;
+  total_results: number;
+  tiers_used:   string[];
+  results:      SearchResult[];
 }
 
-export interface AuditVerifyResult {
-  ok:      boolean;
-  valid:   boolean;
-  error?:  string;
+export interface DashboardStats {
+  total_memories: number;
+  categories:     Record<string, number>;
+  tiers:          { hot: number; total: number };
+  graph:          Record<string, number>;
+  growth:         { hour: string; count: number }[];
+  uptime_seconds: number;
 }
 
 export interface EngramHealthResult {
-  ok:        boolean;
-  status:    "healthy" | "degraded" | "unreachable";
+  ok:         boolean;
+  status:     "healthy" | "degraded" | "unreachable";
   latencyMs?: number;
-  error?:    string;
+  totalMemories?: number;
+  error?:     string;
 }
 
 // ─── Internal fetch ───────────────────────────────────────────────────────────
@@ -86,16 +70,18 @@ async function engramFetch<T>(
   options: RequestInit = {},
   timeoutMs = 6000,
 ): Promise<T | null> {
-  if (!BASE_URL || !API_KEY) return null;   // not configured — silent
+  if (!BASE_URL) return null; // not configured — silent
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...((options.headers ?? {}) as Record<string, string>),
+    };
+    if (API_KEY) headers["Authorization"] = `Bearer ${API_KEY}`;
+
     const res = await fetch(`${BASE_URL}${path}`, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization:  `Bearer ${API_KEY}`,
-        ...((options.headers ?? {}) as Record<string, string>),
-      },
+      headers,
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -119,135 +105,91 @@ async function engramFetch<T>(
 export const EngramClient = {
 
   /**
-   * Register an agent by external_id. Idempotent — safe to call on every
-   * Sophia session start. Returns the agent UUID or null.
+   * Store a memory.
+   * @param agentId  e.g. "production_userId" / "sophia_userId"
+   * @param text     The memory content (natural language)
+   * @param metadata Optional structured context
    */
-  async ensureAgent(externalId: string, name: string): Promise<string | null> {
-    const res = await engramFetch<{ id: string }>("/v1/agents", {
+  async store(
+    agentId: string,
+    text: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<StoreResult | null> {
+    return engramFetch<StoreResult>("/store", {
       method: "POST",
-      body: JSON.stringify({ external_id: externalId, name }),
+      body: JSON.stringify({ agent_id: agentId, text, metadata: metadata ?? {} }),
     });
-    return res?.id ?? null;
   },
 
   /**
-   * Store a single memory. Returns the created memory or null on failure.
+   * Semantic search over an agent's memories.
    */
-  async store(input: StoreMemoryInput): Promise<EngramMemory | null> {
-    return engramFetch<EngramMemory>("/v1/memories", {
+  async search(
+    agentId: string,
+    query: string,
+    limit = 10,
+  ): Promise<SearchResult[]> {
+    const res = await engramFetch<SearchResponse>("/search", {
       method: "POST",
-      body: JSON.stringify({
-        agent_id:            input.agentId,
-        content:             input.content,
-        memory_type:         input.memoryType,
-        confidence:          input.confidence ?? 0.8,
-        source:              input.source ?? "agent",
-        anchor_external_id:  input.subjectExternalId ?? null,
-        metadata:            input.metadata ?? {},
-      }),
+      body: JSON.stringify({ agent_id: agentId, query, limit }),
     });
+    return res?.results ?? [];
   },
 
   /**
-   * Semantic recall — returns top-k memories relevant to query.
-   * Returns [] on failure (agents degrade to DB context gracefully).
+   * Delete a specific memory by ID.
    */
-  async recall(input: RecallInput): Promise<EngramMemory[]> {
-    const params = new URLSearchParams({
-      agent_id: input.agentId,
-      query:    input.query,
-      limit:    String(input.limit ?? 10),
+  async forget(agentId: string, memoryId: string): Promise<boolean> {
+    const res = await engramFetch<{ success: boolean }>("/forget", {
+      method: "POST",
+      body: JSON.stringify({ agent_id: agentId, memory_id: memoryId }),
     });
-    if (input.subjectExternalId) params.set("anchor_external_id", input.subjectExternalId);
-    if (input.memoryType)        params.set("memory_type", input.memoryType);
-    if (input.minConfidence)     params.set("min_confidence", String(input.minConfidence));
-
-    const res = await engramFetch<{ memories: EngramMemory[] }>(
-      `/v1/memories/recall?${params.toString()}`,
-    );
-    return res?.memories ?? [];
+    return res?.success === true;
   },
 
   /**
-   * List all memories for an agent (optionally filtered to one subject).
+   * Dashboard stats — total memories, categories, growth.
+   * Used by admin panel health card.
    */
-  async listByAgent(agentId: string, subjectExternalId?: string): Promise<EngramMemory[]> {
-    const params = new URLSearchParams({ agent_id: agentId });
-    if (subjectExternalId) params.set("anchor_external_id", subjectExternalId);
-
-    const res = await engramFetch<{ memories: EngramMemory[] }>(
-      `/v1/memories?${params.toString()}`,
-    );
-    return res?.memories ?? [];
-  },
-
-  /**
-   * GDPR Art.17 subject erasure — crypto-shreds ALL memories for an anchor.
-   * anchorId must be the engram anchor UUID (not external_id).
-   * Returns true on success.
-   */
-  async eraseSubject(anchorId: string): Promise<boolean> {
-    const res = await engramFetch<{ ok: boolean }>(
-      `/v1/anchors/${anchorId}?purge=true`,
-      { method: "DELETE" },
-      15_000,   // longer timeout for full crypto-shred
-    );
-    return res?.ok === true;
-  },
-
-  /**
-   * Look up an anchor UUID by external_id (userId).
-   * Needed before eraseSubject — returns null if not found.
-   */
-  async findAnchor(externalId: string): Promise<string | null> {
-    const res = await engramFetch<{ anchors: { id: string; external_id: string }[] }>(
-      `/v1/anchors?external_id=${encodeURIComponent(externalId)}`,
-    );
-    return res?.anchors?.[0]?.id ?? null;
-  },
-
-  /**
-   * Verify the tamper-evident SHA-256 audit chain for the whole tenant.
-   */
-  async verifyAudit(): Promise<AuditVerifyResult | null> {
-    const res = await engramFetch<{ valid: boolean; error?: string }>("/v1/audit/verify");
-    if (!res) return null;
-    return { ok: true, valid: res.valid, error: res.error };
+  async stats(): Promise<DashboardStats | null> {
+    return engramFetch<DashboardStats>("/dashboard/stats", {}, 4000);
   },
 
   /**
    * Health check — call on startup and from admin panel.
-   * NOTE: engram health is at /health, NOT /v1/health.
    */
   async health(): Promise<EngramHealthResult> {
     const t0 = Date.now();
 
-    if (!BASE_URL || !API_KEY) {
-      return { ok: false, status: "unreachable", error: "ENGRAM_BASE_URL or ENGRAM_API_KEY not set" };
+    if (!BASE_URL) {
+      return { ok: false, status: "unreachable", error: "ENGRAM_BASE_URL not set" };
     }
 
-    const res = await engramFetch<{ status?: string; message?: string }>("/health", {}, 4000);
+    const res = await engramFetch<{ status?: string; tiers?: unknown; uptime_seconds?: number }>(
+      "/health",
+      {},
+      4000,
+    );
     const latencyMs = Date.now() - t0;
 
     if (!res) {
-      return { ok: false, status: "unreachable", latencyMs, error: "No response from engram" };
+      return { ok: false, status: "unreachable", latencyMs, error: "No response" };
     }
 
-    const isHealthy = res.status === "ok" || res.message === "ok" || res.status === "healthy";
+    const isHealthy = res.status === "healthy";
+
+    // also grab stats for total_memories
+    const statsRes = await engramFetch<DashboardStats>("/dashboard/stats", {}, 3000);
+
     return {
-      ok:        isHealthy,
-      status:    isHealthy ? "healthy" : "degraded",
+      ok:             isHealthy,
+      status:         isHealthy ? "healthy" : "degraded",
       latencyMs,
+      totalMemories:  statsRes?.total_memories ?? 0,
     };
   },
 
-  /** True if env vars are present. */
   isConfigured(): boolean {
-    return Boolean(BASE_URL && API_KEY);
-  },
-
-  /** Default agent ID from env (Sophia). */
-  defaultAgentId(): string {
-    return AGENT_ID;
+    return Boolean(BASE_URL);
   },
 };

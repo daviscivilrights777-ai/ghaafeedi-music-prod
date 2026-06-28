@@ -542,24 +542,15 @@ export const admin = new Hono<HonoEnv>()
   // ─── GET /api/admin/engram/health ────────────────────────────────────────
   // Returns Engram memory layer health + memory count stats.
   .get("/engram/health", async (c) => {
-    const [health, sophiaMems, productionMems] = await Promise.all([
-      EngramClient.health(),
-      EngramClient.listByAgent("sophia_global").catch(() => []),
-      EngramClient.listByAgent("production_global").catch(() => []),
-    ]);
+    const health = await EngramClient.health();
 
-    // Count memories across key namespaces via listing a sentinel agent
-    // In production, total count is aggregated per-agent by namespace
     return c.json({
-      status:         health.status,
-      latencyMs:      health.latencyMs ?? null,
-      ok:             health.ok,
-      error:          health.error ?? null,
-      configured:     EngramClient.isConfigured(),
-      namespaces: {
-        sophia:     sophiaMems.length,
-        production: productionMems.length,
-      },
+      status:        health.status,
+      latencyMs:     health.latencyMs ?? null,
+      ok:            health.ok,
+      error:         health.error ?? null,
+      configured:    EngramClient.isConfigured(),
+      totalMemories: health.totalMemories ?? 0,
     });
   })
 
