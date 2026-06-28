@@ -1,0 +1,12 @@
+[build]
+# Railway builds engram from source using the official Dockerfile.
+# The Dockerfile is a 3-stage build: console (Node/Vite) → binary (Go) → runtime (Alpine).
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/app/engram serve"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

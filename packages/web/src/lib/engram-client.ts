@@ -1,99 +1,100 @@
 /**
- * Engram.to REST Client — Ghaafeedi Music
+ * Engram REST Client — Ghaafeedi Music
  *
- * engram.to has a Python SDK only. This is a typed thin HTTP wrapper
- * against the REST API for use in Bun/Hono TypeScript services.
+ * Thin typed wrapper around the real engram API surface.
+ * Source of truth: https://github.com/Harshitk-cp/engram
+ *
+ * Real endpoints:
+ *   POST   /v1/agents                      — register an agent (idempotent by external_id)
+ *   POST   /v1/memories                    — store a memory
+ *   GET    /v1/memories/recall?...         — semantic recall
+ *   GET    /v1/memories?agent_id=...       — list all memories for agent
+ *   GET    /v1/audit/verify                — verify SHA-256 chain
+ *   DELETE /v1/anchors/:anchorId?purge=true — GDPR per-subject crypto-shred
+ *   GET    /health                          — health check (no /v1 prefix!)
  *
  * Env vars:
- *   ENGRAM_BASE_URL  — e.g. https://your-engram-instance.railway.app
- *   ENGRAM_API_KEY   — issued by engram.to
+ *   ENGRAM_BASE_URL  — e.g. https://engram-ghaafeedi.up.railway.app
+ *   ENGRAM_API_KEY   — master key issued by POST /v1/setup
+ *   ENGRAM_AGENT_ID  — sophia agent UUID (registered once, stored here)
  *
- * All methods are safe to call even if engram is unreachable — they
- * return null/false and log a warning rather than throwing.
+ * All public methods fail silently (return null/[]) so engram being
+ * unreachable never breaks the main product flow.
  */
 
-const BASE_URL = (process.env.ENGRAM_BASE_URL ?? "").replace(/\/$/, "");
-const API_KEY  = process.env.ENGRAM_API_KEY ?? "";
+const BASE_URL  = (process.env.ENGRAM_BASE_URL  ?? "").replace(/\/$/, "");
+const API_KEY   = process.env.ENGRAM_API_KEY   ?? "";
+const AGENT_ID  = process.env.ENGRAM_AGENT_ID  ?? "";   // optional — used as default
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type MemoryType = "semantic" | "episodic" | "procedural";
+export type MemoryType = "preference" | "fact" | "decision" | "constraint";
 
+/** Raw memory shape returned by engram */
 export interface EngramMemory {
-  id:          string;
-  agentId:     string;
-  subjectId:   string;
-  content:     string;
-  memoryType:  MemoryType;
-  importance:  number;          // 0.0 – 1.0
-  tags:        string[];
-  storedAt:    string;          // ISO timestamp
-  expiresAt?:  string | null;
-  auditHash?:  string | null;   // SHA-256 chain hash for GDPR
-  metadata?:   Record<string, unknown>;
+  id:                 string;
+  agent_id:           string;
+  content:            string;
+  memory_type:        MemoryType;
+  confidence:         number;          // 0.0 – 1.0 (engram calls this confidence, not importance)
+  tier:               "hot" | "warm" | "cold" | "archive";
+  anchor_external_id?: string | null;  // the subjectId / userId we pass in
+  source:             "user" | "agent" | "tool" | "derived";
+  created_at:         string;          // ISO
+  updated_at:         string;
+  metadata?:          Record<string, unknown>;
 }
 
 export interface StoreMemoryInput {
-  agentId:    string;           // e.g. "sophia_user123"
-  subjectId:  string;           // userId — for GDPR subject erasure
-  content:    string;
-  memoryType: MemoryType;
-  importance?: number;          // default 0.7
-  tags?:       string[];
-  ttlDays?:    number;          // omit = permanent
-  metadata?:   Record<string, unknown>;
+  agentId:            string;          // sophia_${userId} or pipeline_${type}
+  content:            string;
+  memoryType:         MemoryType;
+  /** userId — used as anchor_external_id for per-subject GDPR erasure */
+  subjectExternalId?: string;
+  /** 0.0–1.0, default 0.8 */
+  confidence?:        number;
+  source?:            "user" | "agent" | "tool" | "derived";
+  metadata?:          Record<string, unknown>;
 }
 
 export interface RecallInput {
-  agentId:    string;
-  subjectId:  string;
-  query:      string;           // semantic similarity query
-  memoryType?: MemoryType;
-  limit?:      number;          // default 10
-  minImportance?: number;       // filter by importance threshold
-}
-
-export interface EraseResult {
-  ok:             boolean;
-  memoriesErased: number;
-  receiptHash:    string;       // cryptographic erasure receipt (GDPR Art.17)
-  erasedAt:       string;
+  agentId:            string;
+  query:              string;
+  subjectExternalId?: string;          // filter to one user's memories
+  memoryType?:        MemoryType;
+  limit?:             number;          // default 10
+  minConfidence?:     number;          // default 0.3
 }
 
 export interface AuditVerifyResult {
   ok:      boolean;
   valid:   boolean;
-  chainId: string;
-  errors?: string[];
+  error?:  string;
 }
 
 export interface EngramHealthResult {
   ok:        boolean;
   status:    "healthy" | "degraded" | "unreachable";
   latencyMs?: number;
-  version?:   string;
-  error?:     string;
+  error?:    string;
 }
 
-// ─── Internal fetch helper ────────────────────────────────────────────────────
+// ─── Internal fetch ───────────────────────────────────────────────────────────
 
 async function engramFetch<T>(
   path: string,
   options: RequestInit = {},
-  timeoutMs = 5000,
+  timeoutMs = 6000,
 ): Promise<T | null> {
-  if (!BASE_URL || !API_KEY) {
-    // Engram not configured — silent fallback
-    return null;
-  }
+  if (!BASE_URL || !API_KEY) return null;   // not configured — silent
 
   try {
     const res = await fetch(`${BASE_URL}${path}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${API_KEY}`,
-        ...(options.headers as Record<string, string> ?? {}),
+        Authorization:  `Bearer ${API_KEY}`,
+        ...((options.headers ?? {}) as Record<string, string>),
       },
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -104,9 +105,8 @@ async function engramFetch<T>(
       return null;
     }
 
-    return await res.json() as T;
+    return (await res.json()) as T;
   } catch (err: any) {
-    // timeout, network error, DNS failure — fail silently
     if (err?.name !== "AbortError") {
       console.warn(`[Engram] ${path} unreachable:`, err?.message ?? err);
     }
@@ -117,76 +117,64 @@ async function engramFetch<T>(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const EngramClient = {
+
   /**
-   * Store a single memory for an agent+subject pair.
-   * Returns the stored memory or null on failure.
+   * Register an agent by external_id. Idempotent — safe to call on every
+   * Sophia session start. Returns the agent UUID or null.
    */
-  async store(input: StoreMemoryInput): Promise<EngramMemory | null> {
-    return engramFetch<EngramMemory>("/v1/memories/store", {
+  async ensureAgent(externalId: string, name: string): Promise<string | null> {
+    const res = await engramFetch<{ id: string }>("/v1/agents", {
       method: "POST",
-      body: JSON.stringify({
-        agent_id:    input.agentId,
-        subject_id:  input.subjectId,
-        content:     input.content,
-        memory_type: input.memoryType,
-        importance:  input.importance ?? 0.7,
-        tags:        input.tags ?? [],
-        ttl_days:    input.ttlDays ?? null,
-        metadata:    input.metadata ?? {},
-      }),
+      body: JSON.stringify({ external_id: externalId, name }),
     });
+    return res?.id ?? null;
   },
 
   /**
-   * Batch store multiple memories in one request.
-   * Returns count stored or 0 on failure.
+   * Store a single memory. Returns the created memory or null on failure.
    */
-  async storeBatch(inputs: StoreMemoryInput[]): Promise<number> {
-    if (inputs.length === 0) return 0;
-    const res = await engramFetch<{ stored: number }>("/v1/memories/store/batch", {
+  async store(input: StoreMemoryInput): Promise<EngramMemory | null> {
+    return engramFetch<EngramMemory>("/v1/memories", {
       method: "POST",
       body: JSON.stringify({
-        memories: inputs.map((m) => ({
-          agent_id:    m.agentId,
-          subject_id:  m.subjectId,
-          content:     m.content,
-          memory_type: m.memoryType,
-          importance:  m.importance ?? 0.7,
-          tags:        m.tags ?? [],
-          ttl_days:    m.ttlDays ?? null,
-          metadata:    m.metadata ?? {},
-        })),
+        agent_id:            input.agentId,
+        content:             input.content,
+        memory_type:         input.memoryType,
+        confidence:          input.confidence ?? 0.8,
+        source:              input.source ?? "agent",
+        anchor_external_id:  input.subjectExternalId ?? null,
+        metadata:            input.metadata ?? {},
       }),
     });
-    return res?.stored ?? 0;
   },
 
   /**
    * Semantic recall — returns top-k memories relevant to query.
-   * Falls back to [] on failure (agents degrade gracefully to DB context).
+   * Returns [] on failure (agents degrade to DB context gracefully).
    */
   async recall(input: RecallInput): Promise<EngramMemory[]> {
-    const res = await engramFetch<{ memories: EngramMemory[] }>("/v1/memories/recall", {
-      method: "POST",
-      body: JSON.stringify({
-        agent_id:       input.agentId,
-        subject_id:     input.subjectId,
-        query:          input.query,
-        memory_type:    input.memoryType ?? null,
-        limit:          input.limit ?? 10,
-        min_importance: input.minImportance ?? 0.3,
-      }),
+    const params = new URLSearchParams({
+      agent_id: input.agentId,
+      query:    input.query,
+      limit:    String(input.limit ?? 10),
     });
+    if (input.subjectExternalId) params.set("anchor_external_id", input.subjectExternalId);
+    if (input.memoryType)        params.set("memory_type", input.memoryType);
+    if (input.minConfidence)     params.set("min_confidence", String(input.minConfidence));
+
+    const res = await engramFetch<{ memories: EngramMemory[] }>(
+      `/v1/memories/recall?${params.toString()}`,
+    );
     return res?.memories ?? [];
   },
 
   /**
-   * List all memories for a subject (for admin inspection / GDPR).
-   * Returns [] on failure.
+   * List all memories for an agent (optionally filtered to one subject).
    */
-  async listBySubject(subjectId: string, agentPrefix?: string): Promise<EngramMemory[]> {
-    const params = new URLSearchParams({ subject_id: subjectId });
-    if (agentPrefix) params.set("agent_prefix", agentPrefix);
+  async listByAgent(agentId: string, subjectExternalId?: string): Promise<EngramMemory[]> {
+    const params = new URLSearchParams({ agent_id: agentId });
+    if (subjectExternalId) params.set("anchor_external_id", subjectExternalId);
+
     const res = await engramFetch<{ memories: EngramMemory[] }>(
       `/v1/memories?${params.toString()}`,
     );
@@ -194,25 +182,42 @@ export const EngramClient = {
   },
 
   /**
-   * GDPR Art.17 subject erasure — deletes ALL memories for a subjectId
-   * across ALL agents. Returns a cryptographic erasure receipt.
+   * GDPR Art.17 subject erasure — crypto-shreds ALL memories for an anchor.
+   * anchorId must be the engram anchor UUID (not external_id).
+   * Returns true on success.
    */
-  async eraseSubject(subjectId: string): Promise<EraseResult | null> {
-    return engramFetch<EraseResult>("/v1/subjects/erase", {
-      method: "DELETE",
-      body: JSON.stringify({ subject_id: subjectId }),
-    }, 15_000); // longer timeout for full erasure
+  async eraseSubject(anchorId: string): Promise<boolean> {
+    const res = await engramFetch<{ ok: boolean }>(
+      `/v1/anchors/${anchorId}?purge=true`,
+      { method: "DELETE" },
+      15_000,   // longer timeout for full crypto-shred
+    );
+    return res?.ok === true;
   },
 
   /**
-   * Verify the audit chain for a subject (GDPR integrity check).
+   * Look up an anchor UUID by external_id (userId).
+   * Needed before eraseSubject — returns null if not found.
    */
-  async verifyAudit(subjectId: string): Promise<AuditVerifyResult | null> {
-    return engramFetch<AuditVerifyResult>(`/v1/audit/verify?subject_id=${subjectId}`);
+  async findAnchor(externalId: string): Promise<string | null> {
+    const res = await engramFetch<{ anchors: { id: string; external_id: string }[] }>(
+      `/v1/anchors?external_id=${encodeURIComponent(externalId)}`,
+    );
+    return res?.anchors?.[0]?.id ?? null;
+  },
+
+  /**
+   * Verify the tamper-evident SHA-256 audit chain for the whole tenant.
+   */
+  async verifyAudit(): Promise<AuditVerifyResult | null> {
+    const res = await engramFetch<{ valid: boolean; error?: string }>("/v1/audit/verify");
+    if (!res) return null;
+    return { ok: true, valid: res.valid, error: res.error };
   },
 
   /**
    * Health check — call on startup and from admin panel.
+   * NOTE: engram health is at /health, NOT /v1/health.
    */
   async health(): Promise<EngramHealthResult> {
     const t0 = Date.now();
@@ -221,23 +226,28 @@ export const EngramClient = {
       return { ok: false, status: "unreachable", error: "ENGRAM_BASE_URL or ENGRAM_API_KEY not set" };
     }
 
-    const res = await engramFetch<{ status: string; version?: string }>("/v1/health", {}, 3000);
+    const res = await engramFetch<{ status?: string; message?: string }>("/health", {}, 4000);
     const latencyMs = Date.now() - t0;
 
     if (!res) {
-      return { ok: false, status: "unreachable", latencyMs, error: "No response from engram instance" };
+      return { ok: false, status: "unreachable", latencyMs, error: "No response from engram" };
     }
 
+    const isHealthy = res.status === "ok" || res.message === "ok" || res.status === "healthy";
     return {
-      ok:        res.status === "ok" || res.status === "healthy",
-      status:    res.status === "ok" || res.status === "healthy" ? "healthy" : "degraded",
+      ok:        isHealthy,
+      status:    isHealthy ? "healthy" : "degraded",
       latencyMs,
-      version:   res.version,
     };
   },
 
-  /** True if engram is configured (env vars present). */
+  /** True if env vars are present. */
   isConfigured(): boolean {
     return Boolean(BASE_URL && API_KEY);
+  },
+
+  /** Default agent ID from env (Sophia). */
+  defaultAgentId(): string {
+    return AGENT_ID;
   },
 };

@@ -1,9 +1,10 @@
 /**
  * Memory Admin Routes — Ghaafeedi Music
  *
- * GET  /api/memory/health           — engram health check
- * GET  /api/memory/:userId          — view all memories for a user (admin)
- * DELETE /api/memory/:userId        — GDPR erasure for a user (admin)
+ * GET    /api/memory/health           — engram health check (admin)
+ * GET    /api/memory/:userId          — view all memories for a user (admin)
+ * DELETE /api/memory/:userId          — GDPR erasure for a user (admin)
+ * GET    /api/memory/:userId/audit    — audit chain verify (admin)
  *
  * All routes require admin role.
  */
@@ -23,7 +24,8 @@ const app = new Hono<HonoEnv>();
 async function requireAdmin(c: any): Promise<string | null> {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.user) return null;
-  const [profile] = await db.select()
+  const [profile] = await db
+    .select()
     .from(profiles)
     .where(eq(profiles.userId, session.user.id))
     .limit(1) as any[];
@@ -39,9 +41,9 @@ app.get("/health", async (c) => {
 
   const result = await EngramClient.health();
   return c.json({
-    configured: EngramClient.isConfigured(),
-    ...result,
+    configured:    EngramClient.isConfigured(),
     engramBaseUrl: process.env.ENGRAM_BASE_URL ? "set" : "not set",
+    ...result,
   });
 });
 
@@ -58,25 +60,18 @@ app.get("/:userId", async (c) => {
     return c.json({ error: "Engram not configured", configured: false }, 503);
   }
 
-  // Pull all memories across all agent namespaces for this user
-  const memories = await EngramClient.listBySubject(userId);
-
-  // Group by agentId for readability
-  const grouped: Record<string, typeof memories> = {};
-  for (const m of memories) {
-    if (!grouped[m.agentId]) grouped[m.agentId] = [];
-    grouped[m.agentId].push(m);
-  }
+  // Pull all memories for this user across Sophia + pipeline agents
+  const sophiaAgent = `sophia_${userId}`;
+  const memories = await EngramClient.listByAgent(sophiaAgent, userId);
 
   return c.json({
     userId,
     totalMemories: memories.length,
-    agents: Object.keys(grouped),
-    grouped,
+    memories,
   });
 });
 
-// ─── DELETE /api/memory/:userId (admin GDPR erasure) ─────────────────────────
+// ─── DELETE /api/memory/:userId ───────────────────────────────────────────────
 
 app.delete("/:userId", async (c) => {
   const adminId = await requireAdmin(c);
@@ -89,18 +84,21 @@ app.delete("/:userId", async (c) => {
     return c.json({ error: "Engram not configured — nothing to erase" }, 503);
   }
 
-  const result = await EngramClient.eraseSubject(userId);
-  if (!result) {
+  // Resolve engram anchor UUID from external userId
+  const anchorId = await EngramClient.findAnchor(userId);
+  if (!anchorId) {
+    return c.json({ ok: true, userId, note: "No engram anchor found — nothing to erase" });
+  }
+
+  const ok = await EngramClient.eraseSubject(anchorId);
+  if (!ok) {
     return c.json({ error: "Erasure failed or engram unreachable" }, 500);
   }
 
   return c.json({
-    ok:             true,
+    ok:     true,
     userId,
-    memoriesErased: result.memoriesErased,
-    receiptHash:    result.receiptHash,
-    erasedAt:       result.erasedAt,
-    note:           "GDPR Art.17 cryptographic erasure receipt stored. Erasure is irreversible.",
+    note:   "GDPR Art.17 cryptographic erasure complete. Content is unrecoverable. Audit record retained.",
   });
 });
 
@@ -110,17 +108,17 @@ app.get("/:userId/audit", async (c) => {
   const adminId = await requireAdmin(c);
   if (!adminId) return c.json({ error: "Forbidden" }, 403);
 
-  const { userId } = c.req.param();
-
   if (!EngramClient.isConfigured()) {
     return c.json({ error: "Engram not configured" }, 503);
   }
 
-  const result = await EngramClient.verifyAudit(userId);
+  // Audit verify is tenant-wide (not per-user) in engram's API
+  const result = await EngramClient.verifyAudit();
   if (!result) {
     return c.json({ error: "Audit verification failed or engram unreachable" }, 500);
   }
 
+  const { userId } = c.req.param();
   return c.json({ userId, ...result });
 });
 
