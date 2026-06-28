@@ -215,7 +215,7 @@ export default function AdminOverview() {
   const [error, setError] = useState("");
   const [engramHealth, setEngramHealth] = useState<{
     ok: boolean; status: string; latencyMs: number | null; configured: boolean;
-    namespaces?: { sophia: number; production: number };
+    totalMemories?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -350,7 +350,7 @@ export default function AdminOverview() {
           value={engramHealth?.ok ? "LIVE" : engramHealth === null ? "…" : "DOWN"}
           sub={
             engramHealth?.ok
-              ? `${engramHealth.latencyMs ?? "—"}ms · ${(engramHealth.namespaces?.sophia ?? 0) + (engramHealth.namespaces?.production ?? 0)} memories`
+              ? `${engramHealth.latencyMs ?? "—"}ms · ${engramHealth.totalMemories ?? 0} memories`
               : engramHealth?.configured === false ? "Not configured" : "Unreachable"
           }
           accent={engramHealth?.ok ? GREEN : engramHealth === null ? AMBER : RED}
@@ -491,7 +491,7 @@ export default function AdminOverview() {
             }
             detail={
               engramHealth?.ok
-                ? `${engramHealth.latencyMs}ms · ${(engramHealth.namespaces?.sophia ?? 0) + (engramHealth.namespaces?.production ?? 0)} mem`
+                ? `${engramHealth.latencyMs}ms · ${engramHealth.totalMemories ?? 0} mem`
                 : engramHealth?.configured === false ? "not configured" : "check logs"
             }
           />
