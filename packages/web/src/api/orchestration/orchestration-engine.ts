@@ -26,6 +26,7 @@ import type { ShotList } from "./schemas/shot-list.schema";
 import type { ProductionTier } from "./schemas/production-bible.schema";
 import { deliverProduction, saveStyleEmbedding } from "./delivery";
 import { sendLipSyncCompleteEmail, sendLipSyncFailedEmail } from "../lib/lipsync-email";
+import { persistJobOutcome } from "../../lib/pipeline-memory";
 
 // --- Types ------------------------------------------------------------------
 
@@ -884,6 +885,19 @@ print(json.dumps(out))
         customerName:  job.inputPayload?.customerName as string ?? "",
       }).catch(() => {});
 
+      // ── Engram pipeline memory: persist success outcome (fire-and-forget) ────
+      persistJobOutcome({
+        jobId:           job.jobId,
+        productType:     (job as any).productType ?? job.jobType,
+        jobType:         job.jobType,
+        provider:        actualProvider,
+        tier:            job.tier,
+        success:         true,
+        durationSeconds: Math.round(durationMs / 1000),
+        actualCostCents: JOB_TYPE_COST_CENTS[job.jobType] ?? 10,
+      }).catch(() => {});
+      // ─────────────────────────────────────────────────────────────────────────
+
       if (webhookUrl) {
         this._fireWebhook(webhookUrl, { jobId: job.jobId, status: "complete", outputPayload }).catch(console.error);
       }
@@ -949,6 +963,20 @@ print(json.dumps(out))
         willRetry:   attempt < (job.maxAttempts ?? 3),
         customerEmail: job.inputPayload?.customerEmail as string ?? "",
       }).catch(() => {});
+
+      // ── Engram pipeline memory: persist failure outcome (fire-and-forget) ────
+      persistJobOutcome({
+        jobId:           job.jobId,
+        productType:     (job as any).productType ?? job.jobType,
+        jobType:         job.jobType,
+        provider:        actualProvider,
+        tier:            job.tier,
+        success:         false,
+        durationSeconds: Math.round((Date.now() - startMs) / 1000),
+        actualCostCents: 0,
+        errorMessage:    lastError,
+      }).catch(() => {});
+      // ─────────────────────────────────────────────────────────────────────────
 
       if (webhookUrl) {
         this._fireWebhook(webhookUrl, { jobId: job.jobId, status: "failed", error: lastError }).catch(console.error);

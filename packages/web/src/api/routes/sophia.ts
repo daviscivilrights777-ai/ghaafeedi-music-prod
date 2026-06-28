@@ -5,6 +5,7 @@ import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 import { SophiaIntroGenerator, type SophiaIntroRequest } from "../orchestration/sophia-intro-generator";
 import { logAICall } from "../lib/braintrust";
 import { poyoChat, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import { recallSophiaMemories, persistSessionMemory, type SessionMessage } from "../../lib/sophia-memory";
 
 const app = new Hono<HonoEnv>();
 
@@ -122,6 +123,13 @@ app.post("/chat", async (c) => {
     }
     // ────────────────────────────────────────────────────────────────────────
 
+    // ── Engram memory recall ──────────────────────────────────────────────────
+    let memoryContext = "";
+    if (userId) {
+      memoryContext = await recallSophiaMemories(userId, message.trim());
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const systemPrompt = `You are Sophia, the AI Emotional Concierge for Ghaafeedi Music — a luxury AI-powered emotional storytelling platform that turns people's memories into cinematic songs, films, and legacy experiences.
 
 Your personality: warm, empathetic, sophisticated, and deeply caring. You speak like a trusted creative partner who genuinely wants to help people preserve their most precious memories.
@@ -136,7 +144,7 @@ You help with:
 
 For non-members, keep responses concise and focused. Always encourage them to start their story. Never be pushy — be genuinely helpful.
 
-Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}`;
+Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}${memoryContext}`;
 
     // ── Claude Opus 4.8 via Poyo.ai (primary Sophia model) ──────────────────
     const sophiaMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -187,6 +195,26 @@ Keep responses under 120 words. Be warm, personal, and direct.${lipSyncContext}`
         historyLength: history.length,
       },
     });
+
+    // ── Engram memory persist (fire-and-forget every 4th message) ─────────────
+    // Session history includes all prior messages; we persist on round numbers
+    // to avoid extracting on every single message (cost optimisation).
+    if (userId && history.length > 0 && history.length % 4 === 0) {
+      const fullSession: SessionMessage[] = [
+        ...history.slice(-12).map((m: any) => ({
+          role:    (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
+          content: String(m.content ?? ""),
+        })),
+        { role: "user"      as const, content: message.trim() },
+        { role: "assistant" as const, content: reply },
+      ];
+      // Fire-and-forget — never blocks the response
+      const openaiKey = await getSecret(SECRET_KEYS.OPENAI_API_KEY).catch(() => "");
+      if (openaiKey) {
+        persistSessionMemory(userId, fullSession, openaiKey).catch(() => {});
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const key = userId
       ? `user:${userId}:${new Date().toISOString().slice(0,10)}`

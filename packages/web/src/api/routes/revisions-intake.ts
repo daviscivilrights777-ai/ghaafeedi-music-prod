@@ -24,6 +24,7 @@ import { eq, and, desc, count, sql } from "drizzle-orm";
 import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 import { poyoChatText, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import { recallRevisionPreferences, persistRevisionOutcome } from "../../lib/revision-memory";
 
 // ─── Customer Context Builder ──────────────────────────────────────────────────
 // Pulls everything Sophia needs to know about this customer + production
@@ -479,6 +480,13 @@ revisionsIntake.post("/sophia-analysis", async (c) => {
       maxRevisions,
     );
 
+    // ── Engram revision memory recall ─────────────────────────────────────────
+    const revisionMemoryContext = await recallRevisionPreferences(
+      session.user.id,
+      body.productSlug,
+    );
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Poyo.ai is primary — no key fetch needed (POYO_API_KEY in env)
 
     // ── Build emotional fingerprint summary ───────────────────────────────────
@@ -557,8 +565,9 @@ Original FAL.ai prompt you used: ${ctx.originalFalPrompt || "Not recorded — us
 Storyboard you wrote:
 ${storyboardSummary}
 
-═══ PRIOR REVISION HISTORY ═══
+═══ PRIOR REVISION HISTORY (from production database) ═══
 ${revisionHistory}
+${revisionMemoryContext}
 
 ═══ YOUR TASK ═══
 ${ctx.customerName} is not satisfied with ${body.revisionType === "both" ? "the song and video" : `the ${body.revisionType}`}.
@@ -633,6 +642,21 @@ Analyze everything you know about this customer and write the retake directive n
       const fallbackData = await fallbackRes.json() as { choices: Array<{ message: { content: string } }> };
       directive = JSON.parse(fallbackData.choices?.[0]?.message?.content ?? "{}");
     }
+
+    // ── Engram: persist revision outcome (fire-and-forget) ────────────────────
+    persistRevisionOutcome({
+      userId:         session.user.id,
+      orderId:        body.orderId,
+      productSlug:    body.productSlug,
+      revisionRound:  ctx.revisionRound,
+      customerNotes:  body.customerNotes || "",
+      directiveUsed:  directive?.director_note || "",
+      falPromptUsed:  directive?.revised_falPrompt || "",
+      moodAdjustment: directive?.mood_adjustment || "unchanged",
+      approved:       false, // will update to true when admin approves
+      emotionalDiag:  directive?.emotional_diagnosis || "",
+    }).catch(() => {});
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Return directive + the customer context so the frontend can
     // update Sophia's spoken script with personal references

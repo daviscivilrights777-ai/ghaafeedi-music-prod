@@ -23,6 +23,8 @@ import { sophiaMobileRoutes } from "./routes/sophia-mobile";
 import { didRoutes } from "./routes/did";
 import { revisionsIntake, adminRevisions } from "./routes/revisions-intake";
 import { characters } from "./routes/characters";
+import { memoryAdmin } from "./routes/memory";
+import { forgetRoutes } from "./routes/forget";
 
 const app = new Hono<HonoEnv>()
   .basePath('api')
@@ -55,7 +57,9 @@ const app = new Hono<HonoEnv>()
   .route("/did", didRoutes)
   .route("/revisions", revisionsIntake)
   .route("/admin/revisions", adminRevisions)
-  .route("/characters", characters);
+  .route("/characters", characters)
+  .route("/memory", memoryAdmin)
+  .route("/member/forget", forgetRoutes);
 
 export type AppType = typeof app;
 export default app;
