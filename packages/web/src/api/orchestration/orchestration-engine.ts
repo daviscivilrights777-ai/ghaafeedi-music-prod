@@ -19,6 +19,7 @@ import { aiJobs, user as userTable } from "../database/pg-schema";
 import { eq, sql } from "drizzle-orm";
 import type { QueueTier } from "./redis-client";
 import { n8nDispatcher } from "./n8n-dispatcher";
+import { persistCompletedDeliverable } from "../../lib/production-memory";
 import { PipelineOrchestrator, type PipelineStage } from "./pipeline-orchestrator";
 import type { StoryBible } from "./schemas/story-bible.schema";
 import type { ProductionBible } from "./schemas/production-bible.schema";
@@ -896,6 +897,30 @@ print(json.dumps(out))
         durationSeconds: Math.round(durationMs / 1000),
         actualCostCents: JOB_TYPE_COST_CENTS[job.jobType] ?? 10,
       }).catch(() => {});
+
+      // ── Engram production memory: persist deliverable URL per customer ────
+      const deliverableUrl = (outputPayload?.url ?? outputPayload?.audioUrl ?? outputPayload?.videoUrl) as string | undefined;
+      if (deliverableUrl && job.userId) {
+        const outputType = job.jobType.includes("video") || job.jobType.includes("clip")
+          ? "video"
+          : job.jobType.includes("song") || job.jobType.includes("music") || job.jobType.includes("audio")
+          ? "audio"
+          : job.jobType.includes("image") || job.jobType.includes("mood")
+          ? "image"
+          : job.jobType.includes("lyric")
+          ? "lyrics"
+          : "storyboard";
+
+        persistCompletedDeliverable({
+          userId:      job.userId,
+          orderId:     job.orderId ?? "unknown",
+          productType: (job as any).productType ?? job.jobType,
+          jobId:       job.jobId,
+          outputUrl:   deliverableUrl,
+          outputType,
+          durationSec: Math.round(durationMs / 1000),
+        }).catch(() => {});
+      }
       // ─────────────────────────────────────────────────────────────────────────
 
       if (webhookUrl) {

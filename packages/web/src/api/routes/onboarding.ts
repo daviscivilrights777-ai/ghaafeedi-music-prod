@@ -3,6 +3,11 @@ import type { HonoEnv } from "../hono-env";
 import { logAICall } from "../lib/braintrust";
 import { getSecret, SECRET_KEYS } from "../orchestration/secrets";
 import { poyoChatText, POYO_LLM } from "../orchestration/adapters/poyo.adapter";
+import {
+  persistEmotionalAnalysis,
+  persistSongCreation,
+  persistMoodImages,
+} from "../../lib/production-memory";
 
 // All 14 Ghaafeedi Music products + memberships for recommendation engine
 const GM_CATALOG = [
@@ -197,6 +202,18 @@ RULES:
         }));
       }
 
+      // ── Persist emotional analysis to Engram (fire-and-forget) ──
+      const userId = (c.get("user") as any)?.id ?? (c.req.header("x-user-id") ?? "anonymous");
+      persistEmotionalAnalysis({
+        userId,
+        storyText: storyText.slice(0, 2000),
+        emotionalFingerprint: analysis.emotionalFingerprint ?? [],
+        emotionalArc:         analysis.emotionalArc ?? "",
+        songTitle:            analysis.songTitle ?? "",
+        profileSummary:       analysis.profileSummary ?? "",
+        scores:               analysis.categories ?? [],
+      }).catch(() => {}); // never blocks response
+
       return c.json({ success: true, analysis }, 200);
     } catch (err: any) {
       // Return graceful fallback so S5 never hard-fails
@@ -328,6 +345,23 @@ RULES:
         // audioUrl stays null — frontend will show "preview generating" state
       }
 
+      // ── Persist song creation to Engram (fire-and-forget) ──
+      const songUserId = (c.get("user") as any)?.id ?? (c.req.header("x-user-id") ?? "anonymous");
+      persistSongCreation({
+        userId:      songUserId,
+        title:       songMeta.title,
+        genre:       songMeta.genre,
+        subgenre:    songMeta.subgenre,
+        bpm:         songMeta.bpm,
+        key:         songMeta.key,
+        mood:        songMeta.mood ?? [],
+        instruments: songMeta.instruments ?? [],
+        vocalStyle:  songMeta.vocalStyle,
+        lyrics:      songMeta.lyrics,
+        sunoPrompt:  songMeta.sunoPrompt,
+        audioUrl:    audioUrl ?? undefined,
+      }).catch(() => {}); // never blocks response
+
       return c.json({
         success: true,
         title: songMeta.title,
@@ -340,7 +374,7 @@ RULES:
         vocalStyle: songMeta.vocalStyle,
         lyrics: songMeta.lyrics,
         sunoPrompt: songMeta.sunoPrompt,
-        audioUrl,      // null if Sunor.cc not yet ready
+        audioUrl,      // null if Poyo.ai not yet ready
         audioReady: !!audioUrl,
       }, 200);
     } catch (err: any) {
@@ -532,6 +566,21 @@ RULES:
       }
 
       const results = await Promise.all(emotionSlots.map(e => generateOne(e)));
+
+      // ── Persist mood images to Engram (fire-and-forget) ──
+      const moodUserId = (c.get("user") as any)?.id ?? (c.req.header("x-user-id") ?? "anonymous");
+      const successImages = results.filter((r) => r.url);
+      if (successImages.length > 0) {
+        persistMoodImages({
+          userId:              moodUserId,
+          emotionalFingerprint: emotionSlots,
+          images: successImages.map((r) => ({
+            emotion:  r.emotion,
+            imageUrl: r.url ?? "",
+            prompt:   `Cinematic mood image for emotion: ${r.emotion}`,
+          })),
+        }).catch(() => {});
+      }
 
       return c.json({ success: true, images: results }, 200);
     } catch (err: any) {

@@ -13,6 +13,7 @@ import { OrchestrationEngine } from "../orchestration/orchestration-engine";
 import type { JobSubmissionRequest } from "../orchestration/orchestration-engine";
 import type { ProductType } from "../orchestration/entitlement-validator";
 import { db } from "../database/pg-client";
+import { persistDirectorShotList } from "../../lib/production-memory";
 
 // Raw SQL helper using pg Pool via drizzle client
 async function rawQuery(query: string, params: unknown[] = []): Promise<any[]> {
@@ -434,6 +435,26 @@ print(json.dumps(out))
     }
 
     const plan = JSON.parse(stdout.trim());
+
+    // ── Persist director shot list to Engram (fire-and-forget) ──
+    const directorUserId = (c.get("user") as any)?.id ?? "anonymous";
+    persistDirectorShotList({
+      userId:       directorUserId,
+      songTitle:    plan.song_title ?? "Untitled",
+      totalShots:   plan.total_shots ?? 0,
+      totalSeconds: plan.total_duration_seconds ?? 0,
+      shots: (plan.shots ?? []).map((s: any, i: number) => ({
+        shotNumber:    i + 1,
+        lyricsSection: s.lyrics_section ?? "",
+        cameraMove:    s.camera_move ?? "",
+        subject:       s.subject ?? "",
+        setting:       s.setting ?? "",
+        lighting:      s.lighting ?? "",
+        mood:          s.mood ?? "",
+        duration:      s.duration ?? 5,
+        sunoPrompt:    s.prompt ?? undefined,
+      })),
+    }).catch(() => {});
 
     return c.json({
       success: true,
