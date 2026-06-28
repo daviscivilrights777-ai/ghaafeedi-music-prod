@@ -29,7 +29,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Help Center",           href: "/contact" },
       { label: "AI Transparency",       href: "/trust" },
       { label: "Community Standards",   href: "/trust" },
-      { label: "Refund Policy",         href: "/legal/refund-policy" },
+      { label: "Refund Policy",         href: "/legal/refund-cancellation" },
       { label: "Revisions & Guarantee", href: "/revisions" },
       { label: "Why We're Different",   href: "/revisions#why-us" },
     ],
@@ -37,21 +37,22 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "LEGAL",
     links: [
-      { label: "Privacy Policy",    href: "/legal/privacy-policy" },
       { label: "Terms of Service",  href: "/legal/terms-of-service" },
-      { label: "Refund Policy",     href: "/legal/refund-policy" },
-      { label: "Voice Consent",     href: "/legal/voice-cloning-consent" },
-      { label: "Cookies Policy",    href: "/legal/cookie-policy" },
+      { label: "Privacy Policy",    href: "/legal/privacy-policy" },
+      { label: "Acceptable Use",    href: "/legal/acceptable-use-policy" },
+      { label: "DMCA Policy",       href: "/legal/dmca-policy" },
+      { label: "Refund & Cancel",   href: "/legal/refund-cancellation" },
+      { label: "Legal Center",      href: "/legal" },
     ],
   },
   {
     title: "MORE LEGAL",
     links: [
-      { label: "Data Protection",   href: "/legal/data-protection" },
-      { label: "Accessibility",     href: "/legal/accessibility" },
-      { label: "Copyright Policy",  href: "/legal/copyright-policy" },
-      { label: "AI Ethics",         href: "/legal/ai-ethics" },
-      { label: "Legal Center",      href: "/legal" },
+      { label: "Music & Video Rights",  href: "/legal/music-video-rights" },
+      { label: "COPPA Compliance",      href: "/legal/coppa-compliance" },
+      { label: "International Policy",  href: "/legal/international-policy" },
+      { label: "Music Rights Strategy", href: "/legal/music-rights-strategy" },
+      { label: "NDA & IP Assignment",   href: "/legal/nda-ip-assignment" },
     ],
   },
 ];
@@ -276,10 +277,10 @@ export function Footer() {
             {[
               { label: "Privacy Policy",    href: "/legal/privacy-policy" },
               { label: "Terms of Service",  href: "/legal/terms-of-service" },
-              { label: "Refund Policy",     href: "/legal/refund-policy" },
-              { label: "Voice Consent",     href: "/legal/voice-consent" },
-              { label: "Cookies",           href: "/legal/cookie-policy" },
-              { label: "Accessibility",     href: "/legal/accessibility" },
+              { label: "Acceptable Use",    href: "/legal/acceptable-use-policy" },
+              { label: "Refund & Cancel",   href: "/legal/refund-cancellation" },
+              { label: "DMCA",              href: "/legal/dmca-policy" },
+              { label: "Legal Center",      href: "/legal" },
             ].map(l => (
               <a key={l.label} href={l.href} style={{
                   fontSize: 11.5, color: "rgba(255,255,255,0.26)", fontFamily: "Inter, sans-serif",
