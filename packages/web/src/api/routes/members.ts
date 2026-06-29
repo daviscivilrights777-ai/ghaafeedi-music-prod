@@ -125,6 +125,32 @@ export const members = new Hono<HonoEnv>()
     }, 200);
   })
 
+  // ─── GET /api/members/consent-status ────────────────────────────────────
+  .get("/consent-status", requireAuth, async (c) => {
+    const user = c.get("user") as any;
+    const [profile] = await db
+      .select({ consentAcceptedAt: schema.profiles.consentAcceptedAt })
+      .from(schema.profiles)
+      .where(eq(schema.profiles.userId, user.id))
+      .limit(1);
+    return c.json({ consentAccepted: !!profile?.consentAcceptedAt, consentAcceptedAt: profile?.consentAcceptedAt ?? null });
+  })
+
+  // ─── POST /api/members/accept-consent ────────────────────────────────────
+  .post("/accept-consent", requireAuth, async (c) => {
+    const user = c.get("user") as any;
+    const now = new Date();
+    // Upsert: create profile row if it doesn't exist, update consent timestamp if it does
+    await db
+      .insert(schema.profiles)
+      .values({ userId: user.id, consentAcceptedAt: now, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({
+        target: schema.profiles.userId,
+        set: { consentAcceptedAt: now, updatedAt: now },
+      });
+    return c.json({ ok: true, consentAcceptedAt: now.toISOString() });
+  })
+
   // ─── GET /api/members/orders ─────────────────────────────────────────────
   .get("/orders", requireAuth, async (c) => {
     const user = c.get("user") as any;

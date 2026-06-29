@@ -2,7 +2,7 @@ import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
-import { useSession } from "../lib/authClient";
+import { useSession, getToken } from "../lib/authClient";
 import { AuthGateModal } from "../components/AuthGateModal";
 import { DodoPayments } from "dodopayments-checkout";
 
@@ -350,7 +350,7 @@ function S1MemberDropdown({
   );
 }
 
-function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext: () => void; sessionLoading?: boolean; isLoggedIn?: boolean; session?: any }) {
+function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }) {
   const [, setLocation] = useLocation();
 
   // Q1 — What brings you here today?
@@ -385,7 +385,6 @@ function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext:
   const userName = session?.user?.name?.split(" ")[0] ?? "there";
 
   const handleNext = () => {
-    if (sessionLoading) return;
     onNext();
   };
 
@@ -440,24 +439,9 @@ function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext:
         {/* Logo */}
         <GhaafeediLogo variant="page" />
 
-        {/* Right: Sign In or Member Dropdown */}
+        {/* Right: Sign Out only — user is always authenticated at S1 */}
         <div style={{ minWidth: 130, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
-          {isLoggedIn && session ? (
-            <S1MemberDropdown session={session} setLocation={setLocation} />
-          ) : (
-            <a href="/signin" style={{
-              fontFamily: "Inter, sans-serif", fontSize: 13,
-              color: "rgba(255,255,255,0.5)", textDecoration: "none",
-              letterSpacing: "0.01em", transition: "color 0.2s",
-              whiteSpace: "nowrap",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
-              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
-            >
-              <span className="s1new-signin-label">Already have an account? </span>
-              <span style={{ color: GOLD, fontWeight: 600 }}>Sign In</span>
-            </a>
-          )}
+          <S1MemberDropdown session={session} setLocation={setLocation} />
         </div>
       </header>
 
@@ -627,7 +611,7 @@ function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext:
           <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420, marginTop: 8 }}>
             <S1PrimaryBtn
               onClick={handleNext}
-              loading={!!sessionLoading}
+              loading={false}
               label="Start My Journey"
             />
             <S1SecondaryBtn
@@ -10039,6 +10023,211 @@ function S9CelebrationOverlay({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ─── Consent Gate Modal ───────────────────────────────────────────────────────
+// Shown to every new user before S1. They must accept all 3 before proceeding.
+function ConsentGateModal({ onAccept }: { onAccept: () => void }) {
+  const [tos, setTos] = React.useState(false);
+  const [privacy, setPrivacy] = React.useState(false);
+  const [age, setAge] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const allChecked = tos && privacy && age;
+
+  const handleAccept = async () => {
+    if (!allChecked) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const token = getToken();
+      const res = await fetch("/api/members/accept-consent", {
+        method: "POST",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Server error");
+      onAccept();
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setSubmitting(false);
+    }
+  };
+
+  const GOLD = "#D4AF37";
+  const GOLD2 = "#F0D060";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 99999,
+      background: "rgba(5,11,26,0.97)",
+      backdropFilter: "blur(24px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "20px",
+    }}>
+      {/* Subtle gold glow behind the card */}
+      <div style={{
+        position: "absolute", top: "50%", left: "50%",
+        transform: "translate(-50%,-50%)",
+        width: 600, height: 400,
+        background: "radial-gradient(ellipse, rgba(212,175,55,0.08) 0%, transparent 70%)",
+        pointerEvents: "none",
+      }} />
+
+      <div style={{
+        position: "relative", zIndex: 2,
+        width: "100%", maxWidth: 520,
+        background: "linear-gradient(160deg, rgba(11,23,54,0.98) 0%, rgba(5,11,26,0.99) 100%)",
+        border: "1px solid rgba(212,175,55,0.28)",
+        borderRadius: 20,
+        padding: "44px 44px 36px",
+        boxShadow: "0 0 60px rgba(212,175,55,0.08), 0 24px 64px rgba(0,0,0,0.7)",
+      }}>
+        {/* Logo mark */}
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 52, height: 52, borderRadius: "50%",
+            background: "rgba(212,175,55,0.10)",
+            border: "1px solid rgba(212,175,55,0.30)",
+            marginBottom: 16,
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill={GOLD} opacity="0.9"/>
+            </svg>
+          </div>
+          <h2 style={{
+            fontFamily: "Playfair Display, serif",
+            fontSize: 26, fontWeight: 800, lineHeight: 1.2,
+            background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            margin: "0 0 8px",
+          }}>Before You Begin</h2>
+          <p style={{
+            fontFamily: "Inter, sans-serif",
+            fontSize: 14, color: "rgba(255,255,255,0.50)", lineHeight: 1.6,
+            margin: 0,
+          }}>
+            Please review and accept our terms before entering your creative journey.
+          </p>
+        </div>
+
+        {/* Checkboxes */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 28 }}>
+          {[
+            {
+              checked: tos, set: setTos,
+              label: "I agree to the",
+              link: "/legal/terms-of-service",
+              linkText: "Terms of Service",
+              suffix: "",
+            },
+            {
+              checked: privacy, set: setPrivacy,
+              label: "I have read and accept the",
+              link: "/legal/privacy-policy",
+              linkText: "Privacy Policy",
+              suffix: "",
+            },
+            {
+              checked: age, set: setAge,
+              label: "I confirm I am",
+              link: null,
+              linkText: null,
+              suffix: " 18 years of age or older",
+            },
+          ].map((item, i) => (
+            <label key={i} onClick={() => item.set(!item.checked)} style={{
+              display: "flex", alignItems: "flex-start", gap: 14,
+              cursor: "pointer", padding: "14px 16px",
+              background: item.checked ? "rgba(212,175,55,0.07)" : "rgba(255,255,255,0.02)",
+              border: `1px solid ${item.checked ? "rgba(212,175,55,0.30)" : "rgba(255,255,255,0.08)"}`,
+              borderRadius: 10, transition: "all 0.2s",
+            }}>
+              {/* Custom checkbox */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  width: 20, height: 20, borderRadius: 5,
+                  border: `2px solid ${item.checked ? GOLD : "rgba(255,255,255,0.25)"}`,
+                  background: item.checked ? GOLD : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.2s", marginTop: 1,
+                  cursor: "pointer",
+                }}
+              >
+                {item.checked && (
+                  <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+                    <path d="M1 5L4.5 8.5L11 1.5" stroke="#050B1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              <span style={{
+                fontFamily: "Inter, sans-serif",
+                fontSize: 14, lineHeight: 1.5,
+                color: item.checked ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.55)",
+                transition: "color 0.2s",
+              }}
+              >
+                {item.label}{" "}
+                {item.link && (
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: GOLD, textDecoration: "underline", textUnderlineOffset: 2 }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {item.linkText}
+                  </a>
+                )}
+                {item.suffix}
+              </span>
+            </label>
+          ))}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <p style={{
+            fontFamily: "Inter, sans-serif", fontSize: 13,
+            color: "#F87171", marginBottom: 14, textAlign: "center",
+          }}>{error}</p>
+        )}
+
+        {/* CTA */}
+        <button
+          onClick={handleAccept}
+          disabled={!allChecked || submitting}
+          style={{
+            width: "100%", padding: "15px 24px",
+            background: allChecked
+              ? `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`
+              : "rgba(255,255,255,0.06)",
+            border: "none", borderRadius: 12,
+            fontFamily: "Inter, sans-serif", fontSize: 15, fontWeight: 700,
+            color: allChecked ? "#050B1A" : "rgba(255,255,255,0.25)",
+            cursor: allChecked && !submitting ? "pointer" : "not-allowed",
+            transition: "all 0.25s",
+            letterSpacing: "0.02em",
+            boxShadow: allChecked ? "0 4px 24px rgba(212,175,55,0.30)" : "none",
+          }}
+        >
+          {submitting ? "Confirming..." : allChecked ? "Accept & Begin My Journey →" : "Please accept all items above"}
+        </button>
+
+        <p style={{
+          fontFamily: "Inter, sans-serif", fontSize: 11,
+          color: "rgba(255,255,255,0.25)", textAlign: "center",
+          marginTop: 16, lineHeight: 1.5,
+        }}>
+          Your story is private. We never sell your data or train AI on your content without explicit consent.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GM_OB_STEP_KEY = "gm_ob_step";
@@ -10058,7 +10247,9 @@ export default function Onboarding() {
     return Math.min(Math.max(saved, 1), 9);
   });
 
-  const [authGateOpen, setAuthGateOpen] = useState(false);
+  // Consent gate — user must accept ToS/Privacy/Age18 before S1 renders
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(true); // true until we've checked
   const [memberData, setMemberData] = useState<{ memberId: string; status: string; tier: string; name: string } | null>(null);
 
   // ── Task 4: Autosave indicator ────────────────────────────────────────────
@@ -10104,9 +10295,15 @@ export default function Onboarding() {
     return () => window.removeEventListener("keydown", handler);
   }, [step]);
 
-  // On auth resolve: ensure member record + load member data
+  // On auth resolve: ensure member record + check consent + load member data
   useEffect(() => {
-    if (sessionLoading || !isAuthed) return;
+    // Not resolved yet — wait
+    if (sessionLoading) return;
+    // Not authenticated — hard redirect to sign-in
+    if (!isAuthed) {
+      setLocation("/signin?redirect=/onboarding");
+      return;
+    }
     // Resume saved step if we landed on step 1 (e.g. after Google OAuth redirect)
     const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || "1") || 1;
     if (saved > 1 && step === 1) {
@@ -10114,7 +10311,24 @@ export default function Onboarding() {
       setResumeBanner({ savedStep: saved });
     }
     // Ensure member record exists
-    fetch("/api/members/create", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
+    const _createToken = getToken();
+    fetch("/api/members/create", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(_createToken ? { Authorization: `Bearer ${_createToken}` } : {}) },
+    }).catch(() => {});
+    // Check consent status — gate S1 until accepted
+    const _consentToken = getToken();
+    fetch("/api/members/consent-status", {
+      credentials: "include",
+      headers: _consentToken ? { Authorization: `Bearer ${_consentToken}` } : {},
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { consentAccepted: boolean } | null) => {
+        if (data?.consentAccepted) setConsentAccepted(true);
+        setConsentLoading(false);
+      })
+      .catch(() => { setConsentLoading(false); });
     // Load member data for bar
     fetch("/api/members/me")
       .then(r => r.ok ? r.json() : null)
@@ -10132,8 +10346,6 @@ export default function Onboarding() {
   }, [sessionLoading, isAuthed]); // eslint-disable-line
 
   const next = () => {
-    if (step === 1 && sessionLoading) return;
-    if (step === 1 && !isAuthed) { setAuthGateOpen(true); return; }
     // Task 5: trigger S9 celebration on first arrival at step 9
     if (step === 8) {
       const alreadyCelebrated = sessionStorage.getItem(GM_S9_CELEBRATED_KEY);
@@ -10178,6 +10390,34 @@ export default function Onboarding() {
 
   const showBar = isAuthed && memberData;
   const barH = showBar ? MEMBER_BAR_H : 0;
+
+  // ── Auth/Consent loading spinner ──────────────────────────────────────────
+  if (sessionLoading || (isAuthed && consentLoading)) {
+    return (
+      <div style={{
+        position: "fixed", inset: 0,
+        background: "#050B1A",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: "50%",
+          border: "3px solid rgba(212,175,55,0.15)",
+          borderTopColor: "#D4AF37",
+          animation: "spin 0.8s linear infinite",
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // ── Consent gate — shown once, before S1 ──────────────────────────────────
+  if (isAuthed && !consentAccepted) {
+    return (
+      <ConsentGateModal
+        onAccept={() => setConsentAccepted(true)}
+      />
+    );
+  }
 
   return (
     <div style={{ background:"#06040f", position:"fixed", inset:0, overflow:"hidden" }}>
@@ -10371,11 +10611,7 @@ export default function Onboarding() {
           `}</style>
         </div>
       )}
-      <AuthGateModal
-        open={authGateOpen}
-        onClose={() => setAuthGateOpen(false)}
-        redirectTo="/onboarding"
-      />
+      {/* Auth gate removed — unauthenticated users are redirected to /signin before reaching this component */}
       {/* Step content area — offset by member bar height when bar is visible */}
       <div style={{
         position:"absolute",
@@ -10507,7 +10743,7 @@ export default function Onboarding() {
             transition={{ duration:0.35 }}
             style={{ height:"100%", overflow:"hidden", position:"absolute", inset:0 }}
           >
-            <Step1Welcome onNext={next} sessionLoading={sessionLoading} isLoggedIn={!!session?.user} session={session}/>
+            <Step1Welcome onNext={next} session={session}/>
           </motion.div>
         )}
         {step === 2 && (

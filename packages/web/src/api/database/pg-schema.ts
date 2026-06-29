@@ -86,6 +86,7 @@ export const profiles = pgTable("profiles", {
   mfaSecret:         text("mfa_secret"), // encrypted at app layer
   verified:          boolean("verified").default(false),
   ltvCents:          integer("ltv_cents").default(0),
+  consentAcceptedAt: timestamp("consent_accepted_at", { withTimezone: true }),
   createdAt:         timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
