@@ -53,6 +53,13 @@ export default function Index() {
   const [, setLocation] = useLocation();
   const { data: session, isPending: sessionLoading } = useSession();
 
+  // ── BOT/CRAWLER DETECTION: skip Sophia intro so Google can index homepage ───
+  useEffect(() => {
+    const ua = navigator.userAgent.toLowerCase();
+    const isBot = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|showyoubot|outbrain|pinterest|developers\.google\.com\/\+\/web\/snippet|lighthouse|pagespeed|headlesschrome|prerender|crawl|spider|bot\b/.test(ua);
+    if (isBot) setStage("home");
+  }, []);
+
   // ── ONE-WAY DOOR: logged-in users never see Sophia or homepage ──────────────
   useEffect(() => {
     if (!sessionLoading && session?.user) {
