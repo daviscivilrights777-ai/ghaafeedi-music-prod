@@ -60,14 +60,14 @@ export default function Index() {
     if (isBot) setStage("home");
   }, []);
 
-  // ── ONE-WAY DOOR: logged-in users never see Sophia or homepage ──────────────
+  // ── Logged-in users skip Sophia intro, land on homepage ─────────────────────
   useEffect(() => {
     if (!sessionLoading && session?.user) {
-      setLocation("/onboarding");
+      setStage("home"); // skip intro, show homepage — they navigate from there
     }
   }, [sessionLoading, session]);
 
-  // While checking auth, render nothing (avoid flash of Sophia for authed users)
+  // While checking auth, render nothing (avoid flash)
   if (sessionLoading) return <div style={{ background: "#06040f", position: "fixed", inset: 0 }} />;
 
   const handleComplete = (path?: "onboarding" | "products" | "home") => {
