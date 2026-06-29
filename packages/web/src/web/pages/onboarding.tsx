@@ -351,595 +351,808 @@ function S1MemberDropdown({
 }
 
 function Step1Welcome({ onNext, sessionLoading, isLoggedIn, session }: { onNext: () => void; sessionLoading?: boolean; isLoggedIn?: boolean; session?: any }) {
-  const [hoverStart, setHoverStart] = useState(false);
-  const [hoverDemo,  setHoverDemo]  = useState(false);
-  const [tickerIdx,  setTickerIdx]  = useState(0);
   const [, setLocation] = useLocation();
 
-  React.useEffect(() => {
-    const t = setInterval(() => setTickerIdx(i => (i + 1) % URGENCY_TICKER.length), 3000);
-    return () => clearInterval(t);
-  }, []);
+  // Q1 — What brings you here today?
+  const [q1, setQ1] = React.useState<string | null>("A memory I need to preserve");
+  // Q2 — What emotion should this carry?
+  const [q2, setQ2] = React.useState<string | null>("Nostalgic & tender");
+  // Q3 — Who is this for?
+  const [q3, setQ3] = React.useState<string | null>(null);
+
+  // Sophia dynamic reaction text per Q1 selection
+  const Q1_REACTIONS: Record<string, string> = {
+    "A memory I need to preserve": "Preserving a memory — there's something sacred about that. You're in exactly the right place.",
+    "A love story": "A love story worth telling. I'll help you capture every feeling in music and film.",
+    "Healing a relationship": "Healing takes courage. Let's create something that speaks what words alone can't say.",
+    "Celebrating a milestone": "Milestones deserve to be remembered forever. Let's make it cinematic.",
+    "Honoring someone I've lost": "Loss is love with nowhere to go. We'll give it somewhere beautiful to live.",
+    "Creating something for myself": "This one's for you. No one else needs to understand it — just feel it.",
+  };
+
+  const Q3_REACTIONS: Record<string, string> = {
+    "Myself": "Just for you. Something deeply personal — only you will know the full weight of it.",
+    "My partner": "A love letter in song and film. This will mean everything to them.",
+    "My family": "A memory, felt nostalgically — made for your family. That's a legacy. Let me ask you one more thing before we choose your format.",
+    "Someone I've lost": "For them. For the love that never fades, only transforms.",
+    "A friend or group": "A gift they'll never forget. Something that says everything you feel.",
+    "The world — I want to share it": "A story for the world. Let's make it resonate with everyone who hears it.",
+  };
+
+  const sophiaReaction1 = q1 ? Q1_REACTIONS[q1] || Q1_REACTIONS["A memory I need to preserve"] : null;
+  const sophiaReaction3 = q3 ? Q3_REACTIONS[q3] || null : null;
+
+  const userName = session?.user?.name?.split(" ")[0] ?? "there";
+
+  const handleNext = () => {
+    if (sessionLoading) return;
+    onNext();
+  };
 
   return (
-    <div className="ob-step1-root" style={{
-      position:"relative", width:"100%", height:"100%",
-      minHeight:"100%", overflow:"hidden",
-      background:`linear-gradient(160deg, #06040f 0%, #0a0718 35%, #0d0a22 65%, #070510 100%)`,
-      display:"flex", flexDirection:"column",
-    }}>
+    <div
+      style={{
+        position: "relative", width: "100%", height: "100%", minHeight: "100%",
+        overflow: "hidden", display: "flex", flexDirection: "column",
+        background: "#050B1A",
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      {/* Stars */}
       <Stars />
 
-      {/* ── NEBULA / ATMOSPHERE LAYERS (matches Figma purple-gold cosmic bg) ── */}
-
-      {/* Layer 1: deep purple nebula — desktop anchored center-right, mobile spans full height */}
-      <div className="ob-nebula-1" style={{
-        position:"absolute", inset:0, zIndex:1, pointerEvents:"none",
-        background:`
-          radial-gradient(ellipse 70% 80% at 68% 52%, rgba(72,28,140,0.32) 0%, rgba(50,15,100,0.16) 40%, transparent 70%),
-          radial-gradient(ellipse 45% 55% at 80% 35%, rgba(90,30,160,0.20) 0%, transparent 55%),
-          radial-gradient(ellipse 55% 65% at 55% 65%, rgba(60,20,120,0.18) 0%, transparent 60%)
+      {/* Nebula background */}
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 70% 80% at 68% 52%, rgba(72,28,140,0.30) 0%, transparent 70%),
+          radial-gradient(ellipse 42% 55% at 72% 54%, rgba(212,175,55,0.16) 0%, transparent 70%),
+          radial-gradient(ellipse 30% 40% at 5% 45%, rgba(20,80,120,0.18) 0%, transparent 60%)
         `,
-      }}/>
-
-      {/* Layer 2: warm gold halo around portal zone */}
-      <div className="ob-nebula-2" style={{
-        position:"absolute", inset:0, zIndex:1, pointerEvents:"none",
-        background:`
-          radial-gradient(ellipse 42% 55% at 72% 54%, rgba(212,175,55,0.18) 0%, rgba(180,130,20,0.06) 45%, transparent 70%),
-          radial-gradient(ellipse 28% 35% at 65% 80%, rgba(212,175,55,0.12) 0%, transparent 55%)
-        `,
-      }}/>
-
-      {/* Layer 3: teal/cyan aurora — left edge */}
-      <div className="ob-nebula-3" style={{
-        position:"absolute", inset:0, zIndex:1, pointerEvents:"none",
-        background:`
-          radial-gradient(ellipse 30% 40% at 5% 45%, rgba(20,80,120,0.20) 0%, transparent 60%),
-          radial-gradient(ellipse 20% 30% at 30% 85%, rgba(15,60,100,0.14) 0%, transparent 55%)
-        `,
-      }}/>
-
-      {/* Layer 4: left vignette — desktop only (mobile override removes top suppression) */}
-      <div className="ob-vignette" style={{
-        position:"absolute", inset:0, zIndex:1, pointerEvents:"none",
-        background:`
-          radial-gradient(ellipse 50% 70% at 0% 50%, rgba(4,2,12,0.72) 0%, transparent 65%),
-          radial-gradient(ellipse 40% 30% at 50% 0%, rgba(4,2,12,0.50) 0%, transparent 55%),
-          radial-gradient(ellipse 40% 25% at 50% 100%, rgba(4,2,12,0.40) 0%, transparent 55%)
-        `,
-      }}/>
+      }} />
 
       {/* ── HEADER ── */}
-      <header className="ob-header" style={{
-        position:"relative", zIndex:10,
-        width:"100%", height:64,
-        display:"flex", alignItems:"center", justifyContent:"space-between",
-        padding:"0 clamp(20px,4vw,60px)",
-        flexShrink:0,
-      }}>
-        {/* 01 WELCOME */}
-        <div className="ob-header-step" style={{ display:"flex", alignItems:"center", gap:10, minWidth:130 }}>
+      <header
+        className="s1new-header"
+        style={{
+          position: "relative", zIndex: 10,
+          width: "100%", height: 64, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 clamp(18px,4vw,60px)",
+          maxWidth: 1440, margin: "0 auto",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* Step indicator */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 130 }} className="s1new-step-indicator">
           <span style={{
-            fontFamily:"Playfair Display, serif",
-            fontSize:13, fontWeight:700, color:GOLD,
-            letterSpacing:"0.14em",
+            fontFamily: "Playfair Display, serif", fontSize: 13, fontWeight: 700,
+            color: GOLD, letterSpacing: "0.14em",
           }}>01</span>
-          <div style={{ width:22, height:1, background:`rgba(212,175,55,0.4)` }}/>
+          <div style={{ width: 22, height: 1, background: "rgba(212,175,55,0.4)" }} />
           <span style={{
-            fontFamily:"Inter, sans-serif",
-            fontSize:11, letterSpacing:"0.22em",
-            color:"rgba(255,255,255,0.4)", textTransform:"uppercase",
+            fontFamily: "Inter, sans-serif", fontSize: 11,
+            letterSpacing: "0.22em", color: "rgba(255,255,255,0.4)",
+            textTransform: "uppercase",
           }}>WELCOME</span>
         </div>
 
         {/* Logo */}
-        <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"default" }}>
-          <GhaafeediLogo variant="page" />
-        </div>
+        <GhaafeediLogo variant="page" />
 
-        {/* Right: Sign In (logged-out) OR MemberDropdown (logged-in) */}
-        <div className="ob-header-signin" style={{ minWidth:130, display:"flex", justifyContent:"flex-end", alignItems:"center" }}>
+        {/* Right: Sign In or Member Dropdown */}
+        <div style={{ minWidth: 130, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
           {isLoggedIn && session ? (
             <S1MemberDropdown session={session} setLocation={setLocation} />
-          ) : !isLoggedIn && (
+          ) : (
             <a href="/signin" style={{
-              fontFamily:"Inter, sans-serif", fontSize:13,
-              color:"rgba(255,255,255,0.5)", textDecoration:"none",
-              letterSpacing:"0.01em", transition:"color 0.2s",
-              whiteSpace:"nowrap",
+              fontFamily: "Inter, sans-serif", fontSize: 13,
+              color: "rgba(255,255,255,0.5)", textDecoration: "none",
+              letterSpacing: "0.01em", transition: "color 0.2s",
+              whiteSpace: "nowrap",
             }}
-              onMouseEnter={e=>(e.currentTarget.style.color=WHITE)}
-              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,0.5)")}
+              onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.5)")}
             >
-              <span className="ob-signin-label">Already have an account?{" "}</span>
-              <span style={{ color:GOLD, fontWeight:600 }}>Sign In</span>
+              <span className="s1new-signin-label">Already have an account? </span>
+              <span style={{ color: GOLD, fontWeight: 600 }}>Sign In</span>
             </a>
           )}
         </div>
       </header>
 
-      {/* ── HERO BODY ── */}
-      <div className="ob-hero-body" style={{
-        position:"relative", zIndex:5,
-        flex:1, display:"flex", alignItems:"stretch",
-        width:"100%", maxWidth:1440, margin:"0 auto",
-        padding:"0 clamp(20px,4vw,60px)",
-      }}>
-
-        {/* ── LEFT CONTENT ── */}
-        <motion.div
-          initial={{ opacity:0, x:-28 }}
-          animate={{ opacity:1, x:0 }}
-          transition={{ duration:0.65, ease:"easeOut" }}
-          className="ob-left"
+      {/* ── HERO SPLIT ── */}
+      <div
+        className="s1new-hero"
+        style={{
+          position: "relative", zIndex: 5,
+          display: "flex", alignItems: "stretch",
+          flex: 1, minHeight: 0,
+          width: "100%", maxWidth: 1440, margin: "0 auto",
+          padding: "0 clamp(18px,4vw,60px)",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* ── LEFT ── */}
+        <div
+          className="s1new-left"
           style={{
-            flex:"0 0 45%", maxWidth:600,
-            display:"flex", flexDirection:"column",
-            justifyContent:"center",
-            paddingRight:"clamp(20px,2.5vw,40px)",
+            flex: "0 0 52%", display: "flex", flexDirection: "column",
+            justifyContent: "center",
+            padding: "40px 40px 40px 0",
+            position: "relative", zIndex: 3,
+            overflowY: "auto",
           }}
         >
-          {/* Headline — ALL GOLD per Figma */}
-          <motion.h1
-            initial={{ opacity:0, y:22 }}
-            animate={{ opacity:1, y:0 }}
-            transition={{ delay:0.15, duration:0.65 }}
-            style={{
-              fontFamily:"Playfair Display, serif",
-              fontSize:"clamp(42px, 4.6vw, 74px)",
-              fontWeight:800, lineHeight:1.12,
-              margin:"0 0 24px",
-              letterSpacing:"-0.01em",
-              background:`linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 55%, ${GOLD} 100%)`,
-              WebkitBackgroundClip:"text",
-              WebkitTextFillColor:"transparent",
-              whiteSpace:"nowrap",
-            }}
-          >
-            Your Story.<br/>
-            Your Soundtrack.<br/>
-            Your Legacy.
-          </motion.h1>
-
-          {/* Description */}
-          <motion.p
-            initial={{ opacity:0, y:14 }}
-            animate={{ opacity:1, y:0 }}
-            transition={{ delay:0.28, duration:0.6 }}
-            style={{
-              fontFamily:"Inter, sans-serif",
-              fontSize:"clamp(15px,1.15vw,18px)",
-              lineHeight:1.7, color:"rgba(255,255,255,0.58)",
-              margin:"0 0 32px", maxWidth:480,
-            }}
-          >
-            Transform your memories, emotions, dreams and life experiences into
-            cinematic songs and videos.
-          </motion.p>
-
-          {/* Trust indicators — vertical stacked, icon + label/sub, per Figma */}
-          <motion.div
-            initial={{ opacity:0, y:10 }}
-            animate={{ opacity:1, y:0 }}
-            transition={{ delay:0.38, duration:0.55 }}
-            className="ob-trust-grid"
-            style={{
-              display:"grid",
-              gridTemplateColumns:"1fr 1fr",
-              gap:"16px 32px",
-              marginBottom:32,
-            }}
-          >
-            {TRUST_ITEMS.map((t, i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {/* Progress rail — 6 dots */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}>
+            {[0,1,2,3,4,5].map(i => (
+              <React.Fragment key={i}>
                 <div style={{
-                  width:38, height:38, borderRadius:10,
-                  background:"rgba(212,175,55,0.08)",
-                  border:"1px solid rgba(212,175,55,0.2)",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  flexShrink:0,
-                }}>
-                  {t.svg}
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                  <span style={{
-                    fontFamily:"Inter, sans-serif", fontSize:13,
-                    fontWeight:600, color:WHITE, lineHeight:1.2,
-                  }}>{t.label}</span>
-                  <span style={{
-                    fontFamily:"Inter, sans-serif", fontSize:11,
-                    color:"rgba(255,255,255,0.38)", lineHeight:1.2,
-                  }}>{t.sub}</span>
-                </div>
-              </div>
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: i === 0 ? GOLD : "rgba(255,255,255,0.15)",
+                  boxShadow: i === 0 ? `0 0 8px rgba(212,175,55,0.6)` : "none",
+                  transition: "all 0.3s",
+                }} />
+                {i < 5 && <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }} />}
+              </React.Fragment>
             ))}
-          </motion.div>
+          </div>
 
-          {/* CTA Buttons — full width, stacked vertically per Figma */}
-          <motion.div
-            initial={{ opacity:0, y:14 }}
-            animate={{ opacity:1, y:0 }}
-            transition={{ delay:0.5, duration:0.6 }}
-            className="ob-cta-stack"
-            style={{ display:"flex", flexDirection:"column", gap:14, maxWidth:400 }}
-          >
-            {/* Primary */}
-            <button
-              onClick={sessionLoading ? undefined : onNext}
-              onMouseEnter={()=>{ if (!sessionLoading) setHoverStart(true); }}
-              onMouseLeave={()=>setHoverStart(false)}
-              disabled={sessionLoading}
-              style={{
-                width:"100%", height:58,
-                borderRadius:10, border:"none",
-                background:sessionLoading
-                  ? "rgba(212,175,55,0.35)"
-                  : hoverStart
-                    ? `linear-gradient(135deg,${GOLD2} 0%,${GOLD} 100%)`
-                    : `linear-gradient(135deg,${GOLD} 0%,#c9a020 100%)`,
-                color:BG_DARK, fontSize:16,
-                fontFamily:"Inter, sans-serif", fontWeight:700,
-                cursor:sessionLoading ? "not-allowed" : "pointer", letterSpacing:"0.04em",
-                boxShadow:sessionLoading ? "none" : hoverStart
-                  ? `0 0 42px rgba(212,175,55,0.6), 0 6px 24px rgba(0,0,0,0.45)`
-                  : `0 0 20px rgba(212,175,55,0.3), 0 4px 16px rgba(0,0,0,0.4)`,
-                transform:(!sessionLoading && hoverStart) ? "translateY(-2px)" : "none",
-                transition:"all 0.22s ease",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:10,
-                opacity: sessionLoading ? 0.7 : 1,
-              }}
-            >
-              {sessionLoading ? (
-                <>
-                  <span style={{
-                    display:"inline-block", width:15, height:15,
-                    border:"2px solid rgba(10,6,24,0.35)", borderTopColor:"#0a0618",
-                    borderRadius:"50%", animation:"obS1spin 0.75s linear infinite",
-                  }}/>
-                  <style>{`@keyframes obS1spin{to{transform:rotate(360deg)}}`}</style>
-                  Verifying…
-                </>
-              ) : (
-                <>
-                  Start My Journey
-                  <span style={{ fontSize:16, marginLeft:2 }}>→</span>
-                </>
-              )}
-            </button>
+          {/* Headline */}
+          <h1 style={{
+            fontFamily: "Playfair Display, serif",
+            fontSize: "clamp(40px,4.4vw,72px)",
+            fontWeight: 800, lineHeight: 1.1, marginBottom: 22,
+            background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 55%, ${GOLD} 100%)`,
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          }}>
+            Your Story.<br />Your Soundtrack.<br />Your Legacy.
+          </h1>
 
-            {/* Secondary */}
-            <button
-              onClick={()=>setLocation("/demo")}
-              onMouseEnter={()=>setHoverDemo(true)}
-              onMouseLeave={()=>setHoverDemo(false)}
-              style={{
-                width:"100%", height:58,
-                borderRadius:10,
-                border:`1.5px solid ${hoverDemo?"rgba(212,175,55,0.55)":"rgba(255,255,255,0.18)"}`,
-                background:hoverDemo?"rgba(212,175,55,0.07)":"rgba(255,255,255,0.03)",
-                color:WHITE, fontSize:16,
-                fontFamily:"Inter, sans-serif", fontWeight:600,
-                cursor:"pointer", letterSpacing:"0.03em",
-                transform:hoverDemo?"translateY(-2px)":"none",
-                transition:"all 0.22s ease",
-                backdropFilter:"blur(8px)",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:12,
-                boxShadow:hoverDemo?"0 0 18px rgba(212,175,55,0.12)":"none",
-              }}
-            >
-              <span style={{
-                display:"inline-flex", alignItems:"center", justifyContent:"center",
-                width:28, height:28, borderRadius:"50%",
-                background:"rgba(255,255,255,0.06)",
-                border:`1px solid rgba(255,255,255,0.22)`,
-                color:WHITE, fontSize:10, paddingLeft:2,
-                flexShrink:0,
-              }}>▶</span>
-              Watch Demo
-            </button>
-          </motion.div>
+          <p style={{
+            fontSize: "clamp(14px,1.1vw,17px)", lineHeight: 1.75,
+            color: "rgba(255,255,255,0.55)", marginBottom: 32, maxWidth: 460,
+          }}>
+            Transform your memories, emotions, dreams and life experiences into
+            cinematic songs and films.
+          </p>
 
-          {/* ── URGENCY TICKER ── */}
-          <motion.div
-            initial={{ opacity:0 }}
-            animate={{ opacity:1 }}
-            transition={{ delay:0.72, duration:0.5 }}
-            className="ob1-ticker"
-            style={{ marginTop:20, maxWidth:400 }}
-          >
-            <AnimatePresence mode="wait">
+          {/* Sophia Live Panel — greeting */}
+          <S1SophiaPanel>
+            <S1SophiaPanelHeader />
+            <div style={{
+              fontSize: 13.5, lineHeight: 1.7,
+              color: "rgba(255,255,255,0.82)", fontStyle: "italic",
+            }}>
+              "Hello, {userName}. I'm Sophia — your personal AI storyteller and creative guide.
+              I'm here with you through every step of this journey. Before we create something
+              unforgettable together, I have a few questions. Your answers shape everything."
+            </div>
+          </S1SophiaPanel>
+
+          {/* Q1 */}
+          <S1QSection
+            num={1} total={6}
+            question="What brings you here today?"
+            options={[
+              "A memory I need to preserve",
+              "A love story",
+              "Healing a relationship",
+              "Celebrating a milestone",
+              "Honoring someone I've lost",
+              "Creating something for myself",
+            ]}
+            selected={q1}
+            onSelect={setQ1}
+          />
+
+          {/* Sophia reaction after Q1 */}
+          <AnimatePresence mode="wait">
+            {sophiaReaction1 && (
               <motion.div
-                key={tickerIdx}
-                initial={{ opacity:0, y:6 }}
-                animate={{ opacity:1, y:0 }}
-                exit={{ opacity:0, y:-6 }}
-                transition={{ duration:0.35 }}
-                style={{
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  gap:8,
-                  padding:"8px 16px",
-                  borderRadius:8,
-                  background:"rgba(212,175,55,0.07)",
-                  border:"1px solid rgba(212,175,55,0.22)",
-                  width:"fit-content",
-                }}
+                key={q1}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
               >
-                <span style={{
-                  fontFamily:"Inter, sans-serif",
-                  fontSize:"clamp(12px,0.95vw,14px)",
-                  color:"rgba(255,255,255,0.78)",
-                  letterSpacing:"0.01em",
-                }}>{URGENCY_TICKER[tickerIdx]}</span>
+                <S1SophiaPanel style={{ marginBottom: 20, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.7, color: "rgba(255,255,255,0.82)", fontStyle: "italic" }}>
+                    "{sophiaReaction1}"
+                  </div>
+                  <div style={{ fontSize: 13, color: GOLD, fontWeight: 600, marginTop: 6, opacity: 0.9 }}>
+                    — I'll make sure every detail matters. ✦
+                  </div>
+                </S1SophiaPanel>
               </motion.div>
-            </AnimatePresence>
-          </motion.div>
-        </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* ── RIGHT VISUAL — portal image bleeds edge-to-edge ── */}
-        <motion.div
-          initial={{ opacity:0, scale:0.97 }}
-          animate={{ opacity:1, scale:1 }}
-          transition={{ delay:0.1, duration:0.9, ease:"easeOut" }}
-          className="ob-right"
+          {/* Q2 */}
+          <S1QSection
+            num={2} total={6}
+            question="What emotion should this carry?"
+            options={[
+              "Nostalgic & tender",
+              "Epic & triumphant",
+              "Raw & heartfelt",
+              "Hopeful & uplifting",
+              "Romantic & intimate",
+              "Bittersweet & reflective",
+            ]}
+            selected={q2}
+            onSelect={setQ2}
+          />
+
+          {/* Q3 */}
+          <S1QSection
+            num={3} total={6}
+            question="Who is this for?"
+            options={[
+              "Myself",
+              "My partner",
+              "My family",
+              "Someone I've lost",
+              "A friend or group",
+              "The world — I want to share it",
+            ]}
+            selected={q3}
+            onSelect={setQ3}
+          />
+
+          {/* Sophia reaction after Q3 */}
+          <AnimatePresence mode="wait">
+            {sophiaReaction3 && (
+              <motion.div
+                key={q3}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3 }}
+              >
+                <S1SophiaPanel style={{ marginBottom: 20, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.7, color: "rgba(255,255,255,0.82)", fontStyle: "italic" }}>
+                    "{sophiaReaction3}"
+                  </div>
+                  <div style={{ fontSize: 13, color: GOLD, fontWeight: 600, marginTop: 6, opacity: 0.9 }}>
+                    — This is going to be beautiful. ✦
+                  </div>
+                </S1SophiaPanel>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* CTAs */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420, marginTop: 8 }}>
+            <S1PrimaryBtn
+              onClick={handleNext}
+              loading={!!sessionLoading}
+              label="Start My Journey"
+            />
+            <S1SecondaryBtn
+              onClick={() => setLocation("/demo")}
+              label="Watch Demo"
+            />
+            {/* Urgency ticker */}
+            <S1Ticker />
+          </div>
+        </div>
+
+        {/* ── RIGHT ── Sophia portrait + float zone */}
+        <div
+          className="s1new-right"
           style={{
-            flex:"1 1 55%",
-            position:"relative",
-            overflow:"hidden",
-            display:"flex", alignItems:"center", justifyContent:"center",
+            flex: 1, position: "relative",
+            overflow: "visible",
+            display: "flex", alignItems: "flex-end", justifyContent: "flex-start",
+            minHeight: "100%",
           }}
         >
-          {/* Gold + purple glow behind portal — matches Figma halo */}
+          {/* Float zone — desktop only (waveform + mem-cards + bubble) */}
+          <div className="s1new-float-zone" style={{
+            position: "absolute", left: 0, top: 200, zIndex: 8,
+            display: "flex", flexDirection: "column", gap: 0,
+          }}>
+            {/* Waveform */}
+            <S1Waveform />
+            {/* Memory cards */}
+            <S1MemCards />
+            {/* Speech bubble */}
+            <S1Bubble />
+          </div>
+
+          {/* Sophia portrait wrap */}
           <div style={{
-            position:"absolute", top:"50%", left:"50%",
-            transform:"translate(-50%,-50%)",
-            width:"95%", height:"95%",
-            background:`radial-gradient(ellipse 60% 55% at 50% 50%, rgba(212,175,55,0.26) 0%, rgba(160,100,20,0.12) 35%, transparent 65%)`,
-            filter:"blur(55px)", borderRadius:"50%",
-            pointerEvents:"none", zIndex:1,
-          }}/>
-          {/* Secondary wider purple halo */}
-          <div style={{
-            position:"absolute", top:"50%", left:"50%",
-            transform:"translate(-50%,-50%)",
-            width:"110%", height:"110%",
-            background:`radial-gradient(ellipse 70% 65% at 50% 50%, rgba(100,40,180,0.14) 0%, rgba(70,20,140,0.06) 50%, transparent 72%)`,
-            filter:"blur(70px)", borderRadius:"50%",
-            pointerEvents:"none", zIndex:1,
-          }}/>
-          <img
-            src="/assets/hero-portal.png"
-            alt="Ghaafeedi Music Portal"
-            className="ob-portal-img"
-            style={{
-              width:"100%",
-              height:"100%",
-              objectFit:"cover",
-              objectPosition:"center center",
-              position:"relative", zIndex:2,
-              filter:"drop-shadow(0 0 60px rgba(212,175,55,0.22)) brightness(1.05)",
-            }}
-          />
-        </motion.div>
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "flex-end", justifyContent: "flex-start",
+            overflow: "visible",
+          }}>
+            {/* Gold glow behind Sophia */}
+            <div style={{
+              position: "absolute", bottom: 0, left: 0,
+              width: "60%", height: "85%",
+              background: "radial-gradient(ellipse 65% 55% at 35% 88%, rgba(212,175,55,0.25) 0%, rgba(160,100,20,0.08) 45%, transparent 70%)",
+              filter: "blur(70px)", borderRadius: "50%",
+              pointerEvents: "none", zIndex: 1,
+            }} />
+            <img
+              src="/assets/sophia-fullbody.png"
+              alt="Sophia"
+              className="s1new-sophia-portrait"
+              style={{
+                position: "absolute", zIndex: 2,
+                bottom: 0, left: "-20px",
+                height: "115%", width: "auto", maxWidth: "none",
+                objectFit: "contain", objectPosition: "bottom left",
+                filter: "drop-shadow(0 0 60px rgba(212,175,55,0.38)) drop-shadow(0 0 130px rgba(212,175,55,0.18)) brightness(1.07)",
+              }}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* ── PROGRESS DOTS ── */}
-      <div style={{
-        position:"relative", zIndex:10,
-        width:"100%", display:"flex",
-        justifyContent:"center", alignItems:"center",
-        gap:8, paddingBottom:24, flexShrink:0,
-      }}>
-        {STEPS.map((_,i)=>(
-          <div key={i} style={{
-            width: i===0 ? 28 : 8,
-            height:8, borderRadius:4,
-            background: i===0 ? GOLD : "rgba(255,255,255,0.15)",
-            transition:"all 0.3s",
-            boxShadow: i===0 ? `0 0 8px rgba(212,175,55,0.55)` : "none",
-          }}/>
-        ))}
-      </div>
-
-      {/* Watch Demo now routes to /demo page directly */}
-
-      {/* ── RESPONSIVE ── */}
+      {/* ── CSS ── */}
       <style>{`
-        /* TABLET 601–1100px: side-by-side, full viewport, content vertically centered */
-        @media(min-width:601px) and (max-width:1100px){
-          /* Nebula covers full tall portrait tablet */
-          .ob-nebula-1{
-            background:
-              radial-gradient(ellipse 80% 70% at 65% 50%, rgba(72,28,140,0.32) 0%, rgba(50,15,100,0.16) 42%, transparent 70%),
-              radial-gradient(ellipse 55% 60% at 80% 30%, rgba(90,30,160,0.20) 0%, transparent 55%),
-              radial-gradient(ellipse 65% 75% at 58% 72%, rgba(60,20,120,0.18) 0%, transparent 62%)
-              !important;
+        /* ── Sophia float zone: desktop only ── */
+        .s1new-float-zone { display: flex !important; }
+        @media (max-width: 1100px) {
+          .s1new-float-zone { display: none !important; }
+        }
+
+        /* ── Tablet 601–1100px ── */
+        @media (min-width: 601px) and (max-width: 1100px) {
+          .s1new-hero {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            padding: 0 clamp(20px,5vw,64px) !important;
           }
-          .ob-nebula-2{
-            background:
-              radial-gradient(ellipse 55% 60% at 68% 50%, rgba(212,175,55,0.18) 0%, rgba(180,130,20,0.06) 45%, transparent 70%),
-              radial-gradient(ellipse 40% 40% at 62% 78%, rgba(212,175,55,0.12) 0%, transparent 55%)
-              !important;
+          .s1new-left {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 24px 0 0 !important;
+            justify-content: flex-start !important;
           }
-          .ob-nebula-3{
-            background:
-              radial-gradient(ellipse 35% 45% at 3% 45%, rgba(20,80,120,0.20) 0%, transparent 60%),
-              radial-gradient(ellipse 25% 35% at 20% 82%, rgba(15,60,100,0.14) 0%, transparent 55%)
-              !important;
+          .s1new-right {
+            flex: 1 !important;
+            min-height: 280px !important;
+            height: auto !important;
           }
-          /* ── TABLET: column layout, content top ~48%, portal fills bottom ── */
-          .ob-step1-root{
-            height:100%!important;
-            min-height:100%!important;
-            max-height:100%!important;
-            overflow:hidden!important;
-            display:flex!important;
-            flex-direction:column!important;
+          .s1new-sophia-portrait {
+            left: auto !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            height: 92vh !important;
+            top: 20px !important;
+            object-position: top left !important;
           }
-          .ob-hero-body{
-            flex:1!important;
-            min-height:0!important;
-            display:flex!important;
-            flex-direction:column!important;
-            align-items:stretch!important;
-            padding:16px clamp(24px,5vw,64px) 0!important;
-            gap:0!important;
-            overflow:hidden!important;
+          .s1new-step-indicator { display: none !important; }
+          .s1new-signin-label { display: none !important; }
+        }
+
+        /* ── Mobile ≤600px ── */
+        @media (max-width: 600px) {
+          .s1new-header {
+            height: 50px !important;
+            padding: 0 18px !important;
           }
-          .ob-left{
-            flex:0 0 auto!important;
-            max-width:100%!important;
-            width:100%!important;
-            padding-left:0!important;
-            padding-right:0!important;
-            justify-content:flex-start!important;
+          .s1new-step-indicator { display: none !important; }
+          .s1new-signin-label { display: none !important; }
+          .s1new-hero {
+            flex-direction: column !important;
+            padding: 0 18px !important;
           }
-          .ob-left h1{
-            font-size:clamp(32px,5vw,52px)!important;
-            line-height:1.1!important;
-            white-space:normal!important;
+          .s1new-left {
+            flex: 0 0 auto !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 16px 0 0 !important;
+            justify-content: flex-start !important;
+            position: relative !important;
+            z-index: 3 !important;
           }
-          .ob-left p{font-size:15px!important;max-width:100%!important;margin-bottom:14px!important;}
-          .ob-trust-grid{gap:8px 16px!important;margin-bottom:14px!important;}
-          .ob-cta-stack{max-width:540px!important;}
-          .ob-cta-stack button{height:52px!important;font-size:15px!important;}
-          /* Portal: flex:1 fills all remaining height below text */
-          .ob-right{
-            flex:1!important;
-            min-height:0!important;
-            width:calc(100% + clamp(48px,10vw,128px))!important;
-            margin-left:calc(-1 * clamp(24px,5vw,64px))!important;
-            margin-right:calc(-1 * clamp(24px,5vw,64px))!important;
-            margin-top:16px!important;
-            position:relative!important;
-            overflow:hidden!important;
-            height:auto!important;
+          .s1new-right {
+            position: absolute !important;
+            top: 50px !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            height: auto !important;
+            z-index: 1 !important;
           }
-          .ob-right > div{position:absolute!important;}
-          .ob-portal-img{
-            position:absolute!important;
-            top:0!important;left:0!important;
-            width:100%!important;height:100%!important;
-            object-fit:cover!important;
-            object-position:center 35%!important;
-          }
-          .ob-right::after{
-            content:''!important;
-            position:absolute!important;inset:0!important;
-            z-index:3!important;pointer-events:none!important;
-            background:linear-gradient(to bottom, rgba(8,6,20,0.4) 0%, transparent 20%, transparent 78%, rgba(8,6,20,0.55) 100%)!important;
+          .s1new-sophia-portrait {
+            left: auto !important;
+            right: -10px !important;
+            bottom: 0 !important;
+            height: 110% !important;
+            opacity: 0.55 !important;
+            object-position: top right !important;
           }
         }
 
-        /* GLOBAL reset — scoped to step1 only, does NOT affect other pages */
-        .ob-step1-root ~ * { } /* isolate */
-
-        /* MOBILE ≤600px — full-screen locked, text top 46%, portal bottom 54% */
-        @media(max-width:600px){
-          .ob-step1-root{
-            height:100%!important;
-            min-height:100%!important;
-            max-height:100%!important;
-            overflow:hidden!important;
-            display:flex!important;
-            flex-direction:column!important;
-            background:linear-gradient(180deg, #080614 0%, #0c0820 40%, #100b28 70%, #080614 100%)!important;
-          }
-          /* Nebula layers — full coverage */
-          .ob-nebula-1{
-            background:
-              radial-gradient(ellipse 120% 50% at 50% 30%, rgba(72,28,140,0.38) 0%, rgba(50,15,100,0.20) 45%, transparent 72%),
-              radial-gradient(ellipse 100% 40% at 50% 70%, rgba(80,25,150,0.30) 0%, rgba(55,18,110,0.14) 45%, transparent 70%)
-              !important;
-          }
-          .ob-nebula-2{
-            background:
-              radial-gradient(ellipse 90% 45% at 50% 72%, rgba(212,175,55,0.22) 0%, rgba(180,130,20,0.08) 45%, transparent 70%)
-              !important;
-          }
-          .ob-nebula-3{
-            background:
-              radial-gradient(ellipse 60% 25% at 10% 20%, rgba(20,100,140,0.22) 0%, transparent 60%),
-              radial-gradient(ellipse 50% 20% at 90% 15%, rgba(30,80,120,0.18) 0%, transparent 55%)
-              !important;
-          }
-          .ob-vignette{
-            background: radial-gradient(ellipse 50% 30% at 0% 50%, rgba(4,2,12,0.40) 0%, transparent 65%) !important;
-          }
-          /* Header: compact */
-          .ob-header{height:50px!important;padding:0 18px!important;flex-shrink:0!important;}
-          .ob-header-step{display:none!important;}
-          .ob-signin-label{display:none!important;}
-          /* Hero body: flex:1 fills remaining space, stacks column */
-          .ob-hero-body{
-            display:flex!important;
-            flex:1!important;
-            flex-direction:column!important;
-            align-items:stretch!important;
-            padding:0 20px!important;
-            gap:0!important;
-            overflow:hidden!important;
-            min-height:0!important;
-            max-width:100%!important;
-            margin:0!important;
-          }
-          /* LEFT — text block: compact, fixed height ~46% of remaining space */
-          .ob-left{
-            flex:0 0 auto!important;
-            max-width:100%!important;
-            width:100%!important;
-            padding-right:0!important;
-            justify-content:flex-start!important;
-            padding-top:10px!important;
-          }
-          .ob-left h1{
-            font-size:clamp(28px,9vw,40px)!important;
-            margin-bottom:8px!important;
-            white-space:normal!important;
-            line-height:1.1!important;
-          }
-          .ob-left p{font-size:13px!important;margin-bottom:10px!important;max-width:100%!important;line-height:1.5!important;}
-          .ob-trust-grid{
-            grid-template-columns:1fr 1fr!important;
-            gap:7px 12px!important;
-            margin-bottom:10px!important;
-          }
-          .ob-trust-grid > div > div:first-child{width:30px!important;height:30px!important;}
-          .ob-trust-grid span{font-size:11px!important;}
-          .ob-cta-stack{max-width:100%!important;gap:8px!important;}
-          .ob-cta-stack button{height:46px!important;font-size:14px!important;}
-          /* RIGHT — portal: fills all remaining space */
-          .ob-right{
-            flex:1!important;
-            min-height:0!important;
-            width:calc(100% + 40px)!important;
-            margin-left:-20px!important;
-            margin-right:-20px!important;
-            margin-top:12px!important;
-            position:relative!important;
-            overflow:hidden!important;
-            height:auto!important;
-            padding-bottom:0!important;
-          }
-          .ob-right > div{position:absolute!important;}
-          .ob-portal-img{
-            position:absolute!important;
-            top:0!important;left:0!important;
-            width:100%!important;height:100%!important;
-            object-fit:cover!important;
-            object-position:center 40%!important;
-            filter:brightness(1.08) drop-shadow(0 0 40px rgba(212,175,55,0.30))!important;
-          }
-          .ob-right::after{
-            content:''!important;
-            position:absolute!important;inset:0!important;
-            z-index:3!important;pointer-events:none!important;
-            background:
-              linear-gradient(to bottom, rgba(8,6,20,0.45) 0%, transparent 18%, transparent 80%, rgba(8,6,20,0.65) 100%)
-              !important;
-          }
+        /* ── Animations ── */
+        @keyframes s1WvAnim {
+          0%,100% { height: 6px; }
+          50% { height: var(--max-h, 22px); }
+        }
+        @keyframes s1MemSlide {
+          from { opacity: 0; transform: rotate(var(--r, 0deg)) translateX(30px); }
+          to   { opacity: 1; transform: rotate(var(--r, 0deg)) translateX(0); }
+        }
+        @keyframes s1BubbleFade {
+          from { opacity: 0; transform: translateY(-10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes s1PulseGreen {
+          0%,100% { opacity: 1; } 50% { opacity: 0.4; }
         }
       `}</style>
+    </div>
+  );
+}
+
+// ── Sub-components for Step1 ────────────────────────────────────────────────
+
+function S1SophiaPanel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      background: "rgba(11,23,54,0.65)",
+      border: "1px solid rgba(212,175,55,0.22)",
+      borderRadius: 16, padding: "18px 20px", marginBottom: 28,
+      backdropFilter: "blur(12px)",
+      position: "relative", overflow: "hidden",
+      ...style,
+    }}>
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: 16,
+        background: "linear-gradient(135deg, rgba(212,175,55,0.06) 0%, transparent 60%)",
+        pointerEvents: "none",
+      }} />
+      <div style={{ position: "relative" }}>{children}</div>
+    </div>
+  );
+}
+
+function S1SophiaPanelHeader() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+      {/* Avatar */}
+      <div style={{
+        width: 36, height: 36, borderRadius: "50%",
+        overflow: "hidden", border: "1.5px solid rgba(212,175,55,0.5)", flexShrink: 0,
+      }}>
+        <img
+          src="/assets/sophia-poster.png"
+          alt="Sophia"
+          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+          onError={e => {
+            const el = e.currentTarget as HTMLImageElement;
+            el.style.display = "none";
+            if (el.parentElement) {
+              el.parentElement.style.background = "linear-gradient(135deg, #D4AF37 0%, #9A6F1F 100%)";
+              el.parentElement.innerHTML = "<span style='display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:14px;font-weight:700;color:#050B1A;font-family:Inter,sans-serif;'>S</span>";
+            }
+          }}
+        />
+      </div>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: GOLD, letterSpacing: "0.08em" }}>SOPHIA</div>
+        <div style={{
+          fontSize: 10, color: "rgba(255,255,255,0.4)",
+          display: "flex", alignItems: "center", gap: 5,
+        }}>
+          <span style={{
+            display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+            background: "#22C55E", animation: "s1PulseGreen 1.8s ease-in-out infinite",
+          }} />
+          Live · Personalized for you
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function S1QSection({
+  num, total, question, options, selected, onSelect,
+}: {
+  num: number; total: number; question: string;
+  options: string[]; selected: string | null;
+  onSelect: (v: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {/* Step badge */}
+      <div style={{
+        display: "inline-flex", alignItems: "center", gap: 8,
+        padding: "5px 14px 5px 6px", borderRadius: 50,
+        background: "rgba(212,175,55,0.10)", border: "1px solid rgba(212,175,55,0.25)",
+        marginBottom: 14,
+      }}>
+        <div style={{
+          width: 24, height: 24, borderRadius: "50%",
+          background: GOLD, color: "#050B1A", fontSize: 11, fontWeight: 800,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>{num}</div>
+        <span style={{
+          fontSize: 11, color: "rgba(212,175,55,0.85)", fontWeight: 600,
+          letterSpacing: "0.06em", textTransform: "uppercase",
+        }}>Question {num} of {total}</span>
+      </div>
+
+      {/* Question text */}
+      <div style={{
+        fontFamily: "Playfair Display, serif",
+        fontSize: "clamp(16px,1.3vw,20px)", fontWeight: 600,
+        color: "#fff", marginBottom: 14, lineHeight: 1.4,
+      }}>{question}</div>
+
+      {/* Chips */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+        {options.map(opt => (
+          <S1Chip
+            key={opt}
+            label={opt}
+            selected={selected === opt}
+            onClick={() => onSelect(opt)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function S1Chip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        padding: "8px 16px", borderRadius: 50,
+        border: selected
+          ? `1px solid ${GOLD}`
+          : hovered
+            ? "1px solid rgba(212,175,55,0.45)"
+            : "1px solid rgba(255,255,255,0.18)",
+        background: selected
+          ? "rgba(212,175,55,0.14)"
+          : hovered
+            ? "rgba(212,175,55,0.05)"
+            : "rgba(255,255,255,0.04)",
+        fontSize: 13, color: selected ? GOLD : hovered ? "#fff" : "rgba(255,255,255,0.7)",
+        fontWeight: selected ? 600 : 400,
+        boxShadow: selected ? "0 0 14px rgba(212,175,55,0.25)" : "none",
+        cursor: "pointer", whiteSpace: "nowrap",
+        transition: "all 0.2s",
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function S1PrimaryBtn({ onClick, loading, label }: { onClick: () => void; loading: boolean; label: string }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      onClick={loading ? undefined : onClick}
+      onMouseEnter={() => { if (!loading) setHovered(true); }}
+      onMouseLeave={() => setHovered(false)}
+      disabled={loading}
+      style={{
+        width: "100%", height: 56, borderRadius: 10, border: "none",
+        background: loading
+          ? "rgba(212,175,55,0.35)"
+          : hovered
+            ? `linear-gradient(135deg, ${GOLD2} 0%, ${GOLD} 100%)`
+            : `linear-gradient(135deg, ${GOLD} 0%, #c9a020 100%)`,
+        color: "#050B1A", fontSize: 16,
+        fontFamily: "Inter, sans-serif", fontWeight: 700,
+        cursor: loading ? "not-allowed" : "pointer", letterSpacing: "0.04em",
+        boxShadow: loading ? "none" : hovered
+          ? "0 0 42px rgba(212,175,55,0.6), 0 6px 24px rgba(0,0,0,0.45)"
+          : "0 0 22px rgba(212,175,55,0.35), 0 4px 16px rgba(0,0,0,0.4)",
+        transform: (!loading && hovered) ? "translateY(-2px)" : "none",
+        transition: "all 0.22s ease",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+        opacity: loading ? 0.7 : 1,
+      }}
+    >
+      {loading ? (
+        <>
+          <span style={{
+            display: "inline-block", width: 15, height: 15,
+            border: "2px solid rgba(10,6,24,0.35)", borderTopColor: "#0a0618",
+            borderRadius: "50%", animation: "s1PrimaryBtnSpin 0.75s linear infinite",
+          }} />
+          <style>{`@keyframes s1PrimaryBtnSpin { to { transform: rotate(360deg); } }`}</style>
+          Verifying…
+        </>
+      ) : (
+        <>{label} <span style={{ fontSize: 16, marginLeft: 2 }}>→</span></>
+      )}
+    </button>
+  );
+}
+
+function S1SecondaryBtn({ onClick, label }: { onClick: () => void; label: string }) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: "100%", height: 52, borderRadius: 10,
+        border: `1.5px solid ${hovered ? "rgba(212,175,55,0.55)" : "rgba(255,255,255,0.18)"}`,
+        background: hovered ? "rgba(212,175,55,0.07)" : "rgba(255,255,255,0.03)",
+        color: "#fff", fontSize: 15,
+        fontFamily: "Inter, sans-serif", fontWeight: 600,
+        cursor: "pointer", letterSpacing: "0.03em",
+        transform: hovered ? "translateY(-2px)" : "none",
+        transition: "all 0.22s ease", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+        boxShadow: hovered ? "0 0 18px rgba(212,175,55,0.12)" : "none",
+      }}
+    >
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 28, height: 28, borderRadius: "50%",
+        background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.22)",
+        color: "#fff", fontSize: 10, paddingLeft: 2, flexShrink: 0,
+      }}>▶</span>
+      {label}
+    </button>
+  );
+}
+
+const S1_TICKER_ITEMS = [
+  "🔴 Only 4 spots remaining this week",
+  "⭐ 50,000+ stories created and counting",
+  "🔒 Your story is private & secure",
+];
+
+function S1Ticker() {
+  const [idx, setIdx] = React.useState(0);
+  React.useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % S1_TICKER_ITEMS.length), 3000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={idx}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.35 }}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "7px 14px", borderRadius: 8,
+          background: "rgba(212,175,55,0.07)",
+          border: "1px solid rgba(212,175,55,0.20)",
+          fontSize: 12, color: "rgba(255,255,255,0.72)",
+        }}
+      >
+        <span style={{
+          display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+          background: GOLD, flexShrink: 0,
+          animation: "s1PulseGreen 1.5s ease-in-out infinite",
+        }} />
+        {S1_TICKER_ITEMS[idx]}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// Waveform — "SOPHIA LISTENING" + 9 animated bars
+function S1Waveform() {
+  const BAR_HEIGHTS = [14, 22, 18, 28, 16, 24, 20, 26, 12];
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 3,
+      marginBottom: 16,
+      animation: "s1BubbleFade 0.5s ease 0.3s both",
+    }}>
+      <span style={{
+        fontSize: 9, fontFamily: "Inter, sans-serif",
+        color: "rgba(212,175,55,0.70)", letterSpacing: "0.08em", marginRight: 5,
+        whiteSpace: "nowrap",
+      }}>SOPHIA LISTENING</span>
+      {BAR_HEIGHTS.map((h, i) => (
+        <div key={i} style={{
+          width: 3, borderRadius: 2,
+          background: `linear-gradient(to top, ${GOLD}, rgba(212,175,55,0.4))`,
+          height: 6,
+          animation: `s1WvAnim ${0.7 + i * 0.12}s ease-in-out infinite`,
+          animationDelay: `${i * 0.07}s`,
+          // @ts-ignore
+          "--max-h": `${h}px`,
+        } as React.CSSProperties} />
+      ))}
+    </div>
+  );
+}
+
+// Memory cards
+const S1_MEM_CARDS = [
+  { label: "A Wedding Day", bg: "linear-gradient(135deg,#1a0a2e 0%,#3d1a6e 40%,#0a1a3e 100%)", r: "-2.5deg", delay: "0.4s" },
+  { label: "A Lost Loved One", bg: "linear-gradient(135deg,#0a1a2e 0%,#1a3a5e 50%,#0d2340 100%)", r: "1.8deg", delay: "0.7s" },
+  { label: "A Love Story", bg: "linear-gradient(135deg,#1a0a18 0%,#4a1a3a 50%,#1a0a28 100%)", r: "-1.2deg", delay: "1.0s" },
+];
+
+function S1MemCards() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+      {S1_MEM_CARDS.map((card, i) => (
+        <div key={i} style={{
+          width: 175, borderRadius: 12, overflow: "hidden",
+          border: "1px solid rgba(212,175,55,0.28)",
+          boxShadow: "0 4px 22px rgba(0,0,0,0.55), 0 0 18px rgba(212,175,55,0.10)",
+          opacity: 0,
+          transform: `rotate(${card.r}) translateX(30px)`,
+          animation: `s1MemSlide 0.6s ease ${card.delay} forwards`,
+          // @ts-ignore
+          "--r": card.r,
+        } as React.CSSProperties}>
+          <div style={{ height: 80, background: card.bg, position: "relative" }}>
+            {/* Subtle shimmer overlay */}
+            <div style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(135deg, rgba(212,175,55,0.05) 0%, transparent 60%)",
+            }} />
+          </div>
+          <div style={{
+            background: "rgba(5,7,18,0.88)", padding: "6px 9px",
+            display: "flex", alignItems: "center", gap: 5,
+          }}>
+            <div style={{
+              width: 5, height: 5, borderRadius: "50%",
+              background: GOLD, flexShrink: 0,
+              boxShadow: `0 0 6px ${GOLD}`,
+            }} />
+            <span style={{
+              fontSize: 10, color: "rgba(255,255,255,0.75)",
+              fontFamily: "Inter, sans-serif", letterSpacing: "0.04em",
+            }}>{card.label}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Speech bubble
+function S1Bubble() {
+  return (
+    <div style={{
+      background: "rgba(6,4,18,0.93)",
+      border: "1.5px solid rgba(212,175,55,0.45)",
+      borderRadius: "14px 14px 4px 14px",
+      padding: "15px 17px", maxWidth: 195,
+      backdropFilter: "blur(18px)",
+      boxShadow: "0 0 36px rgba(212,175,55,0.16), 0 2px 24px rgba(0,0,0,0.6)",
+      animation: "s1BubbleFade 0.5s ease 1.2s both",
+      position: "relative",
+    }}>
+      {/* tail */}
+      <div style={{
+        position: "absolute", bottom: -10, right: 18,
+        width: 0, height: 0,
+        borderLeft: "10px solid transparent",
+        borderRight: 0,
+        borderTop: "10px solid rgba(212,175,55,0.35)",
+      }} />
+      <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, marginBottom: 6, letterSpacing: "0.06em" }}>
+        ✦ SOPHIA
+      </div>
+      <div style={{ fontSize: 12, lineHeight: 1.65, color: "rgba(255,255,255,0.82)", fontStyle: "italic" }}>
+        "I'm with you every step of this. Your story is unlike anyone else's — and what we create together will prove it."
+      </div>
+      <div style={{ fontSize: 12, color: GOLD, fontWeight: 700, marginTop: 6 }}>
+        Let's make something timeless. →
+      </div>
     </div>
   );
 }
