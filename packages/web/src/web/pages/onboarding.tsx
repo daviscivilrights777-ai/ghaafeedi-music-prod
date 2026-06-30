@@ -357,8 +357,10 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
   const [q1, setQ1] = React.useState<string | null>("A memory I need to preserve");
   // Q2 — What emotion should this carry?
   const [q2, setQ2] = React.useState<string | null>("Nostalgic & tender");
-  // Q3 — Who is this for?
+  // Q3 (Concept C Hybrid) — What should they feel when they experience this?
   const [q3, setQ3] = React.useState<string | null>(null);
+
+  const S1_Q_TOTAL = 3; // single source of truth for question counter
 
   // Sophia dynamic reaction text per Q1 selection
   const Q1_REACTIONS: Record<string, string> = {
@@ -370,17 +372,22 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
     "Creating something for myself": "This one's for you. No one else needs to understand it — just feel it.",
   };
 
+  // Q3 reactions — emotional outcome focused (Concept C Hybrid)
   const Q3_REACTIONS: Record<string, string> = {
-    "Myself": "Just for you. Something deeply personal — only you will know the full weight of it.",
-    "My partner": "A love letter in song and film. This will mean everything to them.",
-    "My family": "A memory, felt nostalgically — made for your family. That's a legacy. Let me ask you one more thing before we choose your format.",
-    "Someone I've lost": "For them. For the love that never fades, only transforms.",
-    "A friend or group": "A gift they'll never forget. Something that says everything you feel.",
-    "The world — I want to share it": "A story for the world. Let's make it resonate with everyone who hears it.",
+    "Moved to tears — in the best way": "That kind of emotion doesn't happen by accident. We'll build every note toward that moment.",
+    "Deeply seen and understood": "To feel truly seen — that's what great art does. I'll make sure this one does exactly that.",
+    "A rush of beautiful nostalgia": "Nostalgia is the closest thing to time travel. Let's take them there.",
+    "Inspired and ready to rise": "Something that moves people to action — that's powerful. This will be electric.",
+    "Healed and at peace": "Healing through music is real. I've watched it happen. Let's create that space together.",
+    "Celebrated and truly valued": "Everyone deserves to feel like the main character. Let's make them feel exactly that.",
   };
 
   const sophiaReaction1 = q1 ? Q1_REACTIONS[q1] || Q1_REACTIONS["A memory I need to preserve"] : null;
   const sophiaReaction3 = q3 ? Q3_REACTIONS[q3] || null : null;
+
+  // Time-aware greeting
+  const greetingHour = new Date().getHours();
+  const timeGreeting = greetingHour < 12 ? "Good morning" : greetingHour < 17 ? "Good afternoon" : "Good evening";
 
   const userName = session?.user?.name?.split(" ")[0] ?? "there";
 
@@ -468,19 +475,31 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
             overflowY: "auto",
           }}
         >
-          {/* Progress rail — 6 dots */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}>
-            {[0,1,2,3,4,5].map(i => (
-              <React.Fragment key={i}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: i === 0 ? GOLD : "rgba(255,255,255,0.15)",
-                  boxShadow: i === 0 ? `0 0 8px rgba(212,175,55,0.6)` : "none",
-                  transition: "all 0.3s",
-                }} />
-                {i < 5 && <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }} />}
-              </React.Fragment>
-            ))}
+          {/* Progress indicator — STEP X OF 9 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "5px 14px", borderRadius: 50,
+              background: "rgba(212,175,55,0.10)",
+              border: "1px solid rgba(212,175,55,0.28)",
+            }}>
+              <div style={{
+                width: 7, height: 7, borderRadius: "50%",
+                background: GOLD, boxShadow: `0 0 8px rgba(212,175,55,0.7)`,
+                animation: "s1PulseGreen 2s ease-in-out infinite",
+              }} />
+              <span style={{
+                fontFamily: "Inter, sans-serif", fontSize: 10.5, fontWeight: 700,
+                color: GOLD, letterSpacing: "0.14em", textTransform: "uppercase",
+              }}>STEP 1 OF 9</span>
+              <span style={{
+                width: 1, height: 12, background: "rgba(212,175,55,0.3)", display: "inline-block",
+              }} />
+              <span style={{
+                fontFamily: "Inter, sans-serif", fontSize: 10, fontWeight: 500,
+                color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em",
+              }}>WELCOME · 8 steps ahead</span>
+            </div>
           </div>
 
           {/* Headline */}
@@ -509,15 +528,15 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
               fontSize: 13.5, lineHeight: 1.7,
               color: "rgba(255,255,255,0.82)", fontStyle: "italic",
             }}>
-              "Hello, {userName}. I'm Sophia — your personal AI storyteller and creative guide.
-              I'm here with you through every step of this journey. Before we create something
-              unforgettable together, I have a few questions. Your answers shape everything."
+              "{timeGreeting}, {userName}. I'm Sophia — your personal AI storyteller and creative guide.
+              Before we build something truly unforgettable together, I have {S1_Q_TOTAL} quick questions.
+              Your answers shape every note, every frame, every emotion."
             </div>
           </S1SophiaPanel>
 
           {/* Q1 */}
           <S1QSection
-            num={1} total={6}
+            num={1} total={S1_Q_TOTAL}
             question="What brings you here today?"
             options={[
               "A memory I need to preserve",
@@ -555,7 +574,7 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
 
           {/* Q2 */}
           <S1QSection
-            num={2} total={6}
+            num={2} total={S1_Q_TOTAL}
             question="What emotion should this carry?"
             options={[
               "Nostalgic & tender",
@@ -569,17 +588,17 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
             onSelect={setQ2}
           />
 
-          {/* Q3 */}
+          {/* Q3 — Concept C Hybrid: emotional outcome */}
           <S1QSection
-            num={3} total={6}
-            question="Who is this for?"
+            num={3} total={S1_Q_TOTAL}
+            question="What should they feel when they experience this?"
             options={[
-              "Myself",
-              "My partner",
-              "My family",
-              "Someone I've lost",
-              "A friend or group",
-              "The world — I want to share it",
+              "Moved to tears — in the best way",
+              "Deeply seen and understood",
+              "A rush of beautiful nostalgia",
+              "Inspired and ready to rise",
+              "Healed and at peace",
+              "Celebrated and truly valued",
             ]}
             selected={q3}
             onSelect={setQ3}
@@ -600,7 +619,7 @@ function Step1Welcome({ onNext, session }: { onNext: () => void; session?: any }
                     "{sophiaReaction3}"
                   </div>
                   <div style={{ fontSize: 13, color: GOLD, fontWeight: 600, marginTop: 6, opacity: 0.9 }}>
-                    — This is going to be beautiful. ✦
+                    — I'll design every detail around that feeling. ✦
                   </div>
                 </S1SophiaPanel>
               </motion.div>
@@ -10592,18 +10611,6 @@ export default function Onboarding() {
           }}>
             {memberData.tier === "free" ? "FREE" : memberData.tier.toUpperCase()}
           </div>
-
-          {/* Divider */}
-          <div style={{ width:1, height:14, background:"rgba(255,255,255,0.12)", margin:"0 10px", flexShrink:0 }}/>
-
-          {/* Dashboard link */}
-          <a href="/dashboard" style={{
-            fontFamily:"Inter,sans-serif", fontSize:10, fontWeight:600,
-            color:GOLD, textDecoration:"none", whiteSpace:"nowrap",
-            letterSpacing:"0.04em", flexShrink:0,
-          }}>
-            Dashboard →
-          </a>
 
           {/* Responsive: hide name on mobile */}
           <style>{`
