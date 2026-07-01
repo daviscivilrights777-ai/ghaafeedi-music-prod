@@ -1,120 +1,43 @@
 /**
- * GHAAFEEDI MUSIC — Homepage
+ * GHAAFEEDI MUSIC — Homepage Entry
  * ══════════════════════════════════════════════════════════════════
  * Entry flow (MANDATORY for every visitor — logged-in or not):
- *   1. SophiaIntroVideo — 1:48 cinematic intro video, autoplay muted,
- *      🔊 unmute button, "Enter Ghaafeedi Music →" CTA at 100s.
- *   2. Skip button always visible bottom-right.
- *   3. onComplete() → stage "home"
+ *   GhaafeediPromoIntro — 4:46 cinematic promo video, autoplay with sound.
+ *   Skip button always visible below player.
+ *   "Enter Ghaafeedi Music" gold CTA appears at 4:39 (t=279s).
+ *   Smart routing on skip/enter:
+ *     guest           → /products
+ *     logged-in, incomplete onboarding → /onboarding
+ *     logged-in, complete  → /dashboard
  *
- * Error Boundary wraps SophiaIntroVideo — any crash auto-skips to home.
+ * Bots/crawlers skip intro → /products (for SEO indexing).
  */
-import { useState, useEffect, Suspense, lazy, Component } from "react";
-import type { ReactNode, ErrorInfo } from "react";
-import { SophiaIntroVideo } from "../components/SophiaIntroVideo";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useSession } from "../lib/authClient";
+import GhaafeediPromoIntro from "../components/GhaafeediPromoIntro";
+import { Suspense, lazy } from "react";
 
-// ─── Error Boundary ──────────────────────────────────────────────────────────
-// Any crash inside SophiaEntryFlow → auto-skip to homepage (never black screen)
-interface EBProps { children: ReactNode; onError: () => void; }
-interface EBState { hasError: boolean; }
-class SophiaErrorBoundary extends Component<EBProps, EBState> {
-  override state: EBState = { hasError: false };
-  static getDerivedStateFromError(): EBState { return { hasError: true }; }
-  override componentDidCatch(err: Error, info: ErrorInfo) {
-    console.warn("[Sophia] Entry flow crashed, skipping to home:", err.message, info.componentStack);
-    this.props.onError();
-  }
-  override render() {
-    if (this.state.hasError) return null;
-    return this.props.children;
-  }
-}
-
-// ─── Lazy-load everything below the fold ────────────────────────────────────
-const Navbar              = lazy(() => import("../components/Navbar").then(m => ({ default: m.Navbar })));
-const HeroSection         = lazy(() => import("../components/HeroSection").then(m => ({ default: m.HeroSection })));
-const HowItWorks          = lazy(() => import("../components/HowItWorks").then(m => ({ default: m.HowItWorks })));
-const ProductCards        = lazy(() => import("../components/ProductCards").then(m => ({ default: m.ProductCards })));
-const TrustFeatures       = lazy(() => import("../components/TrustFeatures").then(m => ({ default: m.TrustFeatures })));
-const SocialProof         = lazy(() => import("../components/SocialProof").then(m => ({ default: m.SocialProof })));
-const SophiaConcierge     = lazy(() => import("../components/SophiaConcierge").then(m => ({ default: m.SophiaConcierge })));
-const StorytellingShowcase = lazy(() => import("../components/StorytellingShowcase").then(m => ({ default: m.StorytellingShowcase })));
-const FinalCTA            = lazy(() => import("../components/FinalCTA").then(m => ({ default: m.FinalCTA })));
-const Footer              = lazy(() => import("../components/Footer").then(m => ({ default: m.Footer })));
-const StickyCtaBar        = lazy(() => import("../components/StickyCtaBar").then(m => ({ default: m.StickyCtaBar })));
-const SocialProofToast    = lazy(() => import("../components/SocialProofToast").then(m => ({ default: m.SocialProofToast })));
-
-type Stage = "sophia" | "home";
+const Products = lazy(() => import("./products"));
 
 export default function Index() {
-  const [stage, setStage] = useState<Stage>("sophia");
+  const [isBot, setIsBot] = useState(false);
   const [, setLocation] = useLocation();
-  const { data: session, isPending: sessionLoading } = useSession();
 
-  // ── BOT/CRAWLER DETECTION: skip Sophia intro so Google can index homepage ───
+  // ── BOT/CRAWLER DETECTION: skip video so Google can index content ────────
   useEffect(() => {
     const ua = navigator.userAgent.toLowerCase();
-    const isBot = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|showyoubot|outbrain|pinterest|developers\.google\.com\/\+\/web\/snippet|lighthouse|pagespeed|headlesschrome|prerender|crawl|spider|bot\b/.test(ua);
-    if (isBot) setStage("home");
+    const bot = /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandexbot|facebookexternalhit|twitterbot|rogerbot|linkedinbot|embedly|quora|showyoubot|outbrain|pinterest|developers\.google\.com\/\+\/web\/snippet|lighthouse|pagespeed|headlesschrome|prerender|crawl|spider|bot\b/.test(ua);
+    if (bot) setIsBot(true);
   }, []);
 
-  // ── Logged-in users skip Sophia intro, land on homepage ─────────────────────
-  useEffect(() => {
-    if (!sessionLoading && session?.user) {
-      setStage("home"); // skip intro, show homepage — they navigate from there
-    }
-  }, [sessionLoading, session]);
+  // Bots go straight to products for indexing
+  if (isBot) {
+    return (
+      <Suspense fallback={<div style={{ background: "#050B1A", minHeight: "100vh" }} />}>
+        <Products />
+      </Suspense>
+    );
+  }
 
-  // While checking auth, render nothing (avoid flash)
-  if (sessionLoading) return <div style={{ background: "#06040f", position: "fixed", inset: 0 }} />;
-
-  const handleComplete = (path?: "onboarding" | "products" | "home") => {
-    if (path === "onboarding") {
-      setStage("home");
-      setTimeout(() => setLocation("/onboarding"), 80);
-      return;
-    }
-    if (path === "products") {
-      setStage("home");
-      setTimeout(() => setLocation("/products"), 80);
-      return;
-    }
-    setStage("home");
-  };
-
-  // If anything crashes → just go home
-  const handleSophiaCrash = () => setStage("home");
-
-  return (
-    <>
-      {/* ── Sophia Entry Flow — wrapped in error boundary, safe on all devices ── */}
-      {stage === "sophia" && (
-        <SophiaErrorBoundary onError={handleSophiaCrash}>
-          <SophiaIntroVideo onComplete={() => setStage("home")} />
-        </SophiaErrorBoundary>
-      )}
-
-      {/* ── Homepage ── */}
-      {stage === "home" && (
-        <div style={{ background: "#0A0B0F", minHeight: "100vh", overflowX: "hidden" }}>
-          <Suspense fallback={<div style={{ background: "#0A0B0F", minHeight: "100vh" }} />}>
-            <Navbar />
-            <HeroSection />
-            <HowItWorks />
-            <ProductCards />
-            <TrustFeatures />
-            <SocialProof />
-            <SophiaConcierge />
-            <StorytellingShowcase />
-            <FinalCTA />
-            <Footer />
-            <StickyCtaBar />
-            <SocialProofToast />
-          </Suspense>
-        </div>
-      )}
-    </>
-  );
+  return <GhaafeediPromoIntro />;
 }
