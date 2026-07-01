@@ -29,13 +29,13 @@ export default defineConfig(({ mode }) => {
 			minify: "esbuild",
 			rollupOptions: {
 				output: {
-					// Only split our OWN page code — never node_modules.
+					// chunk-onboarding <-> chunk-products had a circular dependency
+					// causing React.createContext = undefined crash in production.
+					// Only split admin and demo — let Vite handle everything else automatically.
 					manualChunks: (id) => {
 						if (id.includes("node_modules/")) return undefined;
 						if (id.includes("/pages/admin/")) return "chunk-admin";
-						if (id.includes("/pages/onboarding")) return "chunk-onboarding";
 						if (id.includes("/pages/demo")) return "chunk-demo";
-						if (id.includes("/pages/product")) return "chunk-products";
 					},
 				},
 			},
