@@ -10378,6 +10378,34 @@ export default function Onboarding() {
   // back() always stays inside onboarding — S1 is the terminal back point (never exits to / or /sophia)
   const back = () => setStep(s => Math.max(s - 1, 1));
 
+  // ── Swipe-back detection (mobile) ────────────────────────────────────────
+  // Detects iOS/Android edge-swipe gestures so we can suppress the popstate
+  // step-decrement — physical swipe-back should NOT step backwards through S1–S9.
+  const swipeRef = React.useRef(false);
+  const touchStartX = React.useRef(0);
+
+  useEffect(() => {
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      swipeRef.current = false;
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchStartX.current;
+      // Edge swipe: started within 50px of left edge and moved right >40px
+      if (touchStartX.current < 50 && dx > 40) {
+        swipeRef.current = true;
+        // Reset after a short window — if popstate fires within 600ms it's this swipe
+        setTimeout(() => { swipeRef.current = false; }, 600);
+      }
+    };
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
+  }, []);
+
   // ── Browser back button intercept ─────────────────────────────────────────
   // Pushes a fake history entry so browser back stays inside the onboarding flow
   useEffect(() => {
@@ -10389,7 +10417,12 @@ export default function Onboarding() {
       e.preventDefault();
       // Re-push so the URL stays as /onboarding
       window.history.pushState({ gmOb: true, step }, "", "/onboarding");
-      // Trigger internal back (stops at step 1)
+      // Physical swipe-back on mobile fires popstate — suppress step decrement
+      if (swipeRef.current) {
+        swipeRef.current = false;
+        return;
+      }
+      // In-app back (hardware back button / browser back arrow) → step back
       setStep(s => Math.max(s - 1, 1));
     };
 

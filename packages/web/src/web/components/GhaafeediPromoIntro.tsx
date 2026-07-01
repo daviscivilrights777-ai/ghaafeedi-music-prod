@@ -3,6 +3,8 @@ import { useLocation } from "wouter";
 
 const PROMO_VIDEO_URL =
   "https://pub-bc7b203485814e1186102277ad450211.r2.dev/ghaafeedi-promo-v5-final-web.mp4";
+const POSTER_URL =
+  "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.png";
 
 const ENTER_BUTTON_SHOW_TIME = 279; // 4:39 — when "Enter Ghaafeedi Music" fades in
 const INTRO_SEEN_KEY = "gm_intro_seen";
@@ -17,7 +19,7 @@ function useDestination() {
         const res = await fetch("/api/auth/session", {
           credentials: "include",
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("gm_token") || ""}`,
+            Authorization: `Bearer ${localStorage.getItem("gm_bearer_token") || ""}`,
           },
         });
         if (!res.ok) {
@@ -34,7 +36,7 @@ function useDestination() {
         const profileRes = await fetch("/api/members/profile", {
           credentials: "include",
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("gm_token") || ""}`,
+            Authorization: `Bearer ${localStorage.getItem("gm_bearer_token") || ""}`,
           },
         });
         if (profileRes.ok) {
@@ -64,6 +66,8 @@ export default function GhaafeediPromoIntro() {
   const [enterVisible, setEnterVisible] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(286);
+  // Start muted so mobile autoplay is guaranteed — user can unmute below
+  const [isMuted, setIsMuted] = useState(true);
   const dest = useDestination();
 
   // Mark intro seen
@@ -71,9 +75,27 @@ export default function GhaafeediPromoIntro() {
     localStorage.setItem(INTRO_SEEN_KEY, "1");
   }, []);
 
+  // Navigate with replaceState so "/" never sits in the back-stack
   const handleNavigate = useCallback(() => {
+    window.history.replaceState(null, "", dest);
     setLocation(dest);
   }, [dest, setLocation]);
+
+  const handleUnmute = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const next = !isMuted;
+    setIsMuted(next);
+    v.muted = next;
+    // If user unmutes and video was paused by autoplay policy, try play
+    if (!next && v.paused) {
+      v.play().catch(() => {
+        // If still blocked, keep muted
+        setIsMuted(true);
+        v.muted = true;
+      });
+    }
+  }, [isMuted]);
 
   const handleTimeUpdate = useCallback(() => {
     const v = videoRef.current;
@@ -162,8 +184,11 @@ export default function GhaafeediPromoIntro() {
         <video
           ref={videoRef}
           src={PROMO_VIDEO_URL}
+          poster={POSTER_URL}
           autoPlay
+          muted={isMuted}
           playsInline
+          preload="auto"
           style={{
             width: "100%",
             display: "block",
@@ -241,6 +266,32 @@ export default function GhaafeediPromoIntro() {
           }}
         >
           Skip Intro →
+        </button>
+
+        {/* Unmute toggle — center, always visible */}
+        <button
+          onClick={handleUnmute}
+          aria-label={isMuted ? "Unmute video" : "Mute video"}
+          style={{
+            background: isMuted
+              ? "rgba(212,175,55,0.12)"
+              : "rgba(212,175,55,0.22)",
+            border: `1px solid ${isMuted ? "rgba(212,175,55,0.35)" : "#D4AF37"}`,
+            color: isMuted ? "rgba(212,175,55,0.7)" : "#D4AF37",
+            fontSize: 13,
+            fontFamily: "Inter, sans-serif",
+            padding: "8px 18px",
+            borderRadius: 6,
+            cursor: "pointer",
+            letterSpacing: "0.04em",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            transition: "all 0.2s",
+          }}
+        >
+          <span style={{ fontSize: 15 }}>{isMuted ? "🔇" : "🔊"}</span>
+          {isMuted ? "Tap to unmute" : "Mute"}
         </button>
 
         {/* Enter Ghaafeedi Music — appears at 4:39 */}

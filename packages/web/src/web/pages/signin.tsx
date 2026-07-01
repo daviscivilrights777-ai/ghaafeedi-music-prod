@@ -1,6 +1,6 @@
 import { GhaafeediLogo } from "../components/GhaafeediLogo";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { authClient, captureToken, getToken } from "../lib/authClient";
 import { api } from "../lib/api";
@@ -8,6 +8,7 @@ import { api } from "../lib/api";
 const GOLD = "#D4AF37";
 const GOLD2 = "#F0D060";
 const BG = "#050B1A";
+const TOKEN_KEY = "gm_bearer_token";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -17,6 +18,15 @@ export default function SignIn() {
   const [error, setError] = useState("");
   const [, setLocation] = useLocation();
   const search = useSearch();
+
+  // ── LOGGED-IN GUARD ───────────────────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      window.history.replaceState(null, "", "/dashboard");
+      setLocation("/dashboard");
+    }
+  }, [setLocation]);
 
   // Preserve redirect target from product flow
   const params = new URLSearchParams(search);
