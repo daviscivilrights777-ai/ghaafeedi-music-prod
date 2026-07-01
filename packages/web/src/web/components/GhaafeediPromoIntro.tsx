@@ -7,50 +7,39 @@ const POSTER_URL =
   "https://pub-bc7b203485814e1186102277ad450211.r2.dev/sophia-poster.png";
 
 const ENTER_BUTTON_SHOW_TIME = 279; // 4:39 — when "Enter Ghaafeedi Music" fades in
-const INTRO_SEEN_KEY = "gm_intro_seen";
 
 // Determine where to send the user after skip/enter
 function useDestination() {
-  const [dest, setDest] = useState<string>("/products");
+  const [dest, setDest] = useState<string>("/home");
 
   useEffect(() => {
     async function resolve() {
       try {
+        const token = localStorage.getItem("gm_bearer_token") || "";
+        if (!token) {
+          setDest("/home");
+          return;
+        }
         const res = await fetch("/api/auth/session", {
           credentials: "include",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("gm_bearer_token") || ""}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) {
-          setDest("/products");
-          return;
-        }
+        if (!res.ok) { setDest("/home"); return; }
         const data = await res.json();
-        const user = data?.user;
-        if (!user) {
-          setDest("/products");
-          return;
-        }
-        // Check if onboarding complete
+        if (!data?.user) { setDest("/home"); return; }
+
         const profileRes = await fetch("/api/members/profile", {
           credentials: "include",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("gm_bearer_token") || ""}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (profileRes.ok) {
           const profile = await profileRes.json();
-          if (profile?.onboarding_complete) {
-            setDest("/dashboard");
-          } else {
-            setDest("/onboarding");
-          }
+          setDest(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
         } else {
           setDest("/onboarding");
         }
       } catch {
-        setDest("/products");
+        setDest("/home");
       }
     }
     resolve();
@@ -66,14 +55,9 @@ export default function GhaafeediPromoIntro() {
   const [enterVisible, setEnterVisible] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(286);
-  // Start muted so mobile autoplay is guaranteed — user can unmute below
   const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const dest = useDestination();
-
-  // Mark intro seen
-  useEffect(() => {
-    localStorage.setItem(INTRO_SEEN_KEY, "1");
-  }, []);
 
   // Navigate with replaceState so "/" never sits in the back-stack
   const handleNavigate = useCallback(() => {
@@ -81,19 +65,26 @@ export default function GhaafeediPromoIntro() {
     setLocation(dest);
   }, [dest, setLocation]);
 
-  const handleUnmute = useCallback(() => {
+  // Context-aware play / unmute button
+  const handlePlayUnmute = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
-    const next = !isMuted;
-    setIsMuted(next);
-    v.muted = next;
-    // If user unmutes and video was paused by autoplay policy, try play
-    if (!next && v.paused) {
+
+    if (v.paused) {
+      // Autoplay was blocked — user gesture: play with sound
+      v.muted = false;
+      setIsMuted(false);
       v.play().catch(() => {
-        // If still blocked, keep muted
-        setIsMuted(true);
+        // Browser still blocked — fall back to muted play
         v.muted = true;
+        setIsMuted(true);
+        v.play().catch(() => {});
       });
+    } else {
+      // Video is playing — just toggle mute
+      const next = !isMuted;
+      v.muted = next;
+      setIsMuted(next);
     }
   }, [isMuted]);
 
@@ -105,22 +96,22 @@ export default function GhaafeediPromoIntro() {
     setProgress(t / d);
     if (t >= ENTER_BUTTON_SHOW_TIME && !showEnterBtn) {
       setShowEnterBtn(true);
-      requestAnimationFrame(() => {
-        setTimeout(() => setEnterVisible(true), 50);
-      });
+      requestAnimationFrame(() => setTimeout(() => setEnterVisible(true), 50));
     }
   }, [showEnterBtn]);
 
   const handleLoadedMetadata = useCallback(() => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-    }
+    if (videoRef.current) setDuration(videoRef.current.duration);
   }, []);
 
   const handleEnded = useCallback(() => {
     setShowEnterBtn(true);
     setEnterVisible(true);
+    setIsPlaying(false);
   }, []);
+
+  const handlePlay  = useCallback(() => setIsPlaying(true),  []);
+  const handlePause = useCallback(() => setIsPlaying(false), []);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -130,6 +121,15 @@ export default function GhaafeediPromoIntro() {
 
   const currentTime = videoRef.current?.currentTime ?? 0;
 
+  // Button label — context aware
+  const playBtnLabel = !isPlaying
+    ? "▶  Tap to Play"
+    : isMuted
+    ? "🔇  Unmute"
+    : "🔊  Mute";
+
+  const playBtnActive = !isMuted && isPlaying;
+
   return (
     <div
       style={{
@@ -138,8 +138,8 @@ export default function GhaafeediPromoIntro() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        padding: "0",
+        justifyContent: "flex-start",
+        paddingTop: "clamp(12px, 3vw, 28px)",
         fontFamily: "Inter, sans-serif",
       }}
     >
@@ -151,7 +151,7 @@ export default function GhaafeediPromoIntro() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "18px 28px 12px",
+          padding: "0 28px 12px",
           boxSizing: "border-box",
         }}
       >
@@ -171,13 +171,14 @@ export default function GhaafeediPromoIntro() {
         </span>
       </div>
 
-      {/* Video container */}
+      {/* Video container — natural 16:9 aspect ratio, no black bars */}
       <div
         style={{
           width: "100%",
           maxWidth: 1280,
           position: "relative",
           background: "#000",
+          aspectRatio: "16/9",
           lineHeight: 0,
         }}
       >
@@ -191,14 +192,15 @@ export default function GhaafeediPromoIntro() {
           preload="auto"
           style={{
             width: "100%",
+            height: "100%",
             display: "block",
-            maxHeight: "70vh",
-            objectFit: "contain",
-            background: "#000",
+            objectFit: "cover",
           }}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleEnded}
+          onPlay={handlePlay}
+          onPause={handlePause}
         />
 
         {/* Gold progress bar — bottom of video */}
@@ -223,7 +225,7 @@ export default function GhaafeediPromoIntro() {
         </div>
       </div>
 
-      {/* Button row — ALWAYS below video, never overlaid */}
+      {/* Button row — below video, never overlaid */}
       <div
         style={{
           width: "100%",
@@ -231,7 +233,7 @@ export default function GhaafeediPromoIntro() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "20px 28px",
+          padding: "18px 28px",
           boxSizing: "border-box",
           gap: 16,
           flexWrap: "wrap",
@@ -253,31 +255,27 @@ export default function GhaafeediPromoIntro() {
             transition: "all 0.2s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color =
-              "rgba(255,255,255,0.85)";
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              "rgba(255,255,255,0.4)";
+            (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.85)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.4)";
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color =
-              "rgba(255,255,255,0.5)";
-            (e.currentTarget as HTMLButtonElement).style.borderColor =
-              "rgba(255,255,255,0.2)";
+            (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.5)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.2)";
           }}
         >
           Skip Intro →
         </button>
 
-        {/* Unmute toggle — center, always visible */}
+        {/* Play / Unmute toggle — context-aware */}
         <button
-          onClick={handleUnmute}
-          aria-label={isMuted ? "Unmute video" : "Mute video"}
+          onClick={handlePlayUnmute}
+          aria-label={playBtnLabel}
           style={{
-            background: isMuted
-              ? "rgba(212,175,55,0.12)"
-              : "rgba(212,175,55,0.22)",
-            border: `1px solid ${isMuted ? "rgba(212,175,55,0.35)" : "#D4AF37"}`,
-            color: isMuted ? "rgba(212,175,55,0.7)" : "#D4AF37",
+            background: playBtnActive
+              ? "rgba(212,175,55,0.22)"
+              : "rgba(212,175,55,0.10)",
+            border: `1px solid ${playBtnActive ? "#D4AF37" : "rgba(212,175,55,0.35)"}`,
+            color: playBtnActive ? "#D4AF37" : "rgba(212,175,55,0.75)",
             fontSize: 13,
             fontFamily: "Inter, sans-serif",
             padding: "8px 18px",
@@ -288,10 +286,11 @@ export default function GhaafeediPromoIntro() {
             alignItems: "center",
             gap: 6,
             transition: "all 0.2s",
+            minWidth: 130,
+            justifyContent: "center",
           }}
         >
-          <span style={{ fontSize: 15 }}>{isMuted ? "🔇" : "🔊"}</span>
-          {isMuted ? "Tap to unmute" : "Mute"}
+          {playBtnLabel}
         </button>
 
         {/* Enter Ghaafeedi Music — appears at 4:39 */}
@@ -306,8 +305,7 @@ export default function GhaafeediPromoIntro() {
           <button
             onClick={handleNavigate}
             style={{
-              background:
-                "linear-gradient(135deg, #D4AF37 0%, #F4D06F 50%, #D4AF37 100%)",
+              background: "linear-gradient(135deg, #D4AF37 0%, #F4D06F 50%, #D4AF37 100%)",
               border: "none",
               color: "#050B1A",
               fontSize: 16,
@@ -323,8 +321,7 @@ export default function GhaafeediPromoIntro() {
             onMouseEnter={(e) => {
               (e.currentTarget as HTMLButtonElement).style.boxShadow =
                 "0 0 52px rgba(212,175,55,0.8), 0 4px 24px rgba(0,0,0,0.5)";
-              (e.currentTarget as HTMLButtonElement).style.transform =
-                "scale(1.03)";
+              (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.03)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.boxShadow =
@@ -337,15 +334,14 @@ export default function GhaafeediPromoIntro() {
         </div>
       </div>
 
-      {/* Tagline below buttons */}
+      {/* Tagline */}
       <p
         style={{
           color: "rgba(255,255,255,0.25)",
           fontSize: 11,
           letterSpacing: "0.12em",
           textTransform: "uppercase",
-          marginTop: 0,
-          marginBottom: 24,
+          margin: "0 0 24px",
         }}
       >
         Turn Your Memories Into Cinematic Songs &amp; Films

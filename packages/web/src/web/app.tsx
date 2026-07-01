@@ -32,6 +32,7 @@ const AdminLipSync       = lazy(() => import("./pages/admin/lipsync"));
 const AdminQAResults     = lazy(() => import("./pages/admin/qa-results"));
 const RevisionIntakePage = lazy(() => import("./pages/revision-intake"));
 const AdminRevisions     = lazy(() => import("./pages/admin/admin-revisions"));
+const HomePage           = lazy(() => import("./pages/home"));
 
 const PageShell = () => (
   <div style={{ background: "#050B1A", minHeight: "100vh" }} />
@@ -59,6 +60,7 @@ function App() {
           <Route path="/contact" component={ContactPage} />
           <Route path="/faq" component={FaqPage} />
           <Route path="/revisions" component={RevisionsPage} />
+          <Route path="/home" component={HomePage} />
           <Route path="/splash-preview" component={SplashPreview} />
           {/* Admin panel */}
           <Route path="/admin" component={AdminOverview} />
