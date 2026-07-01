@@ -191,12 +191,11 @@ export default function Dashboard() {
   }
 
   const handleSignOut = async () => {
-    await authClient.signOut();
     clearToken();
-    // After sign-out go to signin — replaceState so back never returns to dashboard
-    // (and never accidentally loops through Sophia landing page)
-    window.history.replaceState(null, "", "/signin");
-    setLocation("/signin");
+    await authClient.signOut();
+    // After sign-out go to the Ghaafeedi Music homepage — hard redirect
+    // so no stale React/session state lingers and back never returns to dashboard.
+    window.location.href = "/";
   };
 
   const copyMemberId = () => {

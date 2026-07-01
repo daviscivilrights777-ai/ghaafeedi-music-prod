@@ -53,10 +53,9 @@ export default function AdminLayout({ children, title, subtitle }: Props) {
   const { data: session } = authClient.useSession();
 
   const handleSignOut = async () => {
-    await authClient.signOut();
     clearToken();
-    window.history.replaceState(null, "", "/signin");
-    setLocation("/signin");
+    await authClient.signOut();
+    window.location.href = "/";
   };
 
   const SidebarContent = () => (

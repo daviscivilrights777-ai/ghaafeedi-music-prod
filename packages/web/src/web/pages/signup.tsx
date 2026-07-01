@@ -50,6 +50,10 @@ export default function SignUp() {
       setError("Password must be at least 8 characters.");
       return;
     }
+    if (!allConsented) {
+      setError("Please accept the Terms of Service, Privacy Policy, and confirm your age to continue.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -61,6 +65,15 @@ export default function SignUp() {
         setError(res.error.message ?? "Sign up failed. Please try again.");
       } else {
         await ensureMember();
+        // Record consent acceptance — required, first-time sign-up only
+        try {
+          const token = localStorage.getItem(TOKEN_KEY);
+          await fetch("/api/members/accept-consent", {
+            method: "POST",
+            credentials: "include",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+        } catch { /* non-blocking — onboarding consent gate is the fallback */ }
         setLocation(redirectTo);
       }
     } catch (err: unknown) {
@@ -188,10 +201,35 @@ export default function SignUp() {
             </div>
           ))}
 
-          <button type="submit" disabled={loading || googleLoading}
-            style={{ width: "100%", padding: "14px", marginTop: 10, borderRadius: 8, border: "none", background: loading ? "rgba(212,175,55,0.5)" : `linear-gradient(135deg, ${GOLD} 0%, #b8902a 100%)`, color: BG, fontSize: 15, fontFamily: "Inter, sans-serif", fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", letterSpacing: "0.03em", boxShadow: loading ? "none" : "0 0 20px rgba(212,175,55,0.3)", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = "0 0 30px rgba(212,175,55,0.5)"; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 0 20px rgba(212,175,55,0.3)"; }}
+          {/* ── Required consent checkboxes ── */}
+          <div style={{ marginTop: 6, marginBottom: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { checked: consentTos, setter: setConsentTos, label: <>I agree to the <a href="/legal/terms-of-service" target="_blank" rel="noopener noreferrer" style={{ color: GOLD, textDecoration: "none" }}>Terms of Service</a></> },
+              { checked: consentPrivacy, setter: setConsentPrivacy, label: <>I agree to the <a href="/legal/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: GOLD, textDecoration: "none" }}>Privacy Policy</a></> },
+              { checked: consentAge, setter: setConsentAge, label: "I confirm I am 18 years of age or older" },
+            ].map((row, i) => (
+              <label key={i} onClick={() => row.setter(!row.checked)} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <span style={{
+                  flexShrink: 0, width: 18, height: 18, marginTop: 1, borderRadius: 5,
+                  border: `1.5px solid ${row.checked ? GOLD : "rgba(255,255,255,0.3)"}`,
+                  background: row.checked ? `linear-gradient(135deg, ${GOLD}, #b8902a)` : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s",
+                }}>
+                  {row.checked && (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                      <path d="M20 6L9 17l-5-5" stroke={BG} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
+                <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.65)", fontFamily: "Inter, sans-serif", lineHeight: 1.5 }}>{row.label}</span>
+              </label>
+            ))}
+          </div>
+
+          <button type="submit" disabled={loading || googleLoading || !allConsented}
+            style={{ width: "100%", padding: "14px", marginTop: 10, borderRadius: 8, border: "none", background: (loading || !allConsented) ? "rgba(212,175,55,0.5)" : `linear-gradient(135deg, ${GOLD} 0%, #b8902a 100%)`, color: BG, fontSize: 15, fontFamily: "Inter, sans-serif", fontWeight: 700, cursor: (loading || !allConsented) ? "not-allowed" : "pointer", letterSpacing: "0.03em", boxShadow: (loading || !allConsented) ? "none" : "0 0 20px rgba(212,175,55,0.3)", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            onMouseEnter={e => { if (!loading && allConsented) e.currentTarget.style.boxShadow = "0 0 30px rgba(212,175,55,0.5)"; }}
+            onMouseLeave={e => { e.currentTarget.style.boxShadow = (loading || !allConsented) ? "none" : "0 0 20px rgba(212,175,55,0.3)"; }}
           >
             {loading ? <><Spinner /> Creating Account...</> : "✦ Create My Account"}
           </button>
@@ -212,12 +250,6 @@ export default function SignUp() {
             </div>
           ))}
         </div>
-
-        <p style={{ textAlign: "center", marginTop: 14, fontSize: 11, color: "rgba(255,255,255,0.32)", fontFamily: "Inter, sans-serif", lineHeight: 1.6 }}>
-          By creating an account, you agree to our{" "}
-          <a href="#" style={{ color: GOLD, textDecoration: "none" }}>Terms of Service</a> and{" "}
-          <a href="#" style={{ color: GOLD, textDecoration: "none" }}>Privacy Policy</a>
-        </p>
 
         <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: "rgba(255,255,255,0.5)", fontFamily: "Inter, sans-serif" }}>
           Already have an account?{" "}

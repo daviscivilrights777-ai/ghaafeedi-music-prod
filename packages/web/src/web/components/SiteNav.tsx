@@ -10,9 +10,9 @@ export function SiteNav({ transparent = false }: { transparent?: boolean }) {
   const [, setLocation] = useLocation();
 
   const handleSignOut = async () => {
-    await signOut();
     clearToken();
-    setLocation("/home");
+    await signOut();
+    window.location.href = "/";
   };
 
   return (

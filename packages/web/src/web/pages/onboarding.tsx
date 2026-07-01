@@ -162,9 +162,10 @@ function S1MemberDropdown({
 
   const handleSignOut = async () => {
     setOpen(false);
-    const { authClient: ac } = await import("../lib/authClient");
+    const { authClient: ac, clearToken } = await import("../lib/authClient");
+    clearToken();
     await ac.signOut();
-    setLocation("/signin");
+    window.location.href = "/";
   };
 
   return (
