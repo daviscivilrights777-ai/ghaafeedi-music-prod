@@ -6,6 +6,8 @@ import { Provider } from "./components/provider";
 
 // Lazy-load all non-critical routes
 const SignUp           = lazy(() => import("./pages/signup"));
+const GetStarted       = lazy(() => import("./pages/get-started"));
+const CreateAccount    = lazy(() => import("./pages/create-account"));
 const Onboarding       = lazy(() => import("./pages/onboarding"));
 const Products         = lazy(() => import("./pages/products"));
 const ProductDetail    = lazy(() => import("./pages/product-detail"));
@@ -46,6 +48,8 @@ function App() {
           <Route path="/" component={Index} />
           <Route path="/signin" component={SignIn} />
           <Route path="/signup" component={SignUp} />
+          <Route path="/get-started" component={GetStarted} />
+          <Route path="/create-account" component={CreateAccount} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/products" component={Products} />
           <Route path="/products/:slug" component={ProductDetail} />

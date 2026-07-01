@@ -588,7 +588,7 @@ export default function ProductDetail() {
 
   const handleBeginJourney = () => {
     if (!session) {
-      setLocation(`/signup?redirect=/products/${product.slug}`);
+      setLocation(`/get-started?redirect=/products/${product.slug}`);
       return;
     }
     if (!ackDone) {
@@ -642,7 +642,7 @@ export default function ProductDetail() {
           ) : (
             <>
               <button onClick={() => setLocation("/signin")} style={{ padding: "8px 18px", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.7)", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Sign In</button>
-              <button onClick={() => setLocation("/signup")} style={{ padding: "8px 18px", background: `linear-gradient(135deg, ${GOLD}, #b8902a)`, border: "none", borderRadius: 8, color: BG, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Join Free</button>
+              <button onClick={() => setLocation("/get-started")} style={{ padding: "8px 18px", background: `linear-gradient(135deg, ${GOLD}, #b8902a)`, border: "none", borderRadius: 8, color: BG, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Join Free</button>
             </>
           )}
         </div>

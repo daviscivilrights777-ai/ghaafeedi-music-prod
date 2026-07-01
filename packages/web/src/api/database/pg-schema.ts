@@ -87,6 +87,13 @@ export const profiles = pgTable("profiles", {
   verified:          boolean("verified").default(false),
   ltvCents:          integer("ltv_cents").default(0),
   consentAcceptedAt: timestamp("consent_accepted_at", { withTimezone: true }),
+  // ── Enterprise sign-up fields ──────────────────────────────
+  streetAddress:     text("street_address"),
+  city:              text("city"),
+  state:             text("state"),
+  zip:               text("zip"),
+  dateOfBirth:       text("date_of_birth"), // stored as ISO date string (YYYY-MM-DD)
+  referralSource:    text("referral_source"),
   createdAt:         timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

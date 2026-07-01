@@ -74,7 +74,7 @@ export function AuthGateModal({ open, onClose, redirectTo = "/onboarding" }: Aut
 
             {/* CTA buttons */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <a href={`/signup?redirect=${encodedRedirect}`} style={{
+              <a href={`/create-account?redirect=${encodedRedirect}`} style={{
                 display: "block", padding: "14px 24px",
                 background: "linear-gradient(135deg, #FFF9E6 0%, #F1D37A 30%, #C9962E 100%)",
                 color: "#01040B", fontFamily: "Inter, sans-serif",

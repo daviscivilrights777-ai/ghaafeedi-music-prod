@@ -288,7 +288,7 @@ export default function SignIn() {
         }}>
           Don't have an account?{" "}
           <Link
-            href={redirectTo !== "/onboarding" ? `/signup?redirect=${encodeURIComponent(redirectTo)}` : "/signup"}
+            href={redirectTo !== "/onboarding" ? `/create-account?redirect=${encodeURIComponent(redirectTo)}` : "/create-account"}
             style={{ color: GOLD, textDecoration: "none", fontWeight: 600 }}
           >
             Create Account

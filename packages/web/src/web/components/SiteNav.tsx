@@ -85,7 +85,7 @@ export function SiteNav({ transparent = false }: { transparent?: boolean }) {
             >
               Sign In
             </a>
-            <a href="/signup" style={{
+            <a href="/get-started" style={{
               fontSize: 13, fontFamily: "Inter, sans-serif", fontWeight: 700,
               color: "#01040B", textDecoration: "none",
               padding: "7px 18px",

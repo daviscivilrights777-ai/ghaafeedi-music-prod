@@ -728,7 +728,7 @@ export function SophiaConcierge() {
                         Daily free messages used. Resets tomorrow.
                       </p>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <a href="/signup" style={{
+                        <a href="/create-account" style={{
                           flex: 1, display: "block", textAlign: "center", padding: "8px 0",
                           background: `linear-gradient(135deg, ${GOLD} 0%, ${GOLD2} 100%)`,
                           color: "#01040B", fontFamily: "Inter, sans-serif",
@@ -837,7 +837,7 @@ export function SophiaConcierge() {
                       color: "rgba(255,255,255,0.3)", marginTop: 7, textAlign: "center",
                     }}>
                       {remaining} free message{remaining !== 1 ? "s" : ""} remaining ·{" "}
-                      <a href="/signup" style={{ color: GOLD, textDecoration: "none" }}>Upgrade for unlimited</a>
+                      <a href="/create-account" style={{ color: GOLD, textDecoration: "none" }}>Upgrade for unlimited</a>
                       {" "}·{" "}
                       <button
                         onClick={() => setActiveTab("about")}

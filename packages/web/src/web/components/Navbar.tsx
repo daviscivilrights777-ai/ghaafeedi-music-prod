@@ -386,7 +386,7 @@ export function Navbar() {
                 }}
               >Sign In</Link>
 
-              <Link href="/signup" style={{
+              <Link href="/get-started" style={{
                 background: "linear-gradient(135deg, #FFE8A3 0%, #D4AF37 55%, #9A6F1F 100%)",
                 color: "#0A0B0F", fontSize: 13.5, fontFamily: "Inter, sans-serif", fontWeight: 700,
                 borderRadius: 999, padding: "9px 22px",
