@@ -1025,7 +1025,7 @@ export default function ProductsPage() {
   const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 1440);
   const [, nav] = useLocation();
   const { data: session } = useSession();
-  const handleSignOut = async () => { await signOut(); clearToken(); nav("/"); };
+  const handleSignOut = async () => { await signOut(); clearToken(); nav("/home"); };
 
   useEffect(() => {
     // Debounced resize

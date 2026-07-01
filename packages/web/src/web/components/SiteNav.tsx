@@ -12,7 +12,7 @@ export function SiteNav({ transparent = false }: { transparent?: boolean }) {
   const handleSignOut = async () => {
     await signOut();
     clearToken();
-    setLocation("/");
+    setLocation("/home");
   };
 
   return (

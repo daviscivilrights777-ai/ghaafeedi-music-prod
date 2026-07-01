@@ -59,6 +59,20 @@ export default function GhaafeediPromoIntro() {
   const [isPlaying, setIsPlaying] = useState(false);
   const dest = useDestination();
 
+  // Mobile autoplay: load() + wait for canplay before play()
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onCanPlay = () => {
+      v.play().catch(() => {
+        // autoplay blocked — user must tap the button
+      });
+    };
+    v.addEventListener("canplay", onCanPlay, { once: true });
+    v.load();
+    return () => v.removeEventListener("canplay", onCanPlay);
+  }, []);
+
   // Navigate with replaceState so "/" never sits in the back-stack
   const handleNavigate = useCallback(() => {
     window.history.replaceState(null, "", dest);
@@ -71,17 +85,12 @@ export default function GhaafeediPromoIntro() {
     if (!v) return;
 
     if (v.paused) {
-      // Autoplay was blocked — user gesture: play with sound
-      v.muted = false;
-      setIsMuted(false);
-      v.play().catch(() => {
-        // Browser still blocked — fall back to muted play
-        v.muted = true;
-        setIsMuted(true);
-        v.play().catch(() => {});
-      });
+      // Always play muted first — guaranteed to work on mobile
+      v.muted = true;
+      setIsMuted(true);
+      v.play().catch(() => {});
     } else {
-      // Video is playing — just toggle mute
+      // Video playing — toggle mute
       const next = !isMuted;
       v.muted = next;
       setIsMuted(next);
@@ -191,7 +200,6 @@ export default function GhaafeediPromoIntro() {
           muted={isMuted}
           playsInline
           preload="auto"
-          crossOrigin="anonymous"
           onError={(e) => console.warn("[GhaafeediPromo] video load error:", e)}
           style={{
             width: "100%",

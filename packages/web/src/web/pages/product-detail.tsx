@@ -637,7 +637,7 @@ export default function ProductDetail() {
                 {session.user?.name || session.user?.email}
               </span>
               <button onClick={() => setLocation("/dashboard")} style={{ padding: "8px 18px", background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 8, color: GOLD, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Dashboard</button>
-              <button onClick={async () => { await authClient.signOut(); if (typeof (authClient as any).clearToken === "function") (authClient as any).clearToken(); setLocation("/"); }} style={{ padding: "8px 18px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.62)", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Sign Out</button>
+              <button onClick={async () => { await authClient.signOut(); if (typeof (authClient as any).clearToken === "function") (authClient as any).clearToken(); setLocation("/home"); }} style={{ padding: "8px 18px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "rgba(255,255,255,0.62)", fontSize: 12, cursor: "pointer", fontFamily: "Inter, sans-serif" }}>Sign Out</button>
             </>
           ) : (
             <>
