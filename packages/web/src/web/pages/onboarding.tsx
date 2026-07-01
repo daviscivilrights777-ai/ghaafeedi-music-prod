@@ -10323,6 +10323,10 @@ export default function Onboarding() {
       setLocation("/signin?redirect=/onboarding");
       return;
     }
+    // Capture bearer token if landed here via Google OAuth redirect (token not in localStorage yet)
+    if (!getToken() && (session as any)?.session?.token) {
+      localStorage.setItem("gm_bearer_token", (session as any).session.token);
+    }
     // Resume saved step if we landed on step 1 (e.g. after Google OAuth redirect)
     const saved = parseInt(localStorage.getItem(GM_OB_STEP_KEY) || "1") || 1;
     if (saved > 1 && step === 1) {

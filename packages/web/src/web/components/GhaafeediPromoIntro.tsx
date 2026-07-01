@@ -179,6 +179,7 @@ export default function GhaafeediPromoIntro() {
           position: "relative",
           background: "#000",
           aspectRatio: "16/9",
+          minHeight: 200,
           lineHeight: 0,
         }}
       >
@@ -190,6 +191,8 @@ export default function GhaafeediPromoIntro() {
           muted={isMuted}
           playsInline
           preload="auto"
+          crossOrigin="anonymous"
+          onError={(e) => console.warn("[GhaafeediPromo] video load error:", e)}
           style={{
             width: "100%",
             height: "100%",

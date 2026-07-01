@@ -14,6 +14,7 @@ import { TrustFeatures } from "../components/TrustFeatures";
 import { FinalCTA } from "../components/FinalCTA";
 import { Footer } from "../components/Footer";
 import { StickyCtaBar } from "../components/StickyCtaBar";
+import { SophiaConcierge } from "../components/SophiaConcierge";
 
 export default function HomePage() {
   return (
@@ -28,6 +29,8 @@ export default function HomePage() {
       <FinalCTA />
       <Footer />
       <StickyCtaBar />
+      {/* Sophia floating widget — Concierge Chat tab + Sophia AI Emotional Companion info tab */}
+      <SophiaConcierge />
     </div>
   );
 }

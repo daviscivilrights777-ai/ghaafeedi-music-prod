@@ -74,9 +74,12 @@ export default function SignUp() {
     setGoogleLoading(true);
     setError("");
     try {
+      const absoluteCallback = redirectTo.startsWith("http")
+        ? redirectTo
+        : `${window.location.origin}${redirectTo}`;
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: redirectTo,
+        callbackURL: absoluteCallback,
       });
     } catch {
       setError("Google sign-in failed. Please try again.");
