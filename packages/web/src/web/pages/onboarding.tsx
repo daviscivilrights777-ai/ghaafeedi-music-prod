@@ -6472,18 +6472,18 @@ const S8_PACKAGES: S8Package[] = [
 const S8_BNPL_OPTIONS = [
   {
     id: "buynow4",
-    label: "Buy Now, Pay Later",
-    sub: "4 Interest-Free Payments · 0% APR",
+    label: "Pay in 4",
+    sub: "Afterpay / Clearpay · 4 Interest-Free Payments · 0% APR",
     badge: "MOST POPULAR",
     badgeColor: "#22C55E",
     badgeGlow: "rgba(34,197,94,0.45)",
     summaryLabel: (p: number) => `${(p/4).toFixed(2)} × 4 payments`,
     calc: (p: number) => `${(p/4).toFixed(2)}/payment`,
-    detail: (p: number) => `4 payments of ${(p/4).toFixed(2)} — 0% interest · No fees`,
+    detail: (p: number) => `4 payments of ${(p/4).toFixed(2)}, every 2 weeks — 0% interest · No fees`,
   },
   {
-    id: "monthly",
-    label: "Monthly Installments",
+    id: "financing",
+    label: "Klarna Financing",
     sub: "3, 6 or 12 Month Plans · Choose Your Term",
     badge: "FLEXIBLE",
     badgeColor: "#14B8A6",
@@ -6495,30 +6495,30 @@ const S8_BNPL_OPTIONS = [
     calc: (p: number) => `From ${(p/12).toFixed(2)}/mo`,
     detail: (p: number, term?: number) => {
       const t = term || 6;
-      return `${(p/t).toFixed(2)}/mo × ${t} months · Low interest`;
+      return `${(p/t).toFixed(2)}/mo × ${t} months · Via Klarna`;
     },
   },
   {
-    id: "pay30",
-    label: "Pay in 30 Days",
+    id: "klarna30",
+    label: "Klarna — Pay in 30 Days",
     sub: "Buy today · Pay full amount in 30 days",
     badge: "INTEREST FREE",
     badgeColor: "#34D399",
     badgeGlow: "rgba(52,211,153,0.45)",
     summaryLabel: (p: number) => `${p.toFixed(2)} due ${new Date(Date.now()+30*86400000).toLocaleDateString("en-US",{month:"short",day:"numeric"})}`,
     calc: (p: number) => `${p.toFixed(2)} in 30 days`,
-    detail: (_p: number) => "Pay nothing today · Full payment due in 30 days · No fees",
+    detail: (_p: number) => "Pay nothing today · Full payment due in 30 days · Via Klarna · No fees",
   },
   {
-    id: "pay60",
-    label: "Pay in 60 Days",
-    sub: "Extended deferred · Maximum flexibility",
+    id: "sunbit",
+    label: "Sunbit Installments",
+    sub: "Monthly installment financing · US only",
     badge: "EXTENDED",
     badgeColor: "#14B8A6",
     badgeGlow: "rgba(20,184,166,0.45)",
-    summaryLabel: (p: number) => `${p.toFixed(2)} due ${new Date(Date.now()+60*86400000).toLocaleDateString("en-US",{month:"short",day:"numeric"})}`,
-    calc: (p: number) => `${p.toFixed(2)} in 60 days`,
-    detail: (_p: number) => "Pay nothing today · Full payment due in 60 days · No fees",
+    summaryLabel: (p: number) => `${p.toFixed(2)} via Sunbit`,
+    calc: (p: number) => `${p.toFixed(2)} financed`,
+    detail: (_p: number) => "Split into manageable monthly payments · Via Sunbit · US customers only",
   },
 ];
 
@@ -6837,12 +6837,12 @@ function S8ActivePackage({ pkg, heroHeight }: { pkg: S8Package; heroHeight: numb
 
 
 const S8_METHODS = [
-  { id: "card",   label: "Credit Card",   color: "#D4AF37", bg: "rgba(212,175,55,0.12)" },
-  { id: "apple",  label: "Apple Pay",     color: "#FFFFFF", bg: "rgba(0,0,0,0.35)" },
-  { id: "google", label: "Google Pay",    color: "#4285F4", bg: "rgba(66,133,244,0.12)" },
-  { id: "paypal", label: "PayPal",        color: "#0070BA", bg: "rgba(0,112,186,0.12)"  },
-  { id: "bank",   label: "Bank Transfer", color: "#2563EB", bg: "rgba(37,99,235,0.12)" },
-  { id: "crypto", label: "Crypto",        color: "#10B981", bg: "rgba(16,185,129,0.12)" },
+  { id: "card",    label: "Credit Card",  color: "#D4AF37", bg: "rgba(212,175,55,0.12)" },
+  { id: "apple",   label: "Apple Pay",    color: "#FFFFFF", bg: "rgba(0,0,0,0.35)" },
+  { id: "google",  label: "Google Pay",   color: "#4285F4", bg: "rgba(66,133,244,0.12)" },
+  { id: "amazon",  label: "Amazon Pay",   color: "#FF9900", bg: "rgba(255,153,0,0.12)"  },
+  { id: "cashapp", label: "Cash App Pay", color: "#00D632", bg: "rgba(0,214,50,0.12)" },
+  { id: "revolut", label: "RevolutPay",   color: "#191C1F", bg: "rgba(0,0,0,0.28)" },
 ];
 
 function S8MethodIcon({ id, size=22 }: { id: string; size?: number }) {
@@ -6875,32 +6875,26 @@ function S8MethodIcon({ id, size=22 }: { id: string; size?: number }) {
       <path d="M3.15 8.35C4.04 6.33 5.73 4.75 7.83 3.88L10.19 6.1C9.06 6.52 8.12 7.28 7.5 8.28L3.15 8.35z" fill="#FBBC05"/>
     </svg>
   );
-  if (id === "paypal") return (
+  if (id === "amazon") return (
+    /* Amazon Pay */
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <path d="M7.5 21.5H4.4l2.6-16h5.6c2.3 0 3.9 1.1 3.9 3.2 0 3.5-2.9 5.3-5.9 5.3H8.6L7.5 21.5zm1.3-8.5h1.6c1.7 0 3.2-.8 3.2-2.7 0-1-.7-1.7-2.1-1.7h-1.7L8.8 13z" fill="#003087"/>
-      <path d="M19 8.5c.1.5.1 1.1 0 1.7-.7 3.4-3.1 5.1-6.3 5.1h-1.8L10 21.5H7.1l2.1-12.5h5.7c2.5 0 4 1.1 4.2 3.5h-.1z" fill="#0070BA"/>
+      <path d="M4 16.5c3.2 2 11 3 16-.3.3-.2.6.1.4.4-1.3 1.6-5.4 4.4-11 4.4-5.2 0-9.1-2.6-9.9-3.6-.2-.3.1-.5.5-.4z" fill="#FF9900"/>
+      <path d="M18.2 15c-.2.1-.2.3-.1.5 1 .9 2 .3 2.3-.1.4-.5.2-1.3-.1-1.6-.1-.1-.3-.1-.4 0-.3.3-.4.7-.4 1-.4.1-.9.2-1.3.2z" fill="#FF9900"/>
+      <text x="4" y="10" fontFamily="Arial, Helvetica, sans-serif" fontSize="9" fontWeight="700" fill="#111">amazon</text>
     </svg>
   );
-  if (id === "bank") return (
-    /* Bank Transfer — industry standard blue (#1D4ED8 / #2563EB) */
-    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Roof / pediment */}
-      <path d="M2.5 10.5L12 3.5l9.5 7v1H2.5v-1z" fill="#1D4ED8"/>
-      {/* Columns */}
-      <rect x="4.5"  y="12" width="2.2" height="6" rx="0.5" fill="#2563EB"/>
-      <rect x="8.9"  y="12" width="2.2" height="6" rx="0.5" fill="#2563EB"/>
-      <rect x="13.3" y="12" width="2.2" height="6" rx="0.5" fill="#2563EB"/>
-      <rect x="17.3" y="12" width="2.2" height="6" rx="0.5" fill="#2563EB"/>
-      {/* Base */}
-      <rect x="2.5" y="18.5" width="19" height="2" rx="1" fill="#1D4ED8"/>
-      {/* Highlight stripe on pediment */}
-      <rect x="2.5" y="10.5" width="19" height="1" rx="0.4" fill="#3B82F6" opacity="0.5"/>
+  if (id === "cashapp") return (
+    /* Cash App Pay */
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="6" fill="#00D632"/>
+      <path d="M12 5.5c-2.6 0-4.2 1.3-4.2 3.2 0 1.5 1 2.3 2.9 2.8l1.2.3c1 .25 1.4.55 1.4 1.1 0 .65-.6 1.05-1.65 1.05-1.05 0-1.8-.4-2-1.15H7.2c.2 1.7 1.5 2.85 3.55 3.05l-.3 1.35h1.5l.3-1.35c2.4-.15 3.9-1.4 3.9-3.15 0-1.55-1-2.4-3-2.9l-1.15-.3c-.95-.25-1.35-.55-1.35-1.05 0-.6.55-.95 1.5-.95.95 0 1.6.35 1.8 1.05h2.4C16.15 7.35 14.9 6.25 13 6l.3-1.3h-1.5l-.25 1.15c-.2 0 .3-.35.45-.35z" fill="#fff"/>
     </svg>
   );
-  if (id === "crypto") return (
+  if (id === "revolut") return (
+    /* RevolutPay */
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="10" fill="rgba(16,185,129,0.15)" stroke="#10B981" strokeWidth="1.5"/>
-      <path d="M9 8h4.5c1.1 0 2 .9 2 2s-.9 2-2 2H9V8zm0 4h5c1.1 0 2 .9 2 2s-.9 2-2 2H9v-4zm2-5v-1m2 0v1m-2 10v1m2 0v-1" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round"/>
+      <rect width="24" height="24" rx="5" fill="#191C1F"/>
+      <path d="M7 6.5h5.6c2.1 0 3.6 1.3 3.6 3.15 0 1.4-.85 2.5-2.15 2.95l2.35 4.9h-2.55l-2.1-4.5H9.35v4.5H7V6.5zm2.35 2.05v2.65h2.9c.9 0 1.5-.55 1.5-1.3 0-.8-.6-1.35-1.5-1.35h-2.9z" fill="#fff"/>
     </svg>
   );
   return null;
@@ -6944,10 +6938,10 @@ function S8DodoPaymentModule({
   const selBnpl = S8_BNPL_OPTIONS.find(o => o.id === bnplOption);
   // P6 — dynamic summary amount based on selected BNPL + term
   const bnplSummaryLabel = selBnpl
-    ? (selBnpl.summaryLabel as (p: number, t?: number) => string)(total, bnplOption === "monthly" ? monthlyTerm : undefined)
+    ? (selBnpl.summaryLabel as (p: number, t?: number) => string)(total, bnplOption === "financing" ? monthlyTerm : undefined)
     : "";
   const bnplDetailLabel = selBnpl
-    ? (selBnpl.detail as (p: number, t?: number) => string)(total, bnplOption === "monthly" ? monthlyTerm : undefined)
+    ? (selBnpl.detail as (p: number, t?: number) => string)(total, bnplOption === "financing" ? monthlyTerm : undefined)
     : "";
 
   // ── Validation ──
@@ -7228,11 +7222,11 @@ function S8DodoPaymentModule({
                           fontWeight: 700, color: isSel ? "#D4AF37" : "rgba(255,255,255,0.65)",
                           transition: "color 0.2s ease",
                         }}>
-                          {opt.id === "monthly"
+                          {opt.id === "financing"
                             ? `${(total / monthlyTerm).toFixed(2)}/mo`
                             : opt.calc(total)}
                         </div>
-                        {opt.id === "monthly" && (
+                        {opt.id === "financing" && (
                           <div style={{ fontFamily: "Inter,sans-serif", fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
                             × {monthlyTerm} months
                           </div>
@@ -7241,7 +7235,7 @@ function S8DodoPaymentModule({
                     </div>
 
                     {/* P4 — Monthly term selector (expands when monthly is selected) */}
-                    {opt.id === "monthly" && isSel && (
+                    {opt.id === "financing" && isSel && (
                       <div style={{
                         margin: "6px 2px 0",
                         background: "linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(5,11,26,0.8) 100%)",
@@ -8553,6 +8547,20 @@ function Step8Checkout({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const { data: s8Session } = useSession();
+  const s8UserId    = (s8Session as any)?.user?.id ?? "";
+  const s8Email     = s8Session?.user?.email ?? "";
+  const s8Name      = s8Session?.user?.name  ?? "";
+  const [s8MemberId, setS8MemberId] = React.useState("");
+  React.useEffect(() => {
+    if (!s8UserId) return;
+    const token = getToken();
+    fetch("/api/members/me", { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { member?: { memberId?: string } } | null) => { if (d?.member?.memberId) setS8MemberId(d.member.memberId); })
+      .catch(() => {});
+  }, [s8UserId]);
+
   // ── Restore persisted state ────────────────────────────────────────────────
   const initState = (): GmCheckoutState => {
     try {
@@ -8641,20 +8649,47 @@ function Step8Checkout({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Poll for payment confirmation ──────────────────────────────────────────
+  // Polls the real order-status endpoint (backed by the Dodo webhook writing
+  // to the orders table) instead of a localStorage flag nothing ever sets.
   const pollTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentOrderId = React.useRef<string | null>(null);
   const startPolling = React.useCallback(() => {
     if (pollTimer.current) return;
     let attempts = 0;
     pollTimer.current = setInterval(async () => {
       attempts++;
       try {
-        // Check localStorage flag set by webhook or manual trigger
-        const locked = localStorage.getItem(GM_CHECKOUT_LOCK_KEY);
-        if (locked === "1") {
-          clearInterval(pollTimer.current!);
-          pollTimer.current = null;
-          onNext();
-          return;
+        const orderId = currentOrderId.current;
+        if (!orderId) return;
+        const res = await fetch(`/api/dodo/order-status?orderId=${encodeURIComponent(orderId)}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json() as { found: boolean; status?: string; orderId?: string; productName?: string; priceCents?: number; currency?: string; paymentId?: string };
+          if (data.found && data.status === "paid") {
+            clearInterval(pollTimer.current!);
+            pollTimer.current = null;
+            setSubmitState("success");
+            // Persist confirmed order for S9 to read, and set the lock
+            s9PersistOrder({
+              orderId: data.orderId ?? orderId,
+              packageName: data.productName ?? pkg.name,
+              total: data.priceCents != null ? data.priceCents / 100 : total,
+              paymentMethod: payNowMethod,
+              customerEmail: s8Email,
+              customerName: s8Name,
+              purchaseTimestamp: new Date().toISOString(),
+              deliveryEstimate: pkg.delivery,
+              jobStatus: "Queued",
+            } as GmOrderRecord);
+            setTimeout(() => onNext(), 600);
+            return;
+          }
+          if (data.found && (data.status === "cancelled")) {
+            clearInterval(pollTimer.current!);
+            pollTimer.current = null;
+            setSubmitState("error");
+            submitLock.current = false;
+            return;
+          }
         }
         // After 90s give up
         if (attempts > 45) {
@@ -8663,9 +8698,9 @@ function Step8Checkout({
           setSubmitState("idle");
           submitLock.current = false;
         }
-      } catch { /* ignore */ }
+      } catch { /* ignore — keep polling until timeout */ }
     }, 2000);
-  }, [onNext]);
+  }, [onNext, pkg, payNowMethod, total, s8Email, s8Name]);
 
   // ── Fetch Dodo checkout session ────────────────────────────────────────────
   const handleSubmit = React.useCallback(async () => {
@@ -8689,12 +8724,18 @@ function Step8Checkout({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           packageId: pkg.id,
+          payNowMethod,
+          bnplOption,
+          customerEmail: s8Email || undefined,
+          customerName:  s8Name  || undefined,
+          userId:   s8UserId || undefined,
+          memberId: s8MemberId || undefined,
           successUrl: `${window.location.origin}/onboarding?step=9&payment=success`,
           cancelUrl:  `${window.location.origin}/onboarding?step=8`,
         }),
       });
 
-      const data = await res.json() as { checkoutUrl?: string; sessionId?: string; error?: string };
+      const data = await res.json() as { checkoutUrl?: string; sessionId?: string; orderId?: string; error?: string };
 
       if (!res.ok || !data.checkoutUrl) {
         console.error("[Dodo] session error:", data.error);
@@ -8703,6 +8744,7 @@ function Step8Checkout({
         return;
       }
 
+      currentOrderId.current = data.orderId ?? null;
       setDodoCheckoutUrl(data.checkoutUrl);
       setDodoSessionId(data.sessionId ?? null);
       setSubmitState("idle");
